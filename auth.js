@@ -1,10 +1,13 @@
 /**
  * Assetly - Moduł autoryzacji Google OAuth
+ * Token jest zapisywany i przywracany automatycznie
  */
 
 let tokenClient = null;
 let gapiInited = false;
 let gisInited = false;
+
+const TOKEN_STORAGE_KEY = 'assetly_google_token';
 
 async function initGAPI() {
     return new Promise((resolve, reject) => {
@@ -14,6 +17,10 @@ async function initGAPI() {
                     discoveryDocs: [CONFIG.DISCOVERY_DOC],
                 });
                 gapiInited = true;
+                
+                // Przywróć zapisany token jeśli istnieje
+                restoreToken();
+                
                 resolve();
             } catch (error) {
                 reject(error);
@@ -37,12 +44,63 @@ function handleTokenResponse(response) {
         return;
     }
     
+    // Zapisz token do localStorage
+    saveToken(response);
+    
+    // Zapisz status użytkownika
     localStorage.setItem(CONFIG.STORAGE_KEY_USER, JSON.stringify({
         isLoggedIn: true,
         loginTime: new Date().toISOString()
     }));
     
-    window.location.href = 'dashboard.html';
+    // Przekieruj na dashboard (tylko jeśli jesteśmy na stronie logowania)
+    if (window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/')) {
+        window.location.href = 'dashboard.html';
+    }
+}
+
+function saveToken(tokenResponse) {
+    const tokenData = {
+        access_token: tokenResponse.access_token,
+        token_type: tokenResponse.token_type,
+        expires_in: tokenResponse.expires_in,
+        scope: tokenResponse.scope,
+        saved_at: Date.now()
+    };
+    localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenData));
+}
+
+function restoreToken() {
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!savedToken) return false;
+    
+    try {
+        const tokenData = JSON.parse(savedToken);
+        
+        // Sprawdź czy token nie wygasł (z marginesem 5 minut)
+        const expiresAt = tokenData.saved_at + (tokenData.expires_in * 1000);
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (now >= expiresAt - fiveMinutes) {
+            // Token wygasł lub zaraz wygaśnie
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            return false;
+        }
+        
+        // Przywróć token do gapi
+        gapi.client.setToken({
+            access_token: tokenData.access_token,
+            token_type: tokenData.token_type,
+            expires_in: tokenData.expires_in,
+            scope: tokenData.scope
+        });
+        
+        return true;
+    } catch (e) {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        return false;
+    }
 }
 
 async function initAuth() {
@@ -62,11 +120,8 @@ function handleGoogleLogin() {
         return;
     }
     
-    if (gapi.client.getToken() === null) {
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-    } else {
-        tokenClient.requestAccessToken({ prompt: '' });
-    }
+    // Zawsze pokaż consent dla pełnych uprawnień
+    tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 function handleGoogleLogout() {
@@ -77,42 +132,54 @@ function handleGoogleLogout() {
         gapi.client.setToken(null);
     }
     
+    // Wyczyść wszystko z localStorage
     localStorage.removeItem(CONFIG.STORAGE_KEY_USER);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    
     window.location.href = 'index.html';
 }
 
 function isUserSignedIn() {
     const userData = localStorage.getItem(CONFIG.STORAGE_KEY_USER);
-    if (!userData) return false;
+    const tokenData = localStorage.getItem(TOKEN_STORAGE_KEY);
+    
+    if (!userData || !tokenData) return false;
     
     try {
-        return JSON.parse(userData).isLoggedIn === true;
+        const user = JSON.parse(userData);
+        const token = JSON.parse(tokenData);
+        
+        // Sprawdź czy token nie wygasł
+        const expiresAt = token.saved_at + (token.expires_in * 1000);
+        if (Date.now() >= expiresAt) {
+            return false;
+        }
+        
+        return user.isLoggedIn === true;
     } catch {
         return false;
     }
 }
 
 function hasValidToken() {
-    return gapi.client.getToken() !== null;
+    const token = gapi.client.getToken();
+    return token !== null && token.access_token;
 }
 
 async function ensureValidToken() {
-    return new Promise((resolve, reject) => {
-        if (hasValidToken()) {
-            resolve(true);
-            return;
-        }
-        
-        tokenClient.callback = (response) => {
-            if (response.error) {
-                reject(response.error);
-            } else {
-                resolve(true);
-            }
-        };
-        
-        tokenClient.requestAccessToken({ prompt: '' });
-    });
+    // Najpierw sprawdź czy mamy token w gapi
+    if (hasValidToken()) {
+        return true;
+    }
+    
+    // Spróbuj przywrócić z localStorage
+    if (restoreToken() && hasValidToken()) {
+        return true;
+    }
+    
+    // Brak ważnego tokena - przekieruj na login
+    handleGoogleLogout();
+    throw new Error('Brak ważnego tokena - wymagane ponowne logowanie');
 }
 
 function checkAuthAndRedirect() {
