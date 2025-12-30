@@ -2,71 +2,49 @@
  * Assetly - Główna logika aplikacji
  */
 
-// Stan aplikacji
 let sheetsAPI = null;
 let assets = [];
 let currencyRates = { PLN: 1 };
 let pieChart = null;
 let currentEditId = null;
+let deleteAssetId = null;
 
 // ============================================
 // INICJALIZACJA
 // ============================================
 
-/**
- * Główna inicjalizacja aplikacji
- */
 async function initApp() {
-    // Sprawdź autoryzację
     if (!requireAuth()) return;
     
-    // Inicjalizuj Google API
     try {
         await initAuth();
-        
-        // Sprawdź zapisany spreadsheet ID
-        const savedId = localStorage.getItem(CONFIG.STORAGE_KEY_SPREADSHEET);
-        if (savedId) {
-            document.getElementById('spreadsheetId').value = savedId;
-            await connectSpreadsheet(savedId);
-        } else {
-            updateConnectionStatus('disconnected', 'Wklej ID arkusza');
-        }
-        
-        // Event listeners
         setupEventListeners();
         
+        // Automatyczne połączenie z arkuszem
+        if (CONFIG.SPREADSHEET_ID && !CONFIG.SPREADSHEET_ID.includes('WKLEJ')) {
+            await connectSpreadsheet();
+        } else {
+            updateConnectionStatus('disconnected');
+            showToast('Skonfiguruj SPREADSHEET_ID w config.js', 'warning');
+        }
+        
     } catch (error) {
-        console.error('Błąd inicjalizacji:', error);
+        console.error('Init error:', error);
         showToast('Błąd inicjalizacji aplikacji', 'error');
     }
 }
 
-/**
- * Konfiguracja event listenerów
- */
 function setupEventListeners() {
-    // Połączenie z arkuszem
-    document.getElementById('connectBtn').addEventListener('click', handleConnect);
-    document.getElementById('spreadsheetId').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConnect();
-    });
-    
-    // Wylogowanie
     document.getElementById('logoutBtn').addEventListener('click', handleGoogleLogout);
-    
-    // Dodawanie aktywa
     document.getElementById('addAssetBtn').addEventListener('click', () => showAddAssetModal());
     
-    // Modal
+    // Modal aktywa
     document.getElementById('assetModal').addEventListener('click', (e) => {
         if (e.target.id === 'assetModal') closeModal();
     });
     document.getElementById('closeModal').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
     document.getElementById('assetForm').addEventListener('submit', handleAssetFormSubmit);
-    
-    // Dynamiczne podkategorie
     document.getElementById('kategoria').addEventListener('change', updatePodkategorie);
     
     // Modal potwierdzenia
@@ -80,123 +58,77 @@ function setupEventListeners() {
 // POŁĄCZENIE Z ARKUSZEM
 // ============================================
 
-/**
- * Obsługa przycisku połączenia
- */
-async function handleConnect() {
-    const spreadsheetId = document.getElementById('spreadsheetId').value.trim();
-    
-    if (!spreadsheetId) {
-        showToast('Wprowadź ID arkusza', 'warning');
-        return;
-    }
-    
-    await connectSpreadsheet(spreadsheetId);
-}
-
-/**
- * Połącz z arkuszem Google Sheets
- */
-async function connectSpreadsheet(spreadsheetId) {
-    updateConnectionStatus('loading', 'Łączenie...');
+async function connectSpreadsheet() {
+    updateConnectionStatus('loading');
     
     try {
-        // Upewnij się, że mamy token
         await ensureValidToken();
         
-        // Utwórz instancję API
-        sheetsAPI = createSheetsAPI(spreadsheetId);
-        
-        // Testuj połączenie
+        sheetsAPI = createSheetsAPI(CONFIG.SPREADSHEET_ID);
         await sheetsAPI.testConnection();
         
-        // Zapisz ID
-        localStorage.setItem(CONFIG.STORAGE_KEY_SPREADSHEET, spreadsheetId);
+        updateConnectionStatus('connected');
         
-        updateConnectionStatus('connected', 'Połączono');
-        showToast('Połączono z arkuszem!', 'success');
-        
-        // Pobierz kursy walut i załaduj dane
         await fetchCurrencyRates();
         await loadAssets();
         
     } catch (error) {
-        console.error('Błąd połączenia:', error);
-        updateConnectionStatus('disconnected', 'Błąd połączenia');
+        console.error('Connection error:', error);
+        updateConnectionStatus('disconnected');
         
         let message = 'Nie można połączyć z arkuszem';
         if (error.message?.includes('Brak zakładki')) {
             message = error.message;
         } else if (error.status === 404) {
-            message = 'Nie znaleziono arkusza o podanym ID';
+            message = 'Nie znaleziono arkusza';
         } else if (error.status === 403) {
-            message = 'Brak dostępu do arkusza. Sprawdź uprawnienia.';
+            message = 'Brak dostępu do arkusza';
         }
         
         showToast(message, 'error');
     }
 }
 
-/**
- * Aktualizuj status połączenia w UI
- */
-function updateConnectionStatus(status, text) {
-    const statusEl = document.getElementById('connectionStatus');
-    statusEl.className = `connection-status ${status}`;
+function updateConnectionStatus(status) {
+    const badge = document.getElementById('connectionStatus');
+    badge.className = `connection-badge ${status}`;
     
-    const icons = {
-        connected: '✅',
-        disconnected: '❌',
-        loading: '⏳'
+    const texts = {
+        connected: 'Połączono',
+        disconnected: 'Rozłączono',
+        loading: 'Łączenie...'
     };
     
-    statusEl.innerHTML = `<span>${icons[status] || ''}</span> ${text}`;
+    badge.innerHTML = `<span class="connection-dot"></span>${texts[status] || status}`;
 }
 
 // ============================================
-// KURSY WALUT (NBP API)
+// KURSY WALUT
 // ============================================
 
-/**
- * Pobierz kursy walut z NBP
- */
 async function fetchCurrencyRates() {
     const currencies = WALUTY.filter(c => c !== 'PLN');
     
     for (const currency of currencies) {
         try {
             const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
-            
             if (response.ok) {
                 const data = await response.json();
                 currencyRates[currency] = data.rates[0].mid;
             }
         } catch (error) {
-            console.warn(`Nie udało się pobrać kursu ${currency}:`, error);
-            // Ustaw domyślny kurs
             currencyRates[currency] = 1;
         }
     }
-    
-    console.log('Kursy walut:', currencyRates);
 }
 
-/**
- * Konwertuj wartość na PLN
- */
 function convertToPLN(amount, currency) {
     if (currency === 'PLN') return amount;
-    
-    const rate = currencyRates[currency] || 1;
-    return amount * rate;
+    return amount * (currencyRates[currency] || 1);
 }
 
-/**
- * Formatuj kwotę
- */
 function formatCurrency(amount, currency = 'PLN') {
     return new Intl.NumberFormat('pl-PL', {
-        style: 'decimal',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     }).format(amount) + ' ' + currency;
@@ -206,9 +138,6 @@ function formatCurrency(amount, currency = 'PLN') {
 // ZARZĄDZANIE AKTYWAMI
 // ============================================
 
-/**
- * Załaduj aktywa z arkusza
- */
 async function loadAssets() {
     showLoading(true);
     
@@ -216,16 +145,13 @@ async function loadAssets() {
         assets = await sheetsAPI.getAllAssets();
         renderDashboard();
     } catch (error) {
-        console.error('Błąd ładowania aktywów:', error);
+        console.error('Load error:', error);
         showToast('Błąd ładowania danych', 'error');
     } finally {
         showLoading(false);
     }
 }
 
-/**
- * Dodaj nowe aktywo
- */
 async function handleAddAsset(formData) {
     try {
         showLoading(true);
@@ -234,16 +160,12 @@ async function handleAddAsset(formData) {
         showToast('Aktywo dodane!', 'success');
         closeModal();
     } catch (error) {
-        console.error('Błąd dodawania:', error);
         showToast('Nie udało się dodać aktywa', 'error');
     } finally {
         showLoading(false);
     }
 }
 
-/**
- * Edytuj aktywo
- */
 async function handleEditAsset(id, formData) {
     try {
         showLoading(true);
@@ -252,16 +174,12 @@ async function handleEditAsset(id, formData) {
         showToast('Aktywo zaktualizowane!', 'success');
         closeModal();
     } catch (error) {
-        console.error('Błąd edycji:', error);
         showToast('Nie udało się zaktualizować aktywa', 'error');
     } finally {
         showLoading(false);
     }
 }
 
-/**
- * Usuń aktywo
- */
 async function handleDeleteAsset(id) {
     try {
         showLoading(true);
@@ -270,7 +188,6 @@ async function handleDeleteAsset(id) {
         showToast('Aktywo usunięte', 'success');
         closeConfirmModal();
     } catch (error) {
-        console.error('Błąd usuwania:', error);
         showToast('Nie udało się usunąć aktywa', 'error');
     } finally {
         showLoading(false);
@@ -281,14 +198,9 @@ async function handleDeleteAsset(id) {
 // KALKULACJE
 // ============================================
 
-/**
- * Oblicz całkowitą wartość netto majątku
- */
 function calculateTotalWorth() {
     return assets.reduce((total, asset) => {
         const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
-        
-        // Długi odejmujemy
         if (asset.kategoria === 'Długi') {
             return total - Math.abs(valuePLN);
         }
@@ -296,27 +208,22 @@ function calculateTotalWorth() {
     }, 0);
 }
 
-/**
- * Oblicz rozkład majątku po kategoriach
- */
 function calculateCategoryBreakdown() {
     const breakdown = {};
     
-    // Inicjalizuj wszystkie kategorie
     Object.entries(KATEGORIE).forEach(([key, cat]) => {
         breakdown[key] = {
             nazwa: cat.nazwa,
-            ikona: cat.ikona,
+            icon: cat.icon,
+            color: cat.color,
             wartosc: 0
         };
     });
     
-    // Sumuj wartości
     assets.forEach(asset => {
         const categoryKey = getCategoryKey(asset.kategoria);
         if (categoryKey && breakdown[categoryKey]) {
             const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
-            
             if (categoryKey === 'dlugi') {
                 breakdown[categoryKey].wartosc -= Math.abs(valuePLN);
             } else {
@@ -328,25 +235,21 @@ function calculateCategoryBreakdown() {
     return breakdown;
 }
 
-/**
- * Znajdź klucz kategorii na podstawie nazwy
- */
 function getCategoryKey(categoryName) {
     for (const [key, value] of Object.entries(KATEGORIE)) {
-        if (value.nazwa === categoryName) {
-            return key;
-        }
+        if (value.nazwa === categoryName) return key;
     }
     return null;
 }
 
+function getIcon(iconName) {
+    return ICONS[iconName] || ICONS.wallet;
+}
+
 // ============================================
-// RENDEROWANIE UI
+// RENDEROWANIE
 // ============================================
 
-/**
- * Wyrenderuj cały dashboard
- */
 function renderDashboard() {
     renderNetWorth();
     renderBreakdown();
@@ -354,60 +257,55 @@ function renderDashboard() {
     renderAssetsList();
 }
 
-/**
- * Renderuj wartość netto
- */
 function renderNetWorth() {
     const total = calculateTotalWorth();
-    const formattedValue = new Intl.NumberFormat('pl-PL', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(total);
-    
-    document.getElementById('netWorthValue').textContent = formattedValue;
+    document.getElementById('netWorthValue').textContent = 
+        new Intl.NumberFormat('pl-PL', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(total);
 }
 
-/**
- * Renderuj rozkład majątku
- */
 function renderBreakdown() {
     const breakdown = calculateCategoryBreakdown();
-    const container = document.getElementById('breakdownList');
+    const container = document.getElementById('breakdownGrid');
     
-    container.innerHTML = Object.entries(breakdown)
+    const items = Object.entries(breakdown)
         .filter(([_, data]) => data.wartosc !== 0)
-        .sort((a, b) => Math.abs(b[1].wartosc) - Math.abs(a[1].wartosc))
-        .map(([key, data]) => `
-            <div class="breakdown-item">
-                <div class="breakdown-item-left">
-                    <span class="breakdown-item-icon">${data.ikona}</span>
-                    <span class="breakdown-item-name">${data.nazwa}</span>
-                </div>
-                <span class="breakdown-item-value ${data.wartosc < 0 ? 'negative' : ''}">
-                    ${formatCurrency(data.wartosc)}
-                </span>
-            </div>
-        `).join('');
+        .sort((a, b) => Math.abs(b[1].wartosc) - Math.abs(a[1].wartosc));
     
-    if (container.innerHTML === '') {
-        container.innerHTML = '<p class="text-center" style="color: var(--text-dim); padding: 20px;">Brak aktywów</p>';
+    if (items.length === 0) {
+        container.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: var(--text-muted); padding: 24px;">Brak aktywów do wyświetlenia</p>';
+        return;
     }
+    
+    container.innerHTML = items.map(([key, data]) => `
+        <div class="breakdown-item">
+            <div class="breakdown-icon" style="background: ${data.color}20; color: ${data.color}">
+                ${getIcon(data.icon)}
+            </div>
+            <div class="breakdown-info">
+                <div class="breakdown-name">${data.nazwa}</div>
+                <div class="breakdown-value ${data.wartosc < 0 ? 'negative' : ''}">${formatCurrency(data.wartosc)}</div>
+            </div>
+        </div>
+    `).join('');
 }
 
-/**
- * Renderuj wykres kołowy
- */
 function renderChart() {
     const ctx = document.getElementById('pieChart').getContext('2d');
     const breakdown = calculateCategoryBreakdown();
     
-    // Przygotuj dane (tylko wartości dodatnie dla wykresu)
     const chartData = Object.entries(breakdown)
         .filter(([key, data]) => data.wartosc > 0 && key !== 'dlugi')
         .sort((a, b) => b[1].wartosc - a[1].wartosc);
     
+    const total = chartData.reduce((sum, [_, data]) => sum + data.wartosc, 0);
+    
+    document.getElementById('chartCenterValue').textContent = 
+        new Intl.NumberFormat('pl-PL', { notation: 'compact', maximumFractionDigits: 1 }).format(total) + ' PLN';
+    
     if (chartData.length === 0) {
-        // Pusty wykres
         if (pieChart) {
             pieChart.destroy();
             pieChart = null;
@@ -417,14 +315,10 @@ function renderChart() {
     
     const labels = chartData.map(([_, data]) => data.nazwa);
     const values = chartData.map(([_, data]) => data.wartosc);
-    const colors = chartData.map(([key, _]) => CHART_COLORS[key] || '#6C63FF');
+    const colors = chartData.map(([_, data]) => data.color);
     
-    // Zniszcz poprzedni wykres jeśli istnieje
-    if (pieChart) {
-        pieChart.destroy();
-    }
+    if (pieChart) pieChart.destroy();
     
-    // Utwórz nowy wykres
     pieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -432,98 +326,82 @@ function renderChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderColor: 'rgba(30, 30, 63, 1)',
-                borderWidth: 3,
-                hoverOffset: 4
+                borderColor: 'rgba(10, 15, 13, 1)',
+                borderWidth: 4,
+                hoverOffset: 8
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(30, 30, 63, 0.95)',
+                    backgroundColor: 'rgba(21, 31, 27, 0.95)',
                     titleColor: '#fff',
-                    bodyColor: '#B4B4C8',
-                    borderColor: 'rgba(108, 99, 255, 0.3)',
+                    bodyColor: 'rgba(255,255,255,0.7)',
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
                     borderWidth: 1,
                     cornerRadius: 8,
                     padding: 12,
                     callbacks: {
-                        label: function(context) {
-                            return formatCurrency(context.raw);
-                        }
+                        label: (context) => formatCurrency(context.raw)
                     }
                 }
             },
-            cutout: '65%'
+            cutout: '70%'
         }
     });
 }
 
-/**
- * Renderuj listę aktywów
- */
 function renderAssetsList() {
     const container = document.getElementById('assetsList');
     
     if (assets.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">📊</div>
-                <p class="empty-state-text">Nie masz jeszcze żadnych aktywów</p>
+                <div class="empty-state-icon">${ICONS.wallet}</div>
+                <p class="empty-state-text">Nie masz jeszcze żadnych aktywów.<br>Dodaj pierwsze aktywo, aby rozpocząć śledzenie majątku.</p>
                 <button class="btn btn-primary" onclick="showAddAssetModal()">
-                    Dodaj pierwsze aktywo
+                    ${ICONS.plus} Dodaj aktywo
                 </button>
             </div>
         `;
         return;
     }
     
-    // Sortuj: najpierw po kategorii, potem po wartości
     const sortedAssets = [...assets].sort((a, b) => {
-        if (a.kategoria !== b.kategoria) {
-            return a.kategoria.localeCompare(b.kategoria);
-        }
+        if (a.kategoria !== b.kategoria) return a.kategoria.localeCompare(b.kategoria);
         return convertToPLN(b.wartosc, b.waluta) - convertToPLN(a.wartosc, a.waluta);
     });
     
     container.innerHTML = sortedAssets.map(asset => {
         const categoryKey = getCategoryKey(asset.kategoria);
-        const categoryData = KATEGORIE[categoryKey] || { ikona: '📦' };
+        const categoryData = KATEGORIE[categoryKey] || { icon: 'wallet', color: '#6366F1' };
         const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
         const isDebt = asset.kategoria === 'Długi';
         const displayValue = isDebt ? -Math.abs(asset.wartosc) : asset.wartosc;
         const displayValuePLN = isDebt ? -Math.abs(valuePLN) : valuePLN;
         
         return `
-            <div class="asset-card">
+            <div class="asset-item">
+                <div class="asset-icon" style="background: ${categoryData.color}20; color: ${categoryData.color}">
+                    ${getIcon(categoryData.icon)}
+                </div>
                 <div class="asset-info">
-                    <div class="asset-icon">${categoryData.ikona}</div>
-                    <div class="asset-details">
-                        <div class="asset-name">${escapeHtml(asset.nazwa)}</div>
-                        <div class="asset-category">${escapeHtml(asset.podkategoria)}</div>
-                    </div>
+                    <div class="asset-name">${escapeHtml(asset.nazwa)}</div>
+                    <div class="asset-category">${escapeHtml(asset.podkategoria)}</div>
                 </div>
                 <div class="asset-values">
-                    <div class="asset-value-main ${isDebt ? 'negative' : ''}">
-                        ${formatCurrency(displayValue, asset.waluta)}
-                    </div>
-                    ${asset.waluta !== 'PLN' ? `
-                        <div class="asset-value-converted">
-                            ≈ ${formatCurrency(displayValuePLN)}
-                        </div>
-                    ` : ''}
+                    <div class="asset-value-main ${isDebt ? 'negative' : ''}">${formatCurrency(displayValue, asset.waluta)}</div>
+                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">≈ ${formatCurrency(displayValuePLN)}</div>` : ''}
                 </div>
                 <div class="asset-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="showEditAssetModal('${asset.id}')">
-                        Edytuj
+                    <button class="btn btn-ghost btn-icon" onclick="showEditAssetModal('${asset.id}')" title="Edytuj">
+                        ${ICONS.edit}
                     </button>
-                    <button class="btn btn-danger btn-sm" onclick="showDeleteConfirm('${asset.id}', '${escapeHtml(asset.nazwa)}')">
-                        Usuń
+                    <button class="btn btn-ghost btn-icon" onclick="showDeleteConfirm('${asset.id}', '${escapeHtml(asset.nazwa)}')" title="Usuń">
+                        ${ICONS.trash}
                     </button>
                 </div>
             </div>
@@ -535,37 +413,28 @@ function renderAssetsList() {
 // MODAL - DODAWANIE/EDYCJA
 // ============================================
 
-/**
- * Pokaż modal dodawania aktywa
- */
 function showAddAssetModal() {
     currentEditId = null;
     document.getElementById('modalTitle').textContent = 'Dodaj aktywo';
-    document.getElementById('submitBtn').textContent = 'Dodaj';
+    document.getElementById('submitBtn').innerHTML = `${ICONS.plus} Dodaj`;
     document.getElementById('assetForm').reset();
     
-    // Wypełnij kategorie
     populateCategories();
     updatePodkategorie();
     
     document.getElementById('assetModal').classList.add('active');
 }
 
-/**
- * Pokaż modal edycji aktywa
- */
 function showEditAssetModal(id) {
     const asset = assets.find(a => a.id === id);
     if (!asset) return;
     
     currentEditId = id;
     document.getElementById('modalTitle').textContent = 'Edytuj aktywo';
-    document.getElementById('submitBtn').textContent = 'Zapisz';
+    document.getElementById('submitBtn').innerHTML = 'Zapisz zmiany';
     
-    // Wypełnij kategorie
     populateCategories();
     
-    // Ustaw wartości
     document.getElementById('kategoria').value = asset.kategoria;
     updatePodkategorie();
     document.getElementById('podkategoria').value = asset.podkategoria;
@@ -577,48 +446,33 @@ function showEditAssetModal(id) {
     document.getElementById('assetModal').classList.add('active');
 }
 
-/**
- * Zamknij modal
- */
 function closeModal() {
     document.getElementById('assetModal').classList.remove('active');
     currentEditId = null;
 }
 
-/**
- * Wypełnij dropdown kategorii
- */
 function populateCategories() {
     const select = document.getElementById('kategoria');
     select.innerHTML = Object.entries(KATEGORIE)
-        .map(([key, cat]) => `<option value="${cat.nazwa}">${cat.ikona} ${cat.nazwa}</option>`)
+        .map(([_, cat]) => `<option value="${cat.nazwa}">${cat.nazwa}</option>`)
         .join('');
 }
 
-/**
- * Aktualizuj dropdown podkategorii
- */
 function updatePodkategorie() {
     const kategoriaValue = document.getElementById('kategoria').value;
     const select = document.getElementById('podkategoria');
     
-    // Znajdź kategorię
     let podkategorie = [];
-    for (const [key, cat] of Object.entries(KATEGORIE)) {
+    for (const cat of Object.values(KATEGORIE)) {
         if (cat.nazwa === kategoriaValue) {
             podkategorie = cat.podkategorie;
             break;
         }
     }
     
-    select.innerHTML = podkategorie
-        .map(p => `<option value="${p}">${p}</option>`)
-        .join('');
+    select.innerHTML = podkategorie.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-/**
- * Obsługa formularza aktywa
- */
 async function handleAssetFormSubmit(e) {
     e.preventDefault();
     
@@ -631,7 +485,6 @@ async function handleAssetFormSubmit(e) {
         notatki: document.getElementById('notatki').value.trim()
     };
     
-    // Walidacja
     if (!formData.nazwa) {
         showToast('Wprowadź nazwę aktywa', 'warning');
         return;
@@ -650,32 +503,21 @@ async function handleAssetFormSubmit(e) {
 }
 
 // ============================================
-// MODAL - POTWIERDZENIE USUNIĘCIA
+// MODAL - POTWIERDZENIE
 // ============================================
 
-let deleteAssetId = null;
-
-/**
- * Pokaż modal potwierdzenia usunięcia
- */
 function showDeleteConfirm(id, nazwa) {
     deleteAssetId = id;
     document.getElementById('confirmText').innerHTML = 
-        `Czy na pewno chcesz usunąć aktywo <strong>${escapeHtml(nazwa)}</strong>?`;
+        `Czy na pewno chcesz usunąć aktywo <strong style="color: var(--text-primary)">${escapeHtml(nazwa)}</strong>?<br><span style="font-size: 0.875rem">Ta operacja jest nieodwracalna.</span>`;
     document.getElementById('confirmModal').classList.add('active');
 }
 
-/**
- * Zamknij modal potwierdzenia
- */
 function closeConfirmModal() {
     document.getElementById('confirmModal').classList.remove('active');
     deleteAssetId = null;
 }
 
-/**
- * Potwierdź usunięcie
- */
 async function confirmDelete() {
     if (deleteAssetId) {
         await handleDeleteAsset(deleteAssetId);
@@ -686,39 +528,30 @@ async function confirmDelete() {
 // POMOCNICZE
 // ============================================
 
-/**
- * Pokaż/ukryj loading
- */
 function showLoading(show) {
     const spinner = document.getElementById('loadingSpinner');
-    if (spinner) {
-        spinner.classList.toggle('hidden', !show);
-    }
+    if (spinner) spinner.classList.toggle('hidden', !show);
 }
 
-/**
- * Pokaż toast
- */
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     
-    const icons = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️',
-        info: 'ℹ️'
+    const iconsSvg = {
+        success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>`,
+        error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+        warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+        info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
     };
     
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || ''}</span>
+        <span class="toast-icon">${iconsSvg[type] || iconsSvg.info}</span>
         <span class="toast-message">${escapeHtml(message)}</span>
     `;
     
     container.appendChild(toast);
     
-    // Usuń po 4 sekundach
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(100%)';
@@ -726,17 +559,10 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
-/**
- * Escape HTML
- */
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
-
-// ============================================
-// INICJALIZACJA PO ZAŁADOWANIU STRONY
-// ============================================
 
 document.addEventListener('DOMContentLoaded', initApp);
