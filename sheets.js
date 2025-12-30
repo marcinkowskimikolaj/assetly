@@ -35,7 +35,7 @@ class SheetsAPI {
             
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: this.spreadsheetId,
-                range: `${this.sheetName}!A2:H`,
+                range: `${this.sheetName}!A2:I`,
             });
             
             const rows = response.result.values || [];
@@ -49,7 +49,8 @@ class SheetsAPI {
                 nazwa: row[4] || '',
                 wartosc: parseFloat(row[5]) || 0,
                 waluta: row[6] || 'PLN',
-                notatki: row[7] || ''
+                notatki: row[7] || '',
+                kontoEmerytalne: row[8] || ''
             })).filter(asset => asset.id);
             
         } catch (error) {
@@ -72,12 +73,13 @@ class SheetsAPI {
                 asset.nazwa,
                 asset.wartosc.toString(),
                 asset.waluta,
-                asset.notatki || ''
+                asset.notatki || '',
+                asset.kontoEmerytalne || ''
             ];
             
             await gapi.client.sheets.spreadsheets.values.append({
                 spreadsheetId: this.spreadsheetId,
-                range: `${this.sheetName}!A:H`,
+                range: `${this.sheetName}!A:I`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 resource: { values: [row] }
@@ -108,12 +110,13 @@ class SheetsAPI {
                 updates.nazwa || asset.nazwa,
                 (updates.wartosc !== undefined ? updates.wartosc : asset.wartosc).toString(),
                 updates.waluta || asset.waluta,
-                updates.notatki !== undefined ? updates.notatki : asset.notatki
+                updates.notatki !== undefined ? updates.notatki : asset.notatki,
+                updates.kontoEmerytalne !== undefined ? updates.kontoEmerytalne : (asset.kontoEmerytalne || '')
             ];
             
             await gapi.client.sheets.spreadsheets.values.update({
                 spreadsheetId: this.spreadsheetId,
-                range: `${this.sheetName}!A${asset.rowIndex}:H${asset.rowIndex}`,
+                range: `${this.sheetName}!A${asset.rowIndex}:I${asset.rowIndex}`,
                 valueInputOption: 'USER_ENTERED',
                 resource: { values: [row] }
             });
