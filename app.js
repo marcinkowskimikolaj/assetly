@@ -45,7 +45,10 @@ function setupEventListeners() {
     document.getElementById('closeModal').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
     document.getElementById('assetForm').addEventListener('submit', handleAssetFormSubmit);
-    document.getElementById('kategoria').addEventListener('change', updatePodkategorie);
+    document.getElementById('kategoria').addEventListener('change', () => {
+        updatePodkategorie();
+        updateKontoEmerytalneVisibility();
+    });
     
     // Modal potwierdzenia
     document.getElementById('confirmModal').addEventListener('click', (e) => {
@@ -70,6 +73,7 @@ async function connectSpreadsheet() {
         updateConnectionStatus('connected');
         
         await fetchCurrencyRates();
+        await IKE_IKZE.fetchLimits(sheetsAPI);
         await loadAssets();
         
     } catch (error) {
@@ -255,6 +259,7 @@ function renderDashboard() {
     renderBreakdown();
     renderChart();
     renderAssetsList();
+    renderIkeIkze();
 }
 
 function renderNetWorth() {
@@ -383,13 +388,18 @@ function renderAssetsList() {
         const displayValue = isDebt ? -Math.abs(asset.wartosc) : asset.wartosc;
         const displayValuePLN = isDebt ? -Math.abs(valuePLN) : valuePLN;
         
+        // Badge IKE/IKZE
+        const retirementBadge = asset.kontoEmerytalne 
+            ? `<span class="retirement-badge ${asset.kontoEmerytalne.toLowerCase()}">${asset.kontoEmerytalne}</span>` 
+            : '';
+        
         return `
             <div class="asset-item">
                 <div class="asset-icon" style="background: ${categoryData.color}20; color: ${categoryData.color}">
                     ${getIcon(categoryData.icon)}
                 </div>
                 <div class="asset-info">
-                    <div class="asset-name">${escapeHtml(asset.nazwa)}</div>
+                    <div class="asset-name">${escapeHtml(asset.nazwa)} ${retirementBadge}</div>
                     <div class="asset-category">${escapeHtml(asset.podkategoria)}</div>
                 </div>
                 <div class="asset-values">
@@ -421,6 +431,7 @@ function showAddAssetModal() {
     
     populateCategories();
     updatePodkategorie();
+    updateKontoEmerytalneVisibility();
     
     document.getElementById('assetModal').classList.add('active');
 }
@@ -437,11 +448,14 @@ function showEditAssetModal(id) {
     
     document.getElementById('kategoria').value = asset.kategoria;
     updatePodkategorie();
+    updateKontoEmerytalneVisibility();
+    
     document.getElementById('podkategoria').value = asset.podkategoria;
     document.getElementById('nazwa').value = asset.nazwa;
     document.getElementById('wartosc').value = asset.wartosc;
     document.getElementById('waluta').value = asset.waluta;
     document.getElementById('notatki').value = asset.notatki || '';
+    document.getElementById('kontoEmerytalne').value = asset.kontoEmerytalne || '';
     
     document.getElementById('assetModal').classList.add('active');
 }
@@ -473,16 +487,40 @@ function updatePodkategorie() {
     select.innerHTML = podkategorie.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
+function updateKontoEmerytalneVisibility() {
+    const kategoria = document.getElementById('kategoria').value;
+    const group = document.getElementById('kontoEmerytalneGroup');
+    
+    if (IKE_IKZE.canHaveRetirementAccount(kategoria)) {
+        group.classList.remove('hidden');
+    } else {
+        group.classList.add('hidden');
+        document.getElementById('kontoEmerytalne').value = '';
+    }
+}
+
+function renderIkeIkze() {
+    const container = document.getElementById('ikeIkzeSection');
+    if (container) {
+        container.innerHTML = IKE_IKZE.renderSection(assets);
+    }
+}
+
 async function handleAssetFormSubmit(e) {
     e.preventDefault();
     
+    const kategoria = document.getElementById('kategoria').value;
+    
     const formData = {
-        kategoria: document.getElementById('kategoria').value,
+        kategoria: kategoria,
         podkategoria: document.getElementById('podkategoria').value,
         nazwa: document.getElementById('nazwa').value.trim(),
         wartosc: parseFloat(document.getElementById('wartosc').value),
         waluta: document.getElementById('waluta').value,
-        notatki: document.getElementById('notatki').value.trim()
+        notatki: document.getElementById('notatki').value.trim(),
+        kontoEmerytalne: IKE_IKZE.canHaveRetirementAccount(kategoria) 
+            ? document.getElementById('kontoEmerytalne').value 
+            : ''
     };
     
     if (!formData.nazwa) {
