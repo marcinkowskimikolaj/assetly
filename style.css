@@ -1120,3 +1120,103 @@ a:hover { color: var(--primary-light); }
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* ============================================
+   IKE / IKZE SECTION
+   ============================================ */
+.ike-ikze-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ike-ikze-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ike-ikze-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ike-ikze-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ike-ikze-values {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease, background 0.3s ease;
+}
+
+.ike-ikze-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+
+.ike-ikze-percentage {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.ike-ikze-remaining {
+    color: var(--text-muted);
+}
+
+.ike-ikze-reset {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--warning);
+    margin-top: 4px;
+}
+
+/* Retirement account badges */
+.retirement-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.retirement-badge.ike {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818CF8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.retirement-badge.ikze {
+    background: rgba(236, 72, 153, 0.15);
+    color: #F472B6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+}
