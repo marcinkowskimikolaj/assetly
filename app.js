@@ -215,24 +215,34 @@ function calculateTotalWorth() {
 function calculateCategoryBreakdown() {
     const breakdown = {};
     
-    Object.entries(KATEGORIE).forEach(([key, cat]) => {
-        breakdown[key] = {
-            nazwa: cat.nazwa,
-            icon: cat.icon,
-            color: cat.color,
-            wartosc: 0
-        };
-    });
-    
     assets.forEach(asset => {
         const categoryKey = getCategoryKey(asset.kategoria);
-        if (categoryKey && breakdown[categoryKey]) {
-            const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
-            if (categoryKey === 'dlugi') {
-                breakdown[categoryKey].wartosc -= Math.abs(valuePLN);
-            } else {
-                breakdown[categoryKey].wartosc += valuePLN;
-            }
+        if (!categoryKey) return;
+        
+        const categoryData = KATEGORIE[categoryKey];
+        const waluta = asset.waluta;
+        const key = `${categoryKey}_${waluta}`;
+        
+        if (!breakdown[key]) {
+            breakdown[key] = {
+                categoryKey: categoryKey,
+                nazwa: categoryData.nazwa,
+                waluta: waluta,
+                icon: categoryData.icon,
+                color: categoryData.color,
+                wartosc: 0,
+                wartoscPLN: 0
+            };
+        }
+        
+        const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
+        
+        if (categoryKey === 'dlugi') {
+            breakdown[key].wartosc -= Math.abs(asset.wartosc);
+            breakdown[key].wartoscPLN -= Math.abs(valuePLN);
+        } else {
+            breakdown[key].wartosc += asset.wartosc;
+            breakdown[key].wartoscPLN += valuePLN;
         }
     });
     
@@ -277,32 +287,60 @@ function renderBreakdown() {
     
     const items = Object.entries(breakdown)
         .filter(([_, data]) => data.wartosc !== 0)
-        .sort((a, b) => Math.abs(b[1].wartosc) - Math.abs(a[1].wartosc));
+        .sort((a, b) => Math.abs(b[1].wartoscPLN) - Math.abs(a[1].wartoscPLN));
     
     if (items.length === 0) {
         container.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: var(--text-muted); padding: 24px;">Brak aktywów do wyświetlenia</p>';
         return;
     }
     
-    container.innerHTML = items.map(([key, data]) => `
-        <div class="breakdown-item">
-            <div class="breakdown-icon" style="background: ${data.color}20; color: ${data.color}">
-                ${getIcon(data.icon)}
+    container.innerHTML = items.map(([key, data]) => {
+        const showConverted = data.waluta !== 'PLN';
+        const displayName = `${data.nazwa} ${data.waluta}`;
+        
+        return `
+            <div class="breakdown-item">
+                <div class="breakdown-icon" style="background: ${data.color}20; color: ${data.color}">
+                    ${getIcon(data.icon)}
+                </div>
+                <div class="breakdown-info">
+                    <div class="breakdown-name">${displayName}</div>
+                    <div class="breakdown-value ${data.wartoscPLN < 0 ? 'negative' : ''}">
+                        ${formatCurrency(data.wartosc, data.waluta)}
+                        ${showConverted ? `<span class="breakdown-converted">≈ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
+                    </div>
+                </div>
             </div>
-            <div class="breakdown-info">
-                <div class="breakdown-name">${data.nazwa}</div>
-                <div class="breakdown-value ${data.wartosc < 0 ? 'negative' : ''}">${formatCurrency(data.wartosc)}</div>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderChart() {
     const ctx = document.getElementById('pieChart').getContext('2d');
-    const breakdown = calculateCategoryBreakdown();
     
-    const chartData = Object.entries(breakdown)
-        .filter(([key, data]) => data.wartosc > 0 && key !== 'dlugi')
+    // Dla wykresu grupujemy tylko po kategorii (bez walut)
+    const categoryTotals = {};
+    
+    assets.forEach(asset => {
+        const categoryKey = getCategoryKey(asset.kategoria);
+        if (!categoryKey || categoryKey === 'dlugi') return;
+        
+        const categoryData = KATEGORIE[categoryKey];
+        const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
+        
+        if (!categoryTotals[categoryKey]) {
+            categoryTotals[categoryKey] = {
+                nazwa: categoryData.nazwa,
+                color: categoryData.color,
+                wartosc: 0
+            };
+        }
+        
+        categoryTotals[categoryKey].wartosc += valuePLN;
+    });
+    
+    const chartData = Object.entries(categoryTotals)
+        .filter(([_, data]) => data.wartosc > 0)
         .sort((a, b) => b[1].wartosc - a[1].wartosc);
     
     const total = chartData.reduce((sum, [_, data]) => sum + data.wartosc, 0);
