@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assetly - Dashboard</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Style -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+</head>
+<body>
+    
+    <!-- Header -->
+    <header class="header">
+        <div class="header-logo">
+            <span class="header-logo-icon">💰</span>
+            <span class="header-logo-text">Assetly</span>
+        </div>
+        <div class="header-user">
+            <button id="logoutBtn" class="btn btn-secondary btn-sm">Wyloguj</button>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="container">
+        
+        <!-- Sekcja połączenia z arkuszem -->
+        <section class="connection-section">
+            <div class="connection-form">
+                <span style="color: var(--text-secondary);">⚙️ ID Arkusza:</span>
+                <input 
+                    type="text" 
+                    id="spreadsheetId" 
+                    class="form-input" 
+                    placeholder="Wklej ID arkusza Google Sheets..."
+                    style="max-width: 400px;"
+                >
+                <button id="connectBtn" class="btn btn-primary btn-sm">Połącz</button>
+                <div id="connectionStatus" class="connection-status disconnected">
+                    <span>❌</span> Niepołączono
+                </div>
+            </div>
+        </section>
+        
+        <!-- Wartość netto -->
+        <section class="net-worth-section">
+            <p class="net-worth-label">Wartość netto majątku</p>
+            <div>
+                <span id="netWorthValue" class="net-worth-value">0,00</span>
+                <span class="net-worth-currency">PLN</span>
+            </div>
+        </section>
+        
+        <!-- Przycisk dodawania -->
+        <section class="add-asset-section">
+            <button id="addAssetBtn" class="btn btn-primary">
+                <span>+</span> Dodaj aktywo
+            </button>
+        </section>
+        
+        <!-- Grid: wykres + breakdown -->
+        <section class="dashboard-grid">
+            
+            <!-- Wykres kołowy -->
+            <div class="card chart-section">
+                <div class="card-header">
+                    <h3 class="card-title">Rozkład majątku</h3>
+                </div>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Breakdown po kategoriach -->
+            <div class="card breakdown-section">
+                <div class="card-header">
+                    <h3 class="card-title">Twoje aktywa</h3>
+                </div>
+                <div id="breakdownList" class="breakdown-list">
+                    <!-- Generowane dynamicznie -->
+                </div>
+            </div>
+            
+        </section>
+        
+        <!-- Lista wszystkich aktywów -->
+        <section class="assets-section card">
+            <div class="card-header">
+                <h3 class="card-title">Lista wszystkich aktywów</h3>
+            </div>
+            
+            <!-- Loading spinner -->
+            <div id="loadingSpinner" class="loading hidden">
+                <div class="spinner"></div>
+            </div>
+            
+            <!-- Lista aktywów -->
+            <div id="assetsList" class="assets-list">
+                <!-- Generowane dynamicznie -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <p class="empty-state-text">Połącz arkusz Google Sheets, aby zobaczyć swoje aktywa</p>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+    
+    <!-- Modal: Dodaj/Edytuj aktywo -->
+    <div id="assetModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle" class="modal-title">Dodaj aktywo</h3>
+                <button id="closeModal" class="modal-close">&times;</button>
+            </div>
+            
+            <form id="assetForm">
+                <div class="form-group">
+                    <label class="form-label" for="kategoria">Kategoria</label>
+                    <select id="kategoria" class="form-select" required>
+                        <!-- Generowane dynamicznie -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="podkategoria">Podkategoria</label>
+                    <select id="podkategoria" class="form-select" required>
+                        <!-- Generowane dynamicznie -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="nazwa">Nazwa</label>
+                    <input 
+                        type="text" 
+                        id="nazwa" 
+                        class="form-input" 
+                        placeholder="np. Portfel, Santander, Tesla..."
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Wartość i waluta</label>
+                    <div class="input-group">
+                        <input 
+                            type="number" 
+                            id="wartosc" 
+                            class="form-input" 
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            required
+                        >
+                        <select id="waluta" class="form-select" style="max-width: 120px;">
+                            <option value="PLN">PLN</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="CHF">CHF</option>
+                            <option value="JPY">JPY</option>
+                            <option value="CAD">CAD</option>
+                            <option value="AUD">AUD</option>
+                            <option value="SEK">SEK</option>
+                            <option value="NOK">NOK</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="notatki">Notatki (opcjonalnie)</label>
+                    <textarea 
+                        id="notatki" 
+                        class="form-textarea" 
+                        placeholder="Dodatkowe informacje..."
+                        rows="3"
+                    ></textarea>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" id="cancelBtn" class="btn btn-secondary">Anuluj</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Potwierdzenie usunięcia -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Potwierdź usunięcie</h3>
+                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            </div>
+            
+            <p id="confirmText" class="confirm-text">
+                Czy na pewno chcesz usunąć to aktywo?
+            </p>
+            
+            <div class="confirm-actions">
+                <button id="confirmCancelBtn" class="btn btn-secondary">Anuluj</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Usuń</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+    
+    <!-- Google API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Skrypty aplikacji -->
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="sheets.js"></script>
+    <script src="app.js"></script>
+    
+</body>
+</html>
