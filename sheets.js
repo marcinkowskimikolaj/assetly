@@ -1,5 +1,5 @@
 /**
- * Assetly - Wrapper dla Google Sheets API
+ * Assetly - Google Sheets API Wrapper
  */
 
 class SheetsAPI {
@@ -8,18 +8,12 @@ class SheetsAPI {
         this.sheetName = CONFIG.SHEET_NAME;
     }
     
-    /**
-     * Testuje połączenie z arkuszem
-     * @returns {Promise<boolean>}
-     */
     async testConnection() {
         try {
-            // Pobierz metadane arkusza
             const response = await gapi.client.sheets.spreadsheets.get({
                 spreadsheetId: this.spreadsheetId
             });
             
-            // Sprawdź czy istnieje zakładka "Aktywa"
             const sheets = response.result.sheets || [];
             const hasAktywa = sheets.some(sheet => 
                 sheet.properties.title === this.sheetName
@@ -31,15 +25,10 @@ class SheetsAPI {
             
             return true;
         } catch (error) {
-            console.error('Błąd połączenia z arkuszem:', error);
             throw error;
         }
     }
     
-    /**
-     * Pobiera wszystkie aktywa z arkusza
-     * @returns {Promise<Array>}
-     */
     async getAllAssets() {
         try {
             await ensureValidToken();
@@ -51,9 +40,8 @@ class SheetsAPI {
             
             const rows = response.result.values || [];
             
-            // Parsuj wiersze na obiekty
             return rows.map((row, index) => ({
-                rowIndex: index + 2, // +2 bo zaczynamy od A2
+                rowIndex: index + 2,
                 timestamp: row[0] || '',
                 id: row[1] || '',
                 kategoria: row[2] || '',
@@ -62,24 +50,17 @@ class SheetsAPI {
                 wartosc: parseFloat(row[5]) || 0,
                 waluta: row[6] || 'PLN',
                 notatki: row[7] || ''
-            })).filter(asset => asset.id); // Filtruj puste wiersze
+            })).filter(asset => asset.id);
             
         } catch (error) {
-            console.error('Błąd pobierania aktywów:', error);
             throw error;
         }
     }
     
-    /**
-     * Dodaje nowe aktywo do arkusza
-     * @param {Object} asset - Dane aktywa
-     * @returns {Promise<Object>}
-     */
     async addAsset(asset) {
         try {
             await ensureValidToken();
             
-            // Generuj UUID i timestamp
             const id = this.generateUUID();
             const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
             
@@ -94,47 +75,30 @@ class SheetsAPI {
                 asset.notatki || ''
             ];
             
-            const response = await gapi.client.sheets.spreadsheets.values.append({
+            await gapi.client.sheets.spreadsheets.values.append({
                 spreadsheetId: this.spreadsheetId,
                 range: `${this.sheetName}!A:H`,
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
-                resource: {
-                    values: [row]
-                }
+                resource: { values: [row] }
             });
             
-            return {
-                id,
-                timestamp,
-                ...asset
-            };
+            return { id, timestamp, ...asset };
             
         } catch (error) {
-            console.error('Błąd dodawania aktywa:', error);
             throw error;
         }
     }
     
-    /**
-     * Aktualizuje istniejące aktywo
-     * @param {string} id - ID aktywa
-     * @param {Object} updates - Nowe wartości
-     * @returns {Promise<boolean>}
-     */
     async updateAsset(id, updates) {
         try {
             await ensureValidToken();
             
-            // Najpierw znajdź wiersz z danym ID
             const assets = await this.getAllAssets();
             const asset = assets.find(a => a.id === id);
             
-            if (!asset) {
-                throw new Error('Nie znaleziono aktywa o podanym ID');
-            }
+            if (!asset) throw new Error('Nie znaleziono aktywa');
             
-            // Przygotuj zaktualizowany wiersz
             const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
             const row = [
                 timestamp,
@@ -147,42 +111,29 @@ class SheetsAPI {
                 updates.notatki !== undefined ? updates.notatki : asset.notatki
             ];
             
-            // Zaktualizuj wiersz
             await gapi.client.sheets.spreadsheets.values.update({
                 spreadsheetId: this.spreadsheetId,
                 range: `${this.sheetName}!A${asset.rowIndex}:H${asset.rowIndex}`,
                 valueInputOption: 'USER_ENTERED',
-                resource: {
-                    values: [row]
-                }
+                resource: { values: [row] }
             });
             
             return true;
             
         } catch (error) {
-            console.error('Błąd aktualizacji aktywa:', error);
             throw error;
         }
     }
     
-    /**
-     * Usuwa aktywo z arkusza
-     * @param {string} id - ID aktywa do usunięcia
-     * @returns {Promise<boolean>}
-     */
     async deleteAsset(id) {
         try {
             await ensureValidToken();
             
-            // Znajdź wiersz z danym ID
             const assets = await this.getAllAssets();
             const asset = assets.find(a => a.id === id);
             
-            if (!asset) {
-                throw new Error('Nie znaleziono aktywa o podanym ID');
-            }
+            if (!asset) throw new Error('Nie znaleziono aktywa');
             
-            // Pobierz ID arkusza (sheet ID)
             const spreadsheet = await gapi.client.sheets.spreadsheets.get({
                 spreadsheetId: this.spreadsheetId
             });
@@ -191,23 +142,18 @@ class SheetsAPI {
                 s.properties.title === this.sheetName
             );
             
-            if (!sheet) {
-                throw new Error('Nie znaleziono zakładki');
-            }
+            if (!sheet) throw new Error('Nie znaleziono zakładki');
             
-            const sheetId = sheet.properties.sheetId;
-            
-            // Usuń wiersz
             await gapi.client.sheets.spreadsheets.batchUpdate({
                 spreadsheetId: this.spreadsheetId,
                 resource: {
                     requests: [{
                         deleteDimension: {
                             range: {
-                                sheetId: sheetId,
+                                sheetId: sheet.properties.sheetId,
                                 dimension: 'ROWS',
-                                startIndex: asset.rowIndex - 1, // 0-indexed
-                                endIndex: asset.rowIndex        // exclusive
+                                startIndex: asset.rowIndex - 1,
+                                endIndex: asset.rowIndex
                             }
                         }
                     }]
@@ -217,15 +163,10 @@ class SheetsAPI {
             return true;
             
         } catch (error) {
-            console.error('Błąd usuwania aktywa:', error);
             throw error;
         }
     }
     
-    /**
-     * Generuje unikalny identyfikator UUID v4
-     * @returns {string}
-     */
     generateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
@@ -235,7 +176,6 @@ class SheetsAPI {
     }
 }
 
-// Funkcja pomocnicza do tworzenia instancji SheetsAPI
 function createSheetsAPI(spreadsheetId) {
     return new SheetsAPI(spreadsheetId);
 }
