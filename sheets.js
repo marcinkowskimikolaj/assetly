@@ -62,6 +62,35 @@ class SheetsAPI {
         try {
             await ensureValidToken();
             
+            // Sprawdź czy istnieje już takie samo aktywo
+            const existingAssets = await this.getAllAssets();
+            const duplicate = existingAssets.find(a => 
+                a.kategoria === asset.kategoria &&
+                a.nazwa === asset.nazwa &&
+                a.waluta === asset.waluta &&
+                (a.kontoEmerytalne || '') === (asset.kontoEmerytalne || '')
+            );
+            
+            if (duplicate) {
+                // Aktualizuj istniejące - zsumuj wartość
+                const newValue = duplicate.wartosc + asset.wartosc;
+                const newNotatki = this.mergeNotes(duplicate.notatki, asset.notatki, asset.wartosc);
+                
+                await this.updateAsset(duplicate.id, {
+                    ...duplicate,
+                    wartosc: newValue,
+                    notatki: newNotatki
+                });
+                
+                return { 
+                    ...duplicate, 
+                    wartosc: newValue, 
+                    notatki: newNotatki,
+                    wasUpdated: true 
+                };
+            }
+            
+            // Nowe aktywo - dodaj normalnie
             const id = this.generateUUID();
             const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
             
@@ -85,11 +114,36 @@ class SheetsAPI {
                 resource: { values: [row] }
             });
             
-            return { id, timestamp, ...asset };
+            return { id, timestamp, ...asset, wasUpdated: false };
             
         } catch (error) {
             throw error;
         }
+    }
+    
+    // Helper: łączy notatki przy aktualizacji duplikatu
+    mergeNotes(existingNotes, newNotes, addedValue) {
+        const dateStr = new Date().toLocaleDateString('pl-PL');
+        const valueNote = `+${addedValue.toFixed(2)} PLN (${dateStr})`;
+        
+        // Jeśli nowa notatka ma treść, użyj jej
+        if (newNotes && newNotes.trim()) {
+            if (existingNotes) {
+                return `${existingNotes}; ${newNotes}`;
+            }
+            return newNotes;
+        }
+        
+        // W przeciwnym razie dodaj informację o zwiększeniu wartości
+        if (existingNotes) {
+            // Sprawdź czy notatka już zawiera historię zakupów
+            if (existingNotes.includes('+') && existingNotes.includes('PLN')) {
+                return `${existingNotes}, ${valueNote}`;
+            }
+            return `${existingNotes}; Dokupiono: ${valueNote}`;
+        }
+        
+        return `Dokupiono: ${valueNote}`;
     }
     
     async updateAsset(id, updates) {
