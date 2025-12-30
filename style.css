@@ -667,10 +667,19 @@ a:hover { color: var(--primary-light); }
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .breakdown-value.negative {
     color: var(--error);
+}
+
+.breakdown-converted {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
 }
 
 /* ============================================
