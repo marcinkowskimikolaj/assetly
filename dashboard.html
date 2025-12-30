@@ -4,163 +4,190 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assetly - Dashboard</title>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Style -->
     <link rel="stylesheet" href="style.css">
-    
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2310B981' rx='20' width='100' height='100'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>A</text></svg>">
 </head>
 <body>
+    <div class="dashboard">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12V7H5a2 2 0 010-4h14v4"/>
+                    <path d="M3 5v14a2 2 0 002 2h16v-5"/>
+                    <path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/>
+                </svg>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="sidebar-link active" title="Dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                        <polyline points="9,22 9,12 15,12 15,22"/>
+                    </svg>
+                </div>
+                <div class="sidebar-link" title="Lista aktywów">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6"/>
+                        <line x1="8" y1="12" x2="21" y2="12"/>
+                        <line x1="8" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="6" x2="3.01" y2="6"/>
+                        <line x1="3" y1="12" x2="3.01" y2="12"/>
+                        <line x1="3" y1="18" x2="3.01" y2="18"/>
+                    </svg>
+                </div>
+                <div class="sidebar-link" title="Statystyki">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18"/>
+                        <path d="M18 9l-5 5-4-4-4 4"/>
+                    </svg>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="sidebar-link" id="logoutBtn" title="Wyloguj">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                        <polyline points="16,17 21,12 16,7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Header -->
+            <header class="header">
+                <h1 class="header-title">Dashboard</h1>
+                <div class="header-actions">
+                    <div id="connectionStatus" class="connection-badge loading">
+                        <span class="connection-dot"></span>Łączenie...
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                
+                <!-- Main Column -->
+                <div class="dashboard-main">
+                    
+                    <!-- Net Worth Card -->
+                    <div class="networth-card">
+                        <div class="networth-label">Wartość netto majątku</div>
+                        <div>
+                            <span id="netWorthValue" class="networth-value">0,00</span>
+                            <span class="networth-currency">PLN</span>
+                        </div>
+                        <button id="addAssetBtn" class="btn btn-primary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Dodaj aktywo
+                        </button>
+                    </div>
+                    
+                    <!-- Breakdown Card -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Rozkład majątku</h3>
+                        </div>
+                        <div id="breakdownGrid" class="breakdown-grid">
+                            <!-- Generated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Assets List -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Twoje aktywa</h3>
+                        </div>
+                        
+                        <div id="loadingSpinner" class="loading hidden">
+                            <div class="spinner"></div>
+                        </div>
+                        
+                        <div id="assetsList" class="assets-list">
+                            <!-- Generated dynamically -->
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <!-- Sidebar Column -->
+                <div class="dashboard-sidebar">
+                    
+                    <!-- Chart Card -->
+                    <div class="card card-glass">
+                        <div class="card-header">
+                            <h3 class="card-title">Wykres aktywów</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="pieChart"></canvas>
+                            <div class="chart-center">
+                                <div class="chart-center-label">Razem</div>
+                                <div id="chartCenterValue" class="chart-center-value">0 PLN</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Stats -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Informacje</h3>
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.8;">
+                            <p>Kursy walut pobierane z <strong style="color: var(--primary)">NBP</strong></p>
+                            <p>Dane zapisywane w <strong style="color: var(--primary)">Google Sheets</strong></p>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+            </div>
+            
+        </main>
+        
+    </div>
     
-    <!-- Header -->
-    <header class="header">
-        <div class="header-logo">
-            <span class="header-logo-icon">💰</span>
-            <span class="header-logo-text">Assetly</span>
-        </div>
-        <div class="header-user">
-            <button id="logoutBtn" class="btn btn-secondary btn-sm">Wyloguj</button>
-        </div>
-    </header>
-    
-    <!-- Main Content -->
-    <main class="container">
-        
-        <!-- Sekcja połączenia z arkuszem -->
-        <section class="connection-section">
-            <div class="connection-form">
-                <span style="color: var(--text-secondary);">⚙️ ID Arkusza:</span>
-                <input 
-                    type="text" 
-                    id="spreadsheetId" 
-                    class="form-input" 
-                    placeholder="Wklej ID arkusza Google Sheets..."
-                    style="max-width: 400px;"
-                >
-                <button id="connectBtn" class="btn btn-primary btn-sm">Połącz</button>
-                <div id="connectionStatus" class="connection-status disconnected">
-                    <span>❌</span> Niepołączono
-                </div>
-            </div>
-        </section>
-        
-        <!-- Wartość netto -->
-        <section class="net-worth-section">
-            <p class="net-worth-label">Wartość netto majątku</p>
-            <div>
-                <span id="netWorthValue" class="net-worth-value">0,00</span>
-                <span class="net-worth-currency">PLN</span>
-            </div>
-        </section>
-        
-        <!-- Przycisk dodawania -->
-        <section class="add-asset-section">
-            <button id="addAssetBtn" class="btn btn-primary">
-                <span>+</span> Dodaj aktywo
-            </button>
-        </section>
-        
-        <!-- Grid: wykres + breakdown -->
-        <section class="dashboard-grid">
-            
-            <!-- Wykres kołowy -->
-            <div class="card chart-section">
-                <div class="card-header">
-                    <h3 class="card-title">Rozkład majątku</h3>
-                </div>
-                <div class="chart-container">
-                    <canvas id="pieChart"></canvas>
-                </div>
-            </div>
-            
-            <!-- Breakdown po kategoriach -->
-            <div class="card breakdown-section">
-                <div class="card-header">
-                    <h3 class="card-title">Twoje aktywa</h3>
-                </div>
-                <div id="breakdownList" class="breakdown-list">
-                    <!-- Generowane dynamicznie -->
-                </div>
-            </div>
-            
-        </section>
-        
-        <!-- Lista wszystkich aktywów -->
-        <section class="assets-section card">
-            <div class="card-header">
-                <h3 class="card-title">Lista wszystkich aktywów</h3>
-            </div>
-            
-            <!-- Loading spinner -->
-            <div id="loadingSpinner" class="loading hidden">
-                <div class="spinner"></div>
-            </div>
-            
-            <!-- Lista aktywów -->
-            <div id="assetsList" class="assets-list">
-                <!-- Generowane dynamicznie -->
-                <div class="empty-state">
-                    <div class="empty-state-icon">📊</div>
-                    <p class="empty-state-text">Połącz arkusz Google Sheets, aby zobaczyć swoje aktywa</p>
-                </div>
-            </div>
-        </section>
-        
-    </main>
-    
-    <!-- Modal: Dodaj/Edytuj aktywo -->
+    <!-- Modal: Add/Edit Asset -->
     <div id="assetModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modalTitle" class="modal-title">Dodaj aktywo</h3>
-                <button id="closeModal" class="modal-close">&times;</button>
+                <button id="closeModal" class="modal-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
             
             <form id="assetForm">
                 <div class="form-group">
                     <label class="form-label" for="kategoria">Kategoria</label>
-                    <select id="kategoria" class="form-select" required>
-                        <!-- Generowane dynamicznie -->
-                    </select>
+                    <select id="kategoria" class="form-select" required></select>
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="podkategoria">Podkategoria</label>
-                    <select id="podkategoria" class="form-select" required>
-                        <!-- Generowane dynamicznie -->
-                    </select>
+                    <select id="podkategoria" class="form-select" required></select>
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="nazwa">Nazwa</label>
-                    <input 
-                        type="text" 
-                        id="nazwa" 
-                        class="form-input" 
-                        placeholder="np. Portfel, Santander, Tesla..."
-                        required
-                    >
+                    <input type="text" id="nazwa" class="form-input" placeholder="np. Portfel, Santander, Tesla..." required>
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label">Wartość i waluta</label>
-                    <div class="input-group">
-                        <input 
-                            type="number" 
-                            id="wartosc" 
-                            class="form-input" 
-                            placeholder="0.00"
-                            step="0.01"
-                            min="0"
-                            required
-                        >
-                        <select id="waluta" class="form-select" style="max-width: 120px;">
+                    <div class="input-row">
+                        <input type="number" id="wartosc" class="form-input" placeholder="0.00" step="0.01" min="0" required>
+                        <select id="waluta" class="form-select">
                             <option value="PLN">PLN</option>
                             <option value="USD">USD</option>
                             <option value="EUR">EUR</option>
@@ -177,12 +204,7 @@
                 
                 <div class="form-group">
                     <label class="form-label" for="notatki">Notatki (opcjonalnie)</label>
-                    <textarea 
-                        id="notatki" 
-                        class="form-textarea" 
-                        placeholder="Dodatkowe informacje..."
-                        rows="3"
-                    ></textarea>
+                    <textarea id="notatki" class="form-textarea" placeholder="Dodatkowe informacje..." rows="3"></textarea>
                 </div>
                 
                 <div class="modal-footer">
@@ -193,17 +215,20 @@
         </div>
     </div>
     
-    <!-- Modal: Potwierdzenie usunięcia -->
+    <!-- Modal: Confirm Delete -->
     <div id="confirmModal" class="modal">
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
                 <h3 class="modal-title">Potwierdź usunięcie</h3>
-                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+                <button class="modal-close" onclick="closeConfirmModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
             
-            <p id="confirmText" class="confirm-text">
-                Czy na pewno chcesz usunąć to aktywo?
-            </p>
+            <p id="confirmText" class="confirm-text">Czy na pewno chcesz usunąć to aktywo?</p>
             
             <div class="confirm-actions">
                 <button id="confirmCancelBtn" class="btn btn-secondary">Anuluj</button>
@@ -215,18 +240,13 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
     
-    <!-- Google API -->
+    <!-- Scripts -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Skrypty aplikacji -->
     <script src="config.js"></script>
     <script src="auth.js"></script>
     <script src="sheets.js"></script>
     <script src="app.js"></script>
-    
 </body>
 </html>
