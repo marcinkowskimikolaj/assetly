@@ -420,6 +420,70 @@
     color: var(--primary);
 }
 
+/* Allocation Chart Section */
+.portfolio-details-allocation {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 20px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+}
+
+.allocation-chart-container {
+    width: 180px;
+    height: 180px;
+}
+
+.allocation-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.allocation-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.allocation-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.allocation-name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.allocation-percent {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 50px;
+    text-align: right;
+}
+
+@media (max-width: 600px) {
+    .portfolio-details-allocation {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+    
+    .allocation-legend {
+        width: 100%;
+    }
+}
+
 .portfolio-details-assets h4,
 .portfolio-details-add h4 {
     font-size: 0.875rem;
