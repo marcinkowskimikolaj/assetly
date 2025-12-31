@@ -316,6 +316,12 @@ a:hover { color: var(--primary-light); }
     color: var(--primary);
 }
 
+.card-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Glass Card Variant */
 .card-glass {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
@@ -630,11 +636,30 @@ a:hover { color: var(--primary-light); }
     background: var(--bg-input);
     border-radius: var(--radius-md);
     transition: all 0.2s;
-    cursor: default;
+    cursor: pointer;
+    position: relative;
+    border: 2px solid transparent;
 }
 
 .breakdown-item:hover {
     background: var(--bg-hover);
+}
+
+/* Zaznaczony kafelek */
+.breakdown-item.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+/* Odznaczony kafelek */
+.breakdown-item.deselected {
+    opacity: 0.5;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.breakdown-item.deselected:hover {
+    opacity: 0.75;
 }
 
 .breakdown-icon {
