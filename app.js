@@ -159,9 +159,15 @@ async function loadAssets() {
 async function handleAddAsset(formData) {
     try {
         showLoading(true);
-        await sheetsAPI.addAsset(formData);
+        const result = await sheetsAPI.addAsset(formData);
         await loadAssets();
-        showToast('Aktywo dodane!', 'success');
+        
+        if (result.wasUpdated) {
+            showToast(`Zaktualizowano "${formData.nazwa}" - zsumowano wartość`, 'success');
+        } else {
+            showToast('Aktywo dodane!', 'success');
+        }
+        
         closeModal();
     } catch (error) {
         showToast('Nie udało się dodać aktywa', 'error');
