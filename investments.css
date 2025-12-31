@@ -493,7 +493,9 @@
    PLAN TAB
    ============================================ */
 .plan-container {
-    max-width: 800px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .plan-section {
@@ -751,6 +753,8 @@
    ============================================ */
 .calculator-container {
     max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .calculator-header {
