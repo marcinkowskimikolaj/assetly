@@ -8,6 +8,7 @@ let currencyRates = { PLN: 1 };
 let pieChart = null;
 let currentEditId = null;
 let deleteAssetId = null;
+let selectedBreakdownItems = new Set(); // Zaznaczone elementy w rozkładzie majątku
 
 // ============================================
 // INICJALIZACJA
@@ -297,7 +298,17 @@ function renderDashboard() {
 }
 
 function renderNetWorth() {
-    const total = calculateTotalWorth();
+    const breakdown = calculateCategoryBreakdown();
+    let total = 0;
+    
+    Object.entries(breakdown).forEach(([key, data]) => {
+        // Jeśli selectedBreakdownItems jest puste (pierwsze ładowanie), pokaż wszystko
+        // W przeciwnym razie sprawdź czy element jest zaznaczony
+        if (selectedBreakdownItems.size === 0 || selectedBreakdownItems.has(key)) {
+            total += data.wartoscPLN;
+        }
+    });
+    
     document.getElementById('netWorthValue').textContent = 
         new Intl.NumberFormat('pl-PL', {
             minimumFractionDigits: 2,
@@ -315,15 +326,37 @@ function renderBreakdown() {
     
     if (items.length === 0) {
         container.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: var(--text-muted); padding: 24px;">Brak aktywów do wyświetlenia</p>';
+        selectedBreakdownItems.clear();
         return;
     }
+    
+    // Synchronizuj selectedBreakdownItems z aktualnymi danymi
+    const currentKeys = new Set(items.map(([key]) => key));
+    const isFirstLoad = selectedBreakdownItems.size === 0;
+    
+    // Usuń nieistniejące elementy
+    selectedBreakdownItems.forEach(key => {
+        if (!currentKeys.has(key)) {
+            selectedBreakdownItems.delete(key);
+        }
+    });
+    
+    // Dodaj nowe elementy (domyślnie zaznaczone)
+    items.forEach(([key]) => {
+        if (!selectedBreakdownItems.has(key)) {
+            selectedBreakdownItems.add(key);
+        }
+    });
     
     container.innerHTML = items.map(([key, data]) => {
         const showConverted = data.waluta !== 'PLN';
         const displayName = `${data.nazwa} ${data.waluta}`;
+        const isSelected = selectedBreakdownItems.has(key);
         
         return `
-            <div class="breakdown-item">
+            <div class="breakdown-item ${isSelected ? 'selected' : 'deselected'}" 
+                 data-key="${key}" 
+                 onclick="toggleBreakdownItem('${key}')">
                 <div class="breakdown-icon" style="background: ${data.color}20; color: ${data.color}">
                     ${getIcon(data.icon)}
                 </div>
@@ -339,28 +372,68 @@ function renderBreakdown() {
     }).join('');
 }
 
+function toggleBreakdownItem(key) {
+    if (selectedBreakdownItems.has(key)) {
+        // Nie pozwól odznaczyć wszystkiego
+        if (selectedBreakdownItems.size > 1) {
+            selectedBreakdownItems.delete(key);
+        }
+    } else {
+        selectedBreakdownItems.add(key);
+    }
+    
+    // Aktualizuj UI
+    updateBreakdownSelection();
+    renderFilteredNetWorth();
+    renderFilteredChart();
+}
+
+function updateBreakdownSelection() {
+    document.querySelectorAll('.breakdown-item').forEach(item => {
+        const key = item.dataset.key;
+        if (selectedBreakdownItems.has(key)) {
+            item.classList.remove('deselected');
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+            item.classList.add('deselected');
+        }
+    });
+}
+
+function renderFilteredNetWorth() {
+    renderNetWorth();
+}
+
+function renderFilteredChart() {
+    renderChart();
+}
+
 function renderChart() {
     const ctx = document.getElementById('pieChart').getContext('2d');
+    const breakdown = calculateCategoryBreakdown();
     
-    // Dla wykresu grupujemy tylko po kategorii (bez walut)
+    // Grupuj po kategorii, ale tylko zaznaczone elementy
     const categoryTotals = {};
     
-    assets.forEach(asset => {
-        const categoryKey = getCategoryKey(asset.kategoria);
-        if (!categoryKey || categoryKey === 'dlugi') return;
+    Object.entries(breakdown).forEach(([key, data]) => {
+        // Jeśli selectedBreakdownItems jest puste (pierwsze ładowanie), pokaż wszystko
+        // W przeciwnym razie sprawdź czy element jest zaznaczony
+        if (selectedBreakdownItems.size > 0 && !selectedBreakdownItems.has(key)) return;
+        if (data.categoryKey === 'dlugi') return;
+        if (data.wartoscPLN <= 0) return;
         
-        const categoryData = KATEGORIE[categoryKey];
-        const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
+        const categoryKey = data.categoryKey;
         
         if (!categoryTotals[categoryKey]) {
             categoryTotals[categoryKey] = {
-                nazwa: categoryData.nazwa,
-                color: categoryData.color,
+                nazwa: KATEGORIE[categoryKey]?.nazwa || data.nazwa,
+                color: data.color,
                 wartosc: 0
             };
         }
         
-        categoryTotals[categoryKey].wartosc += valuePLN;
+        categoryTotals[categoryKey].wartosc += data.wartoscPLN;
     });
     
     const chartData = Object.entries(categoryTotals)
