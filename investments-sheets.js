@@ -411,24 +411,35 @@ const InvestmentsSheets = {
     // ═══════════════════════════════════════════════════════════
     
     async createAssetsFromCalculation(items, sheetsAPI) {
-        const createdAssets = [];
+        const results = {
+            created: 0,
+            updated: 0,
+            assets: []
+        };
         
         for (const item of items) {
             const asset = {
                 kategoria: 'Inwestycje',
-                podkategoria: 'ETF (XTB)',
+                podkategoria: 'ETF',
                 nazwa: `${item.ticker} - ${item.nazwa}`,
                 wartosc: item.wartosc,
                 waluta: 'PLN',
-                notatki: `Zakup z planu inwestycyjnego`,
+                notatki: '',
                 kontoEmerytalne: item.konto === 'TOZAME' ? '' : item.konto
             };
             
-            const created = await sheetsAPI.addAsset(asset);
-            createdAssets.push(created);
+            // addAsset automatycznie obsłuży duplikaty (zsumuje wartość)
+            const result = await sheetsAPI.addAsset(asset);
+            
+            if (result.wasUpdated) {
+                results.updated++;
+            } else {
+                results.created++;
+            }
+            results.assets.push(result);
         }
         
-        return createdAssets;
+        return results;
     },
     
     // ═══════════════════════════════════════════════════════════
