@@ -144,6 +144,14 @@ function showPortfolioDetails(portfolioId) {
     const modal = document.getElementById('portfolioDetailsModal');
     const content = document.getElementById('portfolioDetailsContent');
     
+    // Oblicz alokację procentową
+    const totalValue = portfolio.wartosc || 0;
+    const allocations = portfolio.assets.map(a => ({
+        nazwa: a.nazwa,
+        wartosc: convertToPLN(a.wartosc, a.waluta),
+        procent: totalValue > 0 ? (convertToPLN(a.wartosc, a.waluta) / totalValue * 100) : 0
+    })).sort((a, b) => b.wartosc - a.wartosc);
+    
     content.innerHTML = `
         <div class="portfolio-details-header">
             <h2>${escapeHtml(portfolio.nazwa)}</h2>
@@ -158,6 +166,23 @@ function showPortfolioDetails(portfolioId) {
             <span class="label">Wartość portfela</span>
             <span class="value">${formatMoney(portfolio.wartosc)}</span>
         </div>
+        
+        ${portfolio.assets.length > 0 ? `
+            <div class="portfolio-details-allocation">
+                <div class="allocation-chart-container">
+                    <canvas id="portfolioAllocationChart"></canvas>
+                </div>
+                <div class="allocation-legend">
+                    ${allocations.map((a, i) => `
+                        <div class="allocation-legend-item">
+                            <span class="allocation-color" style="background: ${getAllocationColor(i)}"></span>
+                            <span class="allocation-name">${escapeHtml(a.nazwa)}</span>
+                            <span class="allocation-percent">${a.procent.toFixed(1)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
         
         <div class="portfolio-details-assets">
             <h4>Aktywa w portfelu (${portfolio.assets.length})</h4>
@@ -191,6 +216,66 @@ function showPortfolioDetails(portfolioId) {
     `;
     
     modal.classList.add('active');
+    
+    // Renderuj wykres po dodaniu do DOM
+    if (portfolio.assets.length > 0) {
+        renderPortfolioAllocationChart(allocations);
+    }
+}
+
+function getAllocationColor(index) {
+    const colors = [
+        '#10B981', '#6366F1', '#F59E0B', '#EC4899', 
+        '#14B8A6', '#8B5CF6', '#EF4444', '#84CC16',
+        '#06B6D4', '#F97316', '#A855F7', '#22C55E'
+    ];
+    return colors[index % colors.length];
+}
+
+function renderPortfolioAllocationChart(allocations) {
+    const canvas = document.getElementById('portfolioAllocationChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    const colors = allocations.map((_, i) => getAllocationColor(i));
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: allocations.map(a => a.nazwa),
+            datasets: [{
+                data: allocations.map(a => a.wartosc),
+                backgroundColor: colors,
+                borderColor: 'rgba(10, 15, 13, 1)',
+                borderWidth: 3,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(21, 31, 27, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: 'rgba(255,255,255,0.7)',
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: (context) => {
+                            const value = formatMoney(context.raw);
+                            const percent = allocations[context.dataIndex].procent.toFixed(1);
+                            return `${value} (${percent}%)`;
+                        }
+                    }
+                }
+            },
+            cutout: '65%'
+        }
+    });
 }
 
 function renderAddAssetToPortfolio(portfolio) {
