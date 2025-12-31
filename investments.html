@@ -234,17 +234,23 @@
         async function fetchCurrencyRates() {
             const currencies = ['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK'];
             
-            for (const currency of currencies) {
+            const promises = currencies.map(async (currency) => {
                 try {
                     const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
                     if (response.ok) {
                         const data = await response.json();
-                        currencyRates[currency] = data.rates[0].mid;
+                        return { currency, rate: data.rates[0].mid };
                     }
                 } catch (error) {
-                    currencyRates[currency] = 1;
+                    // Cicha obsługa błędu
                 }
-            }
+                return { currency, rate: 1 };
+            });
+            
+            const results = await Promise.all(promises);
+            results.forEach(({ currency, rate }) => {
+                currencyRates[currency] = rate;
+            });
         }
         
         // Pobierz kursy na starcie
