@@ -47,35 +47,43 @@ async function loadInvestmentsData() {
     showInvestmentsLoading(true);
     
     try {
-        // Pobierz wszystkie aktywa
+        // Pobierz wszystkie dane równolegle
         const sheetsAPI = createSheetsAPI(CONFIG.SPREADSHEET_ID);
-        allAssets = await sheetsAPI.getAllAssets();
         
-        // Filtruj tylko inwestycje
+        const [
+            assetsData,
+            portfoliosData,
+            assignmentsData,
+            planData,
+            instrumentsData,
+            historyData
+        ] = await Promise.all([
+            sheetsAPI.getAllAssets(),
+            InvestmentsSheets.getPortfolios(),
+            InvestmentsSheets.getAllPortfolioAssignments(),
+            InvestmentsSheets.getPlan(),
+            InvestmentsSheets.getPlanInstruments(),
+            InvestmentsSheets.getPaymentHistory()
+        ]);
+        
+        allAssets = assetsData;
         investmentAssets = allAssets.filter(a => a.kategoria === 'Inwestycje');
-        
-        // Pobierz portfele i przypisania
-        portfolios = await InvestmentsSheets.getPortfolios();
-        const assignments = await InvestmentsSheets.getAllPortfolioAssignments();
+        portfolios = portfoliosData;
+        plan = planData;
+        planInstruments = instrumentsData;
+        paymentHistory = historyData;
         
         // Przypisz aktywa do portfeli
         portfolios.forEach(p => {
-            const assetIds = assignments
+            const assetIds = assignmentsData
                 .filter(a => a.portfolioId === p.id)
                 .map(a => a.assetId);
             p.assets = investmentAssets.filter(a => assetIds.includes(a.id));
             p.wartosc = p.assets.reduce((sum, a) => sum + convertToPLN(a.wartosc, a.waluta), 0);
         });
         
-        // Pobierz plan i instrumenty
-        plan = await InvestmentsSheets.getPlan();
-        planInstruments = await InvestmentsSheets.getPlanInstruments();
-        
-        // Pobierz historię
-        paymentHistory = await InvestmentsSheets.getPaymentHistory();
-        
-        // Pobierz limity IKE/IKZE
-        await IKE_IKZE.fetchLimits({ spreadsheetId: CONFIG.SPREADSHEET_ID });
+        // Pobierz limity IKE/IKZE (w tle, nie blokuje)
+        IKE_IKZE.fetchLimits({ spreadsheetId: CONFIG.SPREADSHEET_ID }).catch(() => {});
         
     } catch (error) {
         console.error('Błąd ładowania danych:', error);
