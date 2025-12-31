@@ -63,6 +63,7 @@ function setupEventListeners() {
 
 async function connectSpreadsheet() {
     updateConnectionStatus('loading');
+    showLoading(true);
     
     try {
         await ensureValidToken();
@@ -72,9 +73,15 @@ async function connectSpreadsheet() {
         
         updateConnectionStatus('connected');
         
-        await fetchCurrencyRates();
-        await IKE_IKZE.fetchLimits(sheetsAPI);
-        await loadAssets();
+        // Pobierz kursy walut, limity i aktywa równolegle
+        await Promise.all([
+            fetchCurrencyRates(),
+            IKE_IKZE.fetchLimits(sheetsAPI),
+            loadAssets(false) // nie renderuj jeszcze
+        ]);
+        
+        // Teraz renderuj z wszystkimi danymi
+        renderDashboard();
         
     } catch (error) {
         console.error('Connection error:', error);
@@ -90,6 +97,8 @@ async function connectSpreadsheet() {
         }
         
         showToast(message, 'error');
+    } finally {
+        showLoading(false);
     }
 }
 
@@ -113,17 +122,24 @@ function updateConnectionStatus(status) {
 async function fetchCurrencyRates() {
     const currencies = WALUTY.filter(c => c !== 'PLN');
     
-    for (const currency of currencies) {
+    // Pobierz wszystkie kursy równolegle
+    const promises = currencies.map(async (currency) => {
         try {
             const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
             if (response.ok) {
                 const data = await response.json();
-                currencyRates[currency] = data.rates[0].mid;
+                return { currency, rate: data.rates[0].mid };
             }
         } catch (error) {
-            currencyRates[currency] = 1;
+            // Cicha obsługa błędu
         }
-    }
+        return { currency, rate: 1 };
+    });
+    
+    const results = await Promise.all(promises);
+    results.forEach(({ currency, rate }) => {
+        currencyRates[currency] = rate;
+    });
 }
 
 function convertToPLN(amount, currency) {
@@ -142,17 +158,19 @@ function formatCurrency(amount, currency = 'PLN') {
 // ZARZĄDZANIE AKTYWAMI
 // ============================================
 
-async function loadAssets() {
-    showLoading(true);
+async function loadAssets(shouldRender = true) {
+    if (shouldRender) showLoading(true);
     
     try {
         assets = await sheetsAPI.getAllAssets();
-        renderDashboard();
+        if (shouldRender) {
+            renderDashboard();
+        }
     } catch (error) {
         console.error('Load error:', error);
         showToast('Błąd ładowania danych', 'error');
     } finally {
-        showLoading(false);
+        if (shouldRender) showLoading(false);
     }
 }
 
