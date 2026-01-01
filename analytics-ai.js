@@ -35,79 +35,331 @@ const AnalyticsAI = {
     },
     
     // ═══════════════════════════════════════════════════════════
-    // PRZYGOTOWANIE KONTEKSTU
+    // PRZYGOTOWANIE DANYCH - UPROSZCZONE I PRZELICZONE
     // ═══════════════════════════════════════════════════════════
     
-    async prepareContext(assets, snapshots, milestones) {
-        // Formatuj aktualne aktywa
-        const assetsContext = assets.map(a => {
-            const valuePLN = convertToPLN(a.wartosc, a.waluta);
-            return `- ${a.nazwa} (${a.kategoria}): ${valuePLN.toFixed(2)} PLN${a.kontoEmerytalne ? ` [${a.kontoEmerytalne}]` : ''}`;
-        }).join('\n');
+    prepareDataForAI(assets, snapshots, milestones) {
+        const today = new Date().toISOString().substring(0, 10);
         
-        // Formatuj historię (snapshoty pogrupowane po dacie)
-        const snapshotsByDate = {};
-        snapshots.forEach(s => {
-            if (!snapshotsByDate[s.data]) {
-                snapshotsByDate[s.data] = { suma: 0, kategorie: {} };
-            }
-            if (s.kategoria === 'Długi') {
-                snapshotsByDate[s.data].suma -= Math.abs(s.wartoscPLN);
-            } else {
-                snapshotsByDate[s.data].suma += s.wartoscPLN;
-            }
-            if (!snapshotsByDate[s.data].kategorie[s.kategoria]) {
-                snapshotsByDate[s.data].kategorie[s.kategoria] = 0;
-            }
-            snapshotsByDate[s.data].kategorie[s.kategoria] += s.wartoscPLN;
-        });
+        // === 1. AKTUALNE AKTYWA - z deduplikacją ===
+        const uniqueAssets = this.deduplicateAssets(assets);
+        const currentData = this.calculateCurrentState(uniqueAssets);
         
-        const historyContext = Object.entries(snapshotsByDate)
-            .sort((a, b) => new Date(a[0]) - new Date(b[0]))
-            .map(([data, info]) => {
-                const kategorieStr = Object.entries(info.kategorie)
-                    .map(([k, v]) => `${k}: ${v.toFixed(0)}`)
-                    .join(', ');
-                return `${data}: ${info.suma.toFixed(0)} PLN (${kategorieStr})`;
-            }).join('\n');
+        // === 2. HISTORIA - z deduplikacją i agregacją ===
+        const historyData = this.calculateHistory(snapshots);
         
-        // Formatuj kamienie milowe
-        const milestonesContext = milestones.map(m => {
-            if (m.isAchieved) {
-                return `✓ ${m.wartosc.toFixed(0)} PLN - osiągnięty ${m.achievedDate || 'tak'}`;
-            }
-            return `◯ ${m.wartosc.toFixed(0)} PLN - cel`;
-        }).join('\n');
+        // === 3. GOTOWE METRYKI ===
+        const metrics = this.calculateMetrics(currentData, historyData);
+        
+        // === 4. KAMIENIE MILOWE ===
+        const milestonesData = this.formatMilestones(milestones, currentData.totalNetWorth);
         
         return {
-            assets: assetsContext,
-            history: historyContext,
-            milestones: milestonesContext
+            today,
+            current: currentData,
+            history: historyData,
+            metrics,
+            milestones: milestonesData
         };
     },
     
-    getSystemPrompt(context) {
-        return `Jesteś asystentem analizy finansowej. Analizujesz dane majątkowe użytkownika. Zawsze dokonujesz obliczenia w sposób poprawny i zgodny z logiką i zasadami matematyki. Przed daniem odpowiedzi użytkownikowi analizujesz logikę swojej odpowiedzi i upewniasz się o braku przeoczeń - nie dajesz tego w odpowiedzi.
+    deduplicateAssets(assets) {
+        // Grupuj po unikalnym kluczu (nazwa + kategoria + waluta + konto)
+        const grouped = {};
+        assets.forEach(a => {
+            const key = `${a.nazwa}|${a.kategoria}|${a.waluta}|${a.kontoEmerytalne || ''}`;
+            if (!grouped[key]) {
+                grouped[key] = { ...a, wartosc: 0 };
+            }
+            grouped[key].wartosc += parseFloat(a.wartosc) || 0;
+        });
+        return Object.values(grouped);
+    },
+    
+    calculateCurrentState(assets) {
+        let totalNetWorth = 0;
+        const byCategory = {};
+        
+        assets.forEach(a => {
+            const valuePLN = convertToPLN(a.wartosc, a.waluta);
+            const isDebt = a.kategoria === 'Długi';
+            const value = isDebt ? -Math.abs(valuePLN) : valuePLN;
+            
+            totalNetWorth += value;
+            
+            if (!byCategory[a.kategoria]) {
+                byCategory[a.kategoria] = { total: 0, items: [] };
+            }
+            byCategory[a.kategoria].total += value;
+            byCategory[a.kategoria].items.push({
+                nazwa: a.nazwa,
+                wartoscPLN: valuePLN,
+                konto: a.kontoEmerytalne || null
+            });
+        });
+        
+        return { totalNetWorth, byCategory, assetCount: assets.length };
+    },
+    
+    calculateHistory(snapshots) {
+        if (!snapshots || snapshots.length === 0) {
+            return { hasData: false, months: [] };
+        }
+        
+        // Grupuj snapshoty po dacie i deduplikuj po ID aktywa
+        const byDate = {};
+        
+        snapshots.forEach(s => {
+            if (!s.data) return;
+            
+            if (!byDate[s.data]) {
+                byDate[s.data] = { assets: {}, total: 0 };
+            }
+            
+            // Deduplikacja - używamy aktywoId lub nazwy jako klucza
+            const assetKey = s.aktywoId || `${s.nazwa}|${s.kategoria}`;
+            
+            // Jeśli już mamy to aktywo dla tej daty, nadpisz (nie sumuj!)
+            const value = s.kategoria === 'Długi' ? -Math.abs(s.wartoscPLN) : s.wartoscPLN;
+            byDate[s.data].assets[assetKey] = {
+                kategoria: s.kategoria,
+                value: value
+            };
+        });
+        
+        // Przelicz sumy po deduplikacji
+        const months = Object.entries(byDate)
+            .map(([date, data]) => {
+                let total = 0;
+                const byCategory = {};
+                
+                Object.values(data.assets).forEach(asset => {
+                    total += asset.value;
+                    if (!byCategory[asset.kategoria]) {
+                        byCategory[asset.kategoria] = 0;
+                    }
+                    byCategory[asset.kategoria] += asset.value;
+                });
+                
+                return { date, total, byCategory };
+            })
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        return { hasData: months.length > 0, months };
+    },
+    
+    calculateMetrics(currentData, historyData) {
+        const result = {
+            currentNetWorth: currentData.totalNetWorth,
+            changeMonthly: null,
+            changeYearly: null,
+            avgMonthlyGrowth: null,
+            bestMonth: null,
+            worstMonth: null
+        };
+        
+        if (!historyData.hasData || historyData.months.length < 2) {
+            return result;
+        }
+        
+        const months = historyData.months;
+        const lastMonth = months[months.length - 1];
+        const prevMonth = months[months.length - 2];
+        
+        // Zmiana m/m
+        const changeM = lastMonth.total - prevMonth.total;
+        const changeMPercent = prevMonth.total !== 0 ? (changeM / Math.abs(prevMonth.total)) * 100 : 0;
+        result.changeMonthly = {
+            from: prevMonth.date,
+            to: lastMonth.date,
+            fromValue: prevMonth.total,
+            toValue: lastMonth.total,
+            change: changeM,
+            percent: changeMPercent
+        };
+        
+        // Zmiana r/r (znajdź miesiąc sprzed roku)
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const yearAgoMonth = oneYearAgo.toISOString().substring(0, 7);
+        const yearAgoData = months.find(m => m.date.startsWith(yearAgoMonth));
+        
+        if (yearAgoData) {
+            const changeY = lastMonth.total - yearAgoData.total;
+            const changeYPercent = yearAgoData.total !== 0 ? (changeY / Math.abs(yearAgoData.total)) * 100 : 0;
+            result.changeYearly = {
+                from: yearAgoData.date,
+                to: lastMonth.date,
+                fromValue: yearAgoData.total,
+                toValue: lastMonth.total,
+                change: changeY,
+                percent: changeYPercent
+            };
+        }
+        
+        // Średni miesięczny przyrost
+        let totalGrowth = 0;
+        let bestChange = -Infinity;
+        let worstChange = Infinity;
+        let bestIdx = 0;
+        let worstIdx = 0;
+        
+        for (let i = 1; i < months.length; i++) {
+            const change = months[i].total - months[i-1].total;
+            totalGrowth += change;
+            
+            if (change > bestChange) {
+                bestChange = change;
+                bestIdx = i;
+            }
+            if (change < worstChange) {
+                worstChange = change;
+                worstIdx = i;
+            }
+        }
+        
+        result.avgMonthlyGrowth = totalGrowth / (months.length - 1);
+        
+        if (bestIdx > 0) {
+            result.bestMonth = {
+                date: months[bestIdx].date,
+                change: bestChange,
+                percent: months[bestIdx-1].total !== 0 ? (bestChange / Math.abs(months[bestIdx-1].total)) * 100 : 0
+            };
+        }
+        
+        if (worstIdx > 0) {
+            result.worstMonth = {
+                date: months[worstIdx].date,
+                change: worstChange,
+                percent: months[worstIdx-1].total !== 0 ? (worstChange / Math.abs(months[worstIdx-1].total)) * 100 : 0
+            };
+        }
+        
+        return result;
+    },
+    
+    formatMilestones(milestones, currentNetWorth) {
+        if (!milestones || milestones.length === 0) return [];
+        
+        return milestones.map(m => ({
+            target: m.wartosc,
+            achieved: m.isAchieved,
+            achievedDate: m.achievedDate || null,
+            remaining: m.isAchieved ? 0 : m.wartosc - currentNetWorth
+        }));
+    },
+    
+    // ═══════════════════════════════════════════════════════════
+    // FORMATOWANIE TEKSTU DLA AI
+    // ═══════════════════════════════════════════════════════════
+    
+    formatDataAsText(data) {
+        const formatPLN = (v) => v.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' PLN';
+        const formatChange = (v, p) => `${v >= 0 ? '+' : ''}${formatPLN(v)} (${p >= 0 ? '+' : ''}${p.toFixed(1)}%)`;
+        
+        let text = `=== DANE NA DZIEŃ ${data.today} ===\n\n`;
+        
+        // Główna wartość
+        text += `MAJĄTEK NETTO: ${formatPLN(data.current.totalNetWorth)}\n\n`;
+        
+        // Podział na kategorie
+        text += `PODZIAŁ MAJĄTKU:\n`;
+        Object.entries(data.current.byCategory)
+            .sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total))
+            .forEach(([kat, info]) => {
+                text += `• ${kat}: ${formatPLN(info.total)}\n`;
+            });
+        
+        // Metryki - tylko jeśli są dane
+        text += `\n=== OBLICZONE METRYKI ===\n`;
+        
+        if (data.metrics.changeMonthly) {
+            const m = data.metrics.changeMonthly;
+            text += `\nZMIANA MIESIĘCZNA (${m.from} → ${m.to}):\n`;
+            text += `• Było: ${formatPLN(m.fromValue)}\n`;
+            text += `• Jest: ${formatPLN(m.toValue)}\n`;
+            text += `• Zmiana: ${formatChange(m.change, m.percent)}\n`;
+        } else {
+            text += `\nZMIANA MIESIĘCZNA: brak danych (potrzeba min. 2 snapshotów)\n`;
+        }
+        
+        if (data.metrics.changeYearly) {
+            const y = data.metrics.changeYearly;
+            text += `\nZMIANA ROCZNA (${y.from} → ${y.to}):\n`;
+            text += `• Było: ${formatPLN(y.fromValue)}\n`;
+            text += `• Jest: ${formatPLN(y.toValue)}\n`;
+            text += `• Zmiana: ${formatChange(y.change, y.percent)}\n`;
+        } else {
+            text += `\nZMIANA ROCZNA: brak danych (potrzeba snapshotu sprzed roku)\n`;
+        }
+        
+        if (data.metrics.avgMonthlyGrowth !== null) {
+            text += `\nŚREDNI MIESIĘCZNY PRZYROST: ${formatChange(data.metrics.avgMonthlyGrowth, 0).split('(')[0].trim()}\n`;
+        }
+        
+        if (data.metrics.bestMonth) {
+            text += `\nNAJLEPSZY MIESIĄC: ${data.metrics.bestMonth.date} (${formatChange(data.metrics.bestMonth.change, data.metrics.bestMonth.percent)})\n`;
+        }
+        
+        if (data.metrics.worstMonth) {
+            text += `\nNAJGORSZY MIESIĄC: ${data.metrics.worstMonth.date} (${formatChange(data.metrics.worstMonth.change, data.metrics.worstMonth.percent)})\n`;
+        }
+        
+        // Historia
+        if (data.history.hasData) {
+            text += `\n=== HISTORIA (${data.history.months.length} snapshotów) ===\n`;
+            data.history.months.forEach((m, i) => {
+                let changeStr = '';
+                if (i > 0) {
+                    const prev = data.history.months[i-1].total;
+                    const change = m.total - prev;
+                    const pct = prev !== 0 ? (change / Math.abs(prev)) * 100 : 0;
+                    changeStr = ` | zmiana: ${change >= 0 ? '+' : ''}${change.toFixed(0)} PLN (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`;
+                }
+                text += `${m.date}: ${formatPLN(m.total)}${changeStr}\n`;
+            });
+        } else {
+            text += `\n=== HISTORIA ===\nBrak snapshotów historycznych.\n`;
+        }
+        
+        // Kamienie milowe
+        if (data.milestones.length > 0) {
+            text += `\n=== KAMIENIE MILOWE ===\n`;
+            data.milestones.forEach(m => {
+                if (m.achieved) {
+                    text += `✓ ${formatPLN(m.target)} - OSIĄGNIĘTY${m.achievedDate ? ' (' + m.achievedDate + ')' : ''}\n`;
+                } else {
+                    text += `○ ${formatPLN(m.target)} - brakuje ${formatPLN(m.remaining)}\n`;
+                }
+            });
+        }
+        
+        return text;
+    },
+    
+    // ═══════════════════════════════════════════════════════════
+    // SYSTEM PROMPT
+    // ═══════════════════════════════════════════════════════════
+    
+    getSystemPrompt(dataText) {
+        return `Jesteś asystentem do analizy majątku osobistego. Odpowiadasz po polsku.
 
-WAŻNE ZASADY:
-- NIE dawaj rekomendacji inwestycyjnych
-- NIE sugeruj konkretnych działań finansowych
-- Skup się TYLKO na faktach, trendach i obserwacjach
-- Używaj prostego języka, bez żargonu finansowego
-- Odpowiadaj po polsku
-- Bądź zwięzły ale konkretny
-- Zawsze wykonuj działania matematyczne poprawnie
+TWOJE ZADANIE:
+- Odpowiadaj na pytania TYLKO na podstawie poniższych danych
+- Cytuj konkretne liczby z danych
+- Nie wymyślaj żadnych liczb ani dat
+- Jeśli czegoś nie ma w danych, powiedz "brak danych"
+- Nie dawaj porad inwestycyjnych
 
-AKTUALNE AKTYWA UŻYTKOWNIKA:
-${context.assets || 'Brak danych'}
+ZAKAZY:
+- NIE zgaduj wartości
+- NIE zakładaj zmian które nie są w danych
+- NIE mylisz pojęć (np. zmiana miesięczna vs roczna)
 
-HISTORIA WARTOŚCI MAJĄTKU (snapshoty miesięczne):
-${context.history || 'Brak historii'}
+${dataText}
 
-KAMIENIE MILOWE UŻYTKOWNIKA:
-${context.milestones || 'Brak zdefiniowanych'}
-
-Odpowiadaj na pytania użytkownika bazując na powyższych danych.`;
+Odpowiadaj krótko i konkretnie, cytując liczby z powyższych danych.`;
     },
     
     // ═══════════════════════════════════════════════════════════
@@ -120,33 +372,21 @@ Odpowiadaj na pytania użytkownika bazując na powyższych danych.`;
             throw new Error('Brak klucza API OpenAI');
         }
         
-        const context = await this.prepareContext(assets, snapshots, milestones);
+        // Przygotuj dane
+        const data = this.prepareDataForAI(assets, snapshots, milestones);
+        const dataText = this.formatDataAsText(data);
         
-        // Filtruj dane według opcji
-        let filteredSnapshots = snapshots;
-        if (options.scope !== 'all') {
-            filteredSnapshots = snapshots.filter(s => {
-                if (options.scope === 'investments') return s.kategoria === 'Inwestycje';
-                if (options.scope === 'cash') return s.kategoria === 'Gotówka';
-                if (options.scope === 'accounts') return s.kategoria === 'Konta bankowe';
-                if (options.scope === 'category') return s.kategoria === options.category;
-                if (options.scope === 'asset') return s.nazwa === options.assetName;
-                return true;
-            });
+        // Filtruj dla konkretnego zakresu jeśli potrzeba
+        let scopeInfo = '';
+        if (options.scope === 'investments') {
+            scopeInfo = 'Skup się TYLKO na kategorii "Inwestycje".';
+        } else if (options.scope === 'cash') {
+            scopeInfo = 'Skup się TYLKO na kategorii "Gotówka".';
+        } else if (options.scope === 'accounts') {
+            scopeInfo = 'Skup się TYLKO na kategorii "Konta bankowe".';
         }
         
-        // Filtruj po okresie
-        if (options.period !== 'all') {
-            const now = new Date();
-            let cutoff = new Date();
-            if (options.period === '3m') cutoff.setMonth(now.getMonth() - 3);
-            else if (options.period === '6m') cutoff.setMonth(now.getMonth() - 6);
-            else if (options.period === '1y') cutoff.setFullYear(now.getFullYear() - 1);
-            
-            filteredSnapshots = filteredSnapshots.filter(s => new Date(s.data) >= cutoff);
-        }
-        
-        // Buduj prompt analizy
+        // Buduj prompt
         const analysisTypes = [];
         if (options.summary) analysisTypes.push('podsumowanie zmian wartości');
         if (options.trends) analysisTypes.push('wykrycie trendów');
@@ -154,55 +394,14 @@ Odpowiadaj na pytania użytkownika bazując na powyższych danych.`;
         if (options.anomalies) analysisTypes.push('wykrycie nietypowych zmian');
         if (options.comparison) analysisTypes.push('porównanie z poprzednim okresem');
         
-        const scopeLabel = this.getScopeLabel(options);
-        const periodLabel = this.getPeriodLabel(options);
-        
         const userPrompt = `Przeprowadź analizę: ${analysisTypes.join(', ')}.
+${scopeInfo}
 
-Zakres: ${scopeLabel}
-Okres: ${periodLabel}
-
-Dane do analizy:
-${this.formatSnapshotsForAnalysis(filteredSnapshots)}
-
-Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
+Używaj TYLKO liczb z sekcji "OBLICZONE METRYKI" i "HISTORIA". 
+Podawaj konkretne wartości i daty.
+Odpowiedz w punktach.`;
         
-        return await this.callOpenAI(apiKey, context, userPrompt);
-    },
-    
-    getScopeLabel(options) {
-        switch (options.scope) {
-            case 'all': return 'Cały majątek';
-            case 'investments': return 'Inwestycje';
-            case 'cash': return 'Gotówka';
-            case 'accounts': return 'Konta bankowe';
-            case 'category': return `Kategoria: ${options.category}`;
-            case 'asset': return `Aktywo: ${options.assetName}`;
-            default: return 'Cały majątek';
-        }
-    },
-    
-    getPeriodLabel(options) {
-        switch (options.period) {
-            case '3m': return 'Ostatnie 3 miesiące';
-            case '6m': return 'Ostatnie 6 miesięcy';
-            case '1y': return 'Ostatni rok';
-            case 'all': return 'Cała historia';
-            default: return 'Cała historia';
-        }
-    },
-    
-    formatSnapshotsForAnalysis(snapshots) {
-        const byDate = {};
-        snapshots.forEach(s => {
-            if (!byDate[s.data]) byDate[s.data] = 0;
-            byDate[s.data] += s.wartoscPLN;
-        });
-        
-        return Object.entries(byDate)
-            .sort((a, b) => new Date(a[0]) - new Date(b[0]))
-            .map(([data, suma]) => `${data}: ${suma.toFixed(0)} PLN`)
-            .join('\n');
+        return await this.callOpenAI(apiKey, dataText, userPrompt);
     },
     
     // ═══════════════════════════════════════════════════════════
@@ -218,11 +417,13 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
         // Dodaj wiadomość użytkownika
         this.chatMessages.push({ role: 'user', content: message });
         
-        const context = await this.prepareContext(assets, snapshots, milestones);
+        // Przygotuj dane
+        const data = this.prepareDataForAI(assets, snapshots, milestones);
+        const dataText = this.formatDataAsText(data);
         
         // Buduj historię rozmowy dla API
         const messages = [
-            { role: 'system', content: this.getSystemPrompt(context) },
+            { role: 'system', content: this.getSystemPrompt(dataText) },
             ...this.chatMessages.map(m => ({ role: m.role, content: m.content }))
         ];
         
@@ -246,7 +447,7 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
     // OPENAI API CALLS
     // ═══════════════════════════════════════════════════════════
     
-    async callOpenAI(apiKey, context, userPrompt) {
+    async callOpenAI(apiKey, dataText, userPrompt) {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -256,10 +457,10 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: this.getSystemPrompt(context) },
+                    { role: 'system', content: this.getSystemPrompt(dataText) },
                     { role: 'user', content: userPrompt }
                 ],
-                temperature: 0.7,
+                temperature: 0.1,
                 max_tokens: 1500
             })
         });
@@ -269,8 +470,8 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
             throw new Error(error.error?.message || 'Błąd API OpenAI');
         }
         
-        const data = await response.json();
-        return data.choices[0].message.content;
+        const result = await response.json();
+        return result.choices[0].message.content;
     },
     
     async callOpenAIChat(apiKey, messages) {
@@ -283,7 +484,7 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: messages,
-                temperature: 0.7,
+                temperature: 0.1,
                 max_tokens: 1000
             })
         });
@@ -293,8 +494,8 @@ Przedstaw wyniki w czytelnej formie, używając punktów i konkretnych liczb.`;
             throw new Error(error.error?.message || 'Błąd API OpenAI');
         }
         
-        const data = await response.json();
-        return data.choices[0].message.content;
+        const result = await response.json();
+        return result.choices[0].message.content;
     },
     
     // ═══════════════════════════════════════════════════════════
