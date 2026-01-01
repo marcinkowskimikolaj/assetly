@@ -1,0 +1,639 @@
+/**
+ * Assetly - Analytics Module Styles
+ */
+
+/* ============================================
+   TABS NAVIGATION
+   ============================================ */
+.analytics-tabs-nav {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+    width: fit-content;
+    flex-wrap: wrap;
+}
+
+.analytics-tab-btn {
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.analytics-tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.analytics-tab-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+.analytics-tab-content {
+    display: none;
+}
+
+.analytics-tab-content.active {
+    display: block;
+}
+
+/* ============================================
+   CARDS
+   ============================================ */
+.analytics-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.analytics-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.analytics-card-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.chart-controls .form-select-sm {
+    padding: 6px 12px;
+    font-size: 0.8125rem;
+    min-width: 100px;
+}
+
+/* ============================================
+   CHARTS
+   ============================================ */
+.main-chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.monthly-chart-container {
+    height: 200px;
+    position: relative;
+}
+
+.asset-chart-container {
+    height: 180px;
+    position: relative;
+    margin-bottom: 16px;
+}
+
+/* ============================================
+   METRICS GRID
+   ============================================ */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+}
+
+.metric-title {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.metric-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.metric-value.positive {
+    color: var(--success);
+}
+
+.metric-value.negative {
+    color: var(--error);
+}
+
+.metric-change {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.metric-change.positive {
+    color: var(--success);
+}
+
+.metric-change.negative {
+    color: var(--error);
+}
+
+/* ============================================
+   TWO COLUMNS LAYOUT
+   ============================================ */
+.analytics-two-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+/* ============================================
+   MILESTONES
+   ============================================ */
+.milestones-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.milestone-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+}
+
+.milestone-item.achieved {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.milestone-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.milestone-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.milestone-item.achieved .milestone-icon {
+    background: var(--primary);
+    color: white;
+}
+
+.milestone-info {
+    flex: 1;
+}
+
+.milestone-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.milestone-status {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.milestones-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+}
+
+.milestones-empty p {
+    margin-bottom: 12px;
+}
+
+/* ============================================
+   GROWTH RATE
+   ============================================ */
+.growth-rate-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.growth-rate-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+}
+
+.growth-rate-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.growth-rate-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.growth-rate-value.positive {
+    color: var(--success);
+}
+
+.growth-rate-value.negative {
+    color: var(--error);
+}
+
+.growth-rate-projection {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-glass);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* ============================================
+   ASSET ANALYSIS
+   ============================================ */
+.asset-analysis-form {
+    margin-bottom: 20px;
+}
+
+.asset-analysis-form .form-select {
+    max-width: 400px;
+}
+
+.asset-analysis-content {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 24px;
+    align-items: start;
+}
+
+.asset-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.asset-metric {
+    padding: 16px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.asset-metric .label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.asset-metric .value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.asset-metric .value.positive {
+    color: var(--success);
+}
+
+.asset-metric .value.negative {
+    color: var(--error);
+}
+
+.asset-analysis-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* ============================================
+   AI FORM
+   ============================================ */
+.ai-form-section {
+    margin-bottom: 20px;
+}
+
+.ai-form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.ai-radio-group,
+.ai-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.ai-radio,
+.ai-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 12px;
+    background: var(--bg-input);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+
+.ai-radio:hover,
+.ai-checkbox:hover {
+    background: var(--bg-hover);
+}
+
+.ai-radio input,
+.ai-checkbox input {
+    accent-color: var(--primary);
+}
+
+/* ============================================
+   AI RESULT
+   ============================================ */
+.ai-result {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.ai-result strong {
+    color: var(--text-primary);
+}
+
+/* ============================================
+   CHAT
+   ============================================ */
+.ai-chat-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.chat-messages {
+    flex: 1;
+    min-height: 300px;
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+}
+
+.chat-welcome {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+}
+
+.chat-welcome p {
+    margin-bottom: 16px;
+}
+
+.chat-welcome ul {
+    list-style: none;
+    padding: 0;
+}
+
+.chat-welcome li {
+    padding: 8px 0;
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.chat-message {
+    margin-bottom: 16px;
+    display: flex;
+}
+
+.chat-message.user {
+    justify-content: flex-end;
+}
+
+.chat-message.ai {
+    justify-content: flex-start;
+}
+
+.chat-message-content {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+}
+
+.chat-message.user .chat-message-content {
+    background: var(--primary);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.chat-message.ai .chat-message-content {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+}
+
+.chat-message.ai.error .chat-message-content {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--error);
+}
+
+.chat-input-container {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-input-container .form-input {
+    flex: 1;
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ============================================
+   SAVED CHATS
+   ============================================ */
+.saved-chat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-input);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.saved-chat-item:hover {
+    background: var(--bg-hover);
+}
+
+.saved-chat-title {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.saved-chat-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* ============================================
+   SPINNER
+   ============================================ */
+.spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 900px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .analytics-two-cols {
+        grid-template-columns: 1fr;
+    }
+    
+    .asset-analysis-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .asset-metrics {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .asset-metric {
+        flex: 1;
+        min-width: 140px;
+    }
+}
+
+@media (max-width: 600px) {
+    .analytics-tabs-nav {
+        width: 100%;
+    }
+    
+    .analytics-tab-btn {
+        flex: 1;
+        text-align: center;
+        padding: 10px 8px;
+        font-size: 0.8125rem;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-controls {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .chart-controls .form-select-sm {
+        width: 100%;
+    }
+    
+    .analytics-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .ai-radio-group,
+    .ai-checkbox-group {
+        flex-direction: column;
+    }
+    
+    .chat-message-content {
+        max-width: 90%;
+    }
+}
