@@ -87,7 +87,7 @@ const AnalyticsAI = {
     },
     
     getSystemPrompt(context) {
-        return `Jesteś asystentem analizy finansowej. Analizujesz dane majątkowe użytkownika.
+        return `Jesteś asystentem analizy finansowej. Analizujesz dane majątkowe użytkownika. Zawsze dokonujesz obliczenia w sposób poprawny i zgodny z logiką i zasadami matematyki. Przed daniem odpowiedzi użytkownikowi analizujesz logikę swojej odpowiedzi i upewniasz się o braku przeoczeń - nie dajesz tego w odpowiedzi.
 
 WAŻNE ZASADY:
 - NIE dawaj rekomendacji inwestycyjnych
@@ -96,6 +96,7 @@ WAŻNE ZASADY:
 - Używaj prostego języka, bez żargonu finansowego
 - Odpowiadaj po polsku
 - Bądź zwięzły ale konkretny
+- Zawsze wykonuj działania matematyczne poprawnie
 
 AKTUALNE AKTYWA UŻYTKOWNIKA:
 ${context.assets || 'Brak danych'}
