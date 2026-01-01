@@ -359,7 +359,7 @@ ZAKAZY:
 
 ${dataText}
 
-Odpowiadaj krótko i konkretnie, cytując liczby z powyższych danych.`;
+Odpowiadaj konkretnie i dopasowanie do zapytania, cytując liczby z powyższych danych.`;
     },
     
     // ═══════════════════════════════════════════════════════════
