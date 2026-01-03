@@ -29,9 +29,9 @@ const AnalyticsSnapshots = {
         return { created: false };
     },
     
-    // Pobierz snapshoty pogrupowane po dacie
-    async getSnapshotsByDate() {
-        const snapshots = await AnalyticsSheets.getSnapshots();
+    // Pobierz snapshoty pogrupowane po dacie (używa przekazanych snapshotów lub pobiera)
+    getSnapshotsByDate(snapshotsData = null) {
+        const snapshots = snapshotsData || [];
         const grouped = {};
         
         snapshots.forEach(s => {
@@ -44,9 +44,9 @@ const AnalyticsSnapshots = {
         return grouped;
     },
     
-    // Pobierz sumy per kategoria dla każdej daty
-    async getCategorySumsByDate(categoryFilter = null) {
-        const snapshots = await AnalyticsSheets.getSnapshots();
+    // Pobierz sumy per kategoria dla każdej daty (używa przekazanych snapshotów)
+    getCategorySumsByDate(snapshotsData, categoryFilter = null) {
+        const snapshots = snapshotsData || [];
         const result = {};
         
         snapshots.forEach(s => {
@@ -73,9 +73,9 @@ const AnalyticsSnapshots = {
         return Object.values(result).sort((a, b) => new Date(a.data) - new Date(b.data));
     },
     
-    // Pobierz historię konkretnego aktywa
-    async getAssetHistory(aktywoId) {
-        const snapshots = await AnalyticsSheets.getSnapshots();
+    // Pobierz historię konkretnego aktywa (używa przekazanych snapshotów)
+    getAssetHistory(snapshotsData, aktywoId) {
+        const snapshots = snapshotsData || [];
         return snapshots
             .filter(s => s.aktywoId === aktywoId)
             .sort((a, b) => new Date(a.data) - new Date(b.data));
