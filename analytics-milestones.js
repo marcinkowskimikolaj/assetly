@@ -21,51 +21,63 @@ const AnalyticsMilestones = {
         'Konta bankowe': 'Konta bankowe'
     },
     
-    // Pobierz kamienie milowe z informacją o statusie dla danej kategorii
-    async getMilestonesWithStatus(currentValues, kategoria = 'all') {
-        const allMilestones = await AnalyticsSheets.getMilestones();
-        const milestones = allMilestones.filter(m => m.kategoria === kategoria);
-        const snapshots = await AnalyticsSheets.getSnapshots();
-        
-        // Pobierz aktualną wartość dla kategorii
-        const currentValue = currentValues[kategoria] || 0;
-        
-        return milestones.map(m => {
-            const isAchieved = m.osiagnietaData || currentValue >= m.wartosc;
-            let achievedDate = m.osiagnietaData;
-            
-            // Jeśli osiągnięty ale bez daty, znajdź datę w snapshotach
-            if (isAchieved && !achievedDate) {
-                achievedDate = this.findAchievementDate(m.wartosc, snapshots, kategoria);
-            }
-            
-            // Oblicz projekcję dla nieosiągniętych
-            let projection = null;
-            if (!isAchieved && currentValue > 0) {
-                const avgGrowthRate = this.estimateGrowthRate(snapshots, kategoria);
-                projection = AnalyticsMetrics.calculateProjection(
-                    currentValue, 
-                    m.wartosc, 
-                    avgGrowthRate
-                );
-            }
-            
-            return {
-                wartosc: m.wartosc,
-                kategoria: m.kategoria,
-                isAchieved: isAchieved,
-                achievedDate: achievedDate,
-                projection: projection
-            };
-        });
+    // Cache dla danych (unikamy wielokrotnego pobierania)
+    _cachedMilestones: null,
+    _cachedSnapshots: null,
+    
+    // Wyczyść cache (wywoływane po zmianach)
+    clearCache() {
+        this._cachedMilestones = null;
+        this._cachedSnapshots = null;
     },
     
-    // Pobierz wszystkie kamienie milowe ze statusem (dla wszystkich kategorii)
-    async getAllMilestonesWithStatus(currentValues) {
+    // Pobierz wszystkie kamienie milowe ze statusem - ZOPTYMALIZOWANE (jedno zapytanie)
+    async getAllMilestonesWithStatus(currentValues, snapshotsFromParent = null) {
+        // Pobierz dane tylko raz
+        const [allMilestones, snapshots] = await Promise.all([
+            AnalyticsSheets.getMilestones(),
+            snapshotsFromParent ? Promise.resolve(snapshotsFromParent) : AnalyticsSheets.getSnapshots()
+        ]);
+        
+        // Oblicz growth rate dla każdej kategorii raz
+        const growthRates = {};
+        for (const kategoria of Object.keys(this.CATEGORY_MAP)) {
+            growthRates[kategoria] = this.estimateGrowthRate(snapshots, kategoria);
+        }
+        
+        // Przetwórz wszystkie kategorie bez dodatkowych zapytań
         const result = {};
         for (const kategoria of Object.keys(this.CATEGORY_MAP)) {
-            result[kategoria] = await this.getMilestonesWithStatus(currentValues, kategoria);
+            const milestones = allMilestones.filter(m => m.kategoria === kategoria);
+            const currentValue = currentValues[kategoria] || 0;
+            
+            result[kategoria] = milestones.map(m => {
+                const isAchieved = m.osiagnietaData || currentValue >= m.wartosc;
+                let achievedDate = m.osiagnietaData;
+                
+                if (isAchieved && !achievedDate) {
+                    achievedDate = this.findAchievementDate(m.wartosc, snapshots, kategoria);
+                }
+                
+                let projection = null;
+                if (!isAchieved && currentValue > 0) {
+                    projection = AnalyticsMetrics.calculateProjection(
+                        currentValue, 
+                        m.wartosc, 
+                        growthRates[kategoria]
+                    );
+                }
+                
+                return {
+                    wartosc: m.wartosc,
+                    kategoria: m.kategoria,
+                    isAchieved: isAchieved,
+                    achievedDate: achievedDate,
+                    projection: projection
+                };
+            });
         }
+        
         return result;
     },
     
@@ -135,9 +147,9 @@ const AnalyticsMilestones = {
         return count > 0 ? totalRate / count : 2;
     },
     
-    // Sprawdź i zaktualizuj osiągnięte kamienie milowe
-    async checkAndUpdateAchievements(currentValues) {
-        const milestones = await AnalyticsSheets.getMilestones();
+    // Sprawdź i zaktualizuj osiągnięte kamienie milowe (przyjmuje opcjonalnie już pobrane milestones)
+    async checkAndUpdateAchievements(currentValues, milestonesFromParent = null) {
+        const milestones = milestonesFromParent || await AnalyticsSheets.getMilestones();
         const today = new Date().toISOString().substring(0, 10);
         const newlyAchieved = [];
         
