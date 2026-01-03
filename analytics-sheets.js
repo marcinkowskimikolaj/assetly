@@ -94,13 +94,15 @@ const AnalyticsSheets = {
         try {
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: CONFIG.SPREADSHEET_ID,
-                range: `${this.SHEETS.MILESTONES}!A2:B`
+                range: `${this.SHEETS.MILESTONES}!A2:C`
             });
             
             const rows = response.result.values || [];
-            return rows.map(row => ({
+            return rows.map((row, index) => ({
                 wartosc: parseFloat(row[0]) || 0,
-                osiagnietaData: row[1] || null
+                kategoria: row[1] || 'all',
+                osiagnietaData: row[2] || null,
+                rowIndex: index + 2 // do usuwania/aktualizacji
             })).filter(m => m.wartosc > 0).sort((a, b) => a.wartosc - b.wartosc);
         } catch (error) {
             console.warn('Nie można pobrać kamieni milowych:', error);
@@ -108,27 +110,32 @@ const AnalyticsSheets = {
         }
     },
     
-    async addMilestone(wartosc) {
+    async getMilestonesByCategory(kategoria) {
+        const all = await this.getMilestones();
+        return all.filter(m => m.kategoria === kategoria);
+    },
+    
+    async addMilestone(wartosc, kategoria = 'all') {
         const existing = await this.getMilestones();
-        if (existing.some(m => m.wartosc === wartosc)) {
-            throw new Error('Taki próg już istnieje');
+        if (existing.some(m => m.wartosc === wartosc && m.kategoria === kategoria)) {
+            throw new Error('Taki kamień milowy już istnieje dla tej kategorii');
         }
         
         await gapi.client.sheets.spreadsheets.values.append({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.MILESTONES}!A:B`,
+            range: `${this.SHEETS.MILESTONES}!A:C`,
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
-            resource: { values: [[wartosc.toString(), '']] }
+            resource: { values: [[wartosc.toString(), kategoria, '']] }
         });
         
         return true;
     },
     
-    async deleteMilestone(wartosc) {
+    async deleteMilestone(wartosc, kategoria) {
         const milestones = await this.getMilestones();
-        const index = milestones.findIndex(m => m.wartosc === wartosc);
-        if (index === -1) return false;
+        const milestone = milestones.find(m => m.wartosc === wartosc && m.kategoria === kategoria);
+        if (!milestone) return false;
         
         const sheetId = await this.getSheetId(this.SHEETS.MILESTONES);
         await gapi.client.sheets.spreadsheets.batchUpdate({
@@ -139,8 +146,8 @@ const AnalyticsSheets = {
                         range: {
                             sheetId: sheetId,
                             dimension: 'ROWS',
-                            startIndex: index + 1,
-                            endIndex: index + 2
+                            startIndex: milestone.rowIndex - 1,
+                            endIndex: milestone.rowIndex
                         }
                     }
                 }]
@@ -150,14 +157,14 @@ const AnalyticsSheets = {
         return true;
     },
     
-    async updateMilestoneAchieved(wartosc, data) {
+    async updateMilestoneAchieved(wartosc, kategoria, data) {
         const milestones = await this.getMilestones();
-        const index = milestones.findIndex(m => m.wartosc === wartosc);
-        if (index === -1) return false;
+        const milestone = milestones.find(m => m.wartosc === wartosc && m.kategoria === kategoria);
+        if (!milestone) return false;
         
         await gapi.client.sheets.spreadsheets.values.update({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.MILESTONES}!B${index + 2}`,
+            range: `${this.SHEETS.MILESTONES}!C${milestone.rowIndex}`,
             valueInputOption: 'USER_ENTERED',
             resource: { values: [[data]] }
         });
@@ -344,7 +351,7 @@ const AnalyticsSheets = {
     async addHeaders(sheetNames) {
         const headers = {
             [this.SHEETS.SNAPSHOTS]: ['Data', 'Aktywo_ID', 'Kategoria', 'Podkategoria', 'Nazwa', 'Wartosc', 'Waluta', 'Wartosc_PLN', 'Konto_Emerytalne'],
-            [this.SHEETS.MILESTONES]: ['Wartosc', 'Osiagnieto_Data'],
+            [this.SHEETS.MILESTONES]: ['Wartosc', 'Kategoria', 'Osiagnieto_Data'],
             [this.SHEETS.SAVED_CHATS]: ['ID', 'Tytul', 'Data', 'Tresc_JSON'],
             [this.SHEETS.SETTINGS]: ['Klucz', 'Wartosc']
         };
