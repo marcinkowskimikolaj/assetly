@@ -116,6 +116,16 @@
             
             <form onsubmit="handleMilestoneSubmit(event)">
                 <div class="form-group">
+                    <label class="form-label" for="milestoneCategory">Kategoria</label>
+                    <select id="milestoneCategory" class="form-input">
+                        <option value="all">Cały majątek</option>
+                        <option value="Inwestycje">Inwestycje</option>
+                        <option value="Gotówka">Gotówka</option>
+                        <option value="Konta bankowe">Konta bankowe</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
                     <label class="form-label" for="milestoneValue">Wartość docelowa (PLN)</label>
                     <input type="number" id="milestoneValue" class="form-input" 
                         placeholder="np. 100000" min="1" step="1000" required>
