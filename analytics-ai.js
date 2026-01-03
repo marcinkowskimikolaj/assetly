@@ -57,7 +57,7 @@ const AnalyticsAI = {
         const historyDetails = this.getHistoryDetails(snapshots);
         
         // === 6. KAMIENIE MILOWE ===
-        const milestonesData = this.formatMilestones(milestones, currentData.totalNetWorth, metrics);
+        const milestonesData = this.formatMilestones(milestones, currentData, metrics);
         
         // === 7. ANALIZA STRUKTURY ===
         const structureAnalysis = this.analyzeStructure(currentData, historyData);
@@ -361,10 +361,8 @@ const AnalyticsAI = {
             }));
     },
     
-    formatMilestones(milestones, currentNetWorth, metrics) {
+    formatMilestones(milestones, currentData, metrics) {
         if (!milestones || milestones.length === 0) return [];
-        
-        const avgGrowth = metrics.avgMonthlyGrowth || 0;
         
         // Mapowanie kategorii na etykiety
         const categoryLabels = {
@@ -375,17 +373,27 @@ const AnalyticsAI = {
         };
         
         return milestones.map(m => {
-            const remaining = m.wartosc - currentNetWorth;
-            let monthsToReach = null;
+            const kategoria = m.kategoria || 'all';
             
-            if (!m.isAchieved && avgGrowth > 0 && remaining > 0) {
-                monthsToReach = Math.ceil(remaining / avgGrowth);
+            // Pobierz wartość dla odpowiedniej kategorii
+            let currentValue;
+            if (kategoria === 'all') {
+                currentValue = currentData.totalNetWorth;
+            } else {
+                currentValue = currentData.byCategory[kategoria]?.total || 0;
             }
+            
+            const remaining = m.wartosc - currentValue;
+            
+            // Używamy projection które już jest poprawnie obliczone w analytics-milestones.js
+            // (uwzględnia growth rate dla danej kategorii)
+            const monthsToReach = m.projection;
             
             return {
                 target: m.wartosc,
-                kategoria: m.kategoria || 'all',
-                kategoriaLabel: categoryLabels[m.kategoria] || m.kategoria || 'Cały majątek',
+                kategoria: kategoria,
+                kategoriaLabel: categoryLabels[kategoria] || kategoria,
+                currentValue: currentValue,
                 achieved: m.isAchieved,
                 achievedDate: m.achievedDate || null,
                 remaining: m.isAchieved ? 0 : remaining,
@@ -670,9 +678,10 @@ const AnalyticsAI = {
                     if (m.achievedDate) text += ` (${m.achievedDate})`;
                     text += '\n';
                 } else {
-                    text += `⏳ ${fmtPLN(m.target)}${katLabel} - brakuje ${fmtPLN(m.remaining)}`;
+                    text += `⏳ ${fmtPLN(m.target)}${katLabel}\n`;
+                    text += `   Aktualnie: ${fmtPLN(m.currentValue)} | Brakuje: ${fmtPLN(m.remaining)}`;
                     if (m.monthsToReach) {
-                        text += ` (szac. ${m.monthsToReach} mies. przy obecnym tempie)`;
+                        text += ` | Szac. ${m.monthsToReach} mies.`;
                     }
                     text += '\n';
                 }
