@@ -230,7 +230,7 @@ async function renderDataTab(categoryFilter) {
                         <h3>Kamienie milowe</h3>
                         <button class="btn btn-ghost btn-sm" onclick="showAddMilestoneModal('${milestoneCategory}')">+ Dodaj</button>
                     </div>
-                    ${renderMilestones(milestoneCategory)}
+                    ${renderMilestones(milestoneCategory, metrics.growthRate)}
                 </div>
                 
                 <div class="analytics-card">
@@ -321,9 +321,14 @@ function renderBestMonthCard(bestMonth) {
     `;
 }
 
-function renderMilestones(kategoria = 'all') {
+function renderMilestones(kategoria = 'all', growthRate = null) {
     const milestones = analyticsMilestones[kategoria] || [];
     const categoryLabel = AnalyticsMilestones.getCategoryLabel(kategoria);
+    const currentValue = currentCategoryValues[kategoria] || 0;
+    
+    // Średnie tempo wzrostu dla tej kategorii (% na miesiąc)
+    const avgGrowthPercent = growthRate?.average || 0;
+    const monthlyGrowthAmount = avgGrowthPercent > 0 ? currentValue * (avgGrowthPercent / 100) : 0;
     
     if (milestones.length === 0) {
         return `
@@ -336,7 +341,22 @@ function renderMilestones(kategoria = 'all') {
     
     return `
         <div class="milestones-list">
-            ${milestones.map(m => `
+            ${milestones.map(m => {
+                // Oblicz projekcję dynamicznie na podstawie growthRate
+                let projectionText = '';
+                if (!m.isAchieved && monthlyGrowthAmount > 0) {
+                    const remaining = m.wartosc - currentValue;
+                    if (remaining > 0) {
+                        const months = Math.ceil(remaining / monthlyGrowthAmount);
+                        projectionText = AnalyticsMilestones.formatProjection(months);
+                    } else {
+                        projectionText = 'Osiągnięty!';
+                    }
+                } else if (!m.isAchieved) {
+                    projectionText = m.projection ? AnalyticsMilestones.formatProjection(m.projection) : 'brak danych';
+                }
+                
+                return `
                 <div class="milestone-item ${m.isAchieved ? 'achieved' : ''}">
                     <div class="milestone-icon">
                         ${m.isAchieved 
@@ -349,7 +369,7 @@ function renderMilestones(kategoria = 'all') {
                         <div class="milestone-status">
                             ${m.isAchieved 
                                 ? `Osiągnięty ${m.achievedDate || ''}`
-                                : AnalyticsMilestones.formatProjection(m.projection)
+                                : projectionText
                             }
                         </div>
                     </div>
@@ -359,7 +379,7 @@ function renderMilestones(kategoria = 'all') {
                         </svg>
                     </button>
                 </div>
-            `).join('')}
+            `}).join('')}
         </div>
     `;
 }
@@ -367,6 +387,22 @@ function renderMilestones(kategoria = 'all') {
 function renderGrowthRate(growthRate, kategoria = 'all') {
     const milestones = analyticsMilestones[kategoria] || [];
     const nextMilestone = milestones.find(m => !m.isAchieved);
+    const currentValue = currentCategoryValues[kategoria] || 0;
+    
+    // Oblicz projekcję na podstawie wyświetlanego średniego tempa
+    let projectionText = '';
+    if (nextMilestone && growthRate.average > 0 && currentValue < nextMilestone.wartosc) {
+        // Oblicz ile miesięcy przy obecnym średnim tempie
+        const remaining = nextMilestone.wartosc - currentValue;
+        const monthlyGrowthAmount = currentValue * (growthRate.average / 100);
+        
+        if (monthlyGrowthAmount > 0) {
+            const months = Math.ceil(remaining / monthlyGrowthAmount);
+            projectionText = AnalyticsMilestones.formatProjection(months);
+        } else {
+            projectionText = 'nie da się określić';
+        }
+    }
     
     return `
         <div class="growth-rate-content">
@@ -387,7 +423,7 @@ function renderGrowthRate(growthRate, kategoria = 'all') {
                     <span class="growth-rate-label">Najbliższy cel:</span>
                     <span class="growth-rate-value">
                         ${AnalyticsMilestones.formatMilestoneValue(nextMilestone.wartosc)}
-                        za ${AnalyticsMilestones.formatProjection(nextMilestone.projection)}
+                        za ${projectionText}
                     </span>
                 </div>
             ` : ''}
