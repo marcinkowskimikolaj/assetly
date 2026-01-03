@@ -61,31 +61,38 @@ async function loadAnalyticsData() {
     try {
         const sheetsAPI = createSheetsAPI(CONFIG.SPREADSHEET_ID);
         
-        const [assets, snapshots] = await Promise.all([
+        // Pobierz WSZYSTKIE dane równolegle w jednym zapytaniu
+        const [assets, snapshots, milestones, _] = await Promise.all([
             sheetsAPI.getAllAssets(),
-            AnalyticsSheets.getSnapshots()
+            AnalyticsSheets.getSnapshots(),
+            AnalyticsSheets.getMilestones(),
+            fetchCurrencyRates()
         ]);
         
         allAnalyticsAssets = assets;
         analyticsSnapshots = snapshots;
         
-        // Oblicz wartości per kategoria
+        // Oblicz wartości per kategoria (lokalne obliczenia, brak API)
         currentCategoryValues = calculateCategoryValues();
         
-        // Pobierz kamienie milowe ze statusem dla wszystkich kategorii
-        analyticsMilestones = await AnalyticsMilestones.getAllMilestonesWithStatus(currentCategoryValues);
+        // Pobierz kamienie milowe ze statusem - przekaż już pobrane snapshoty
+        analyticsMilestones = await AnalyticsMilestones.getAllMilestonesWithStatus(
+            currentCategoryValues, 
+            snapshots
+        );
         
-        // Sprawdź nowo osiągnięte kamienie milowe
-        const newlyAchieved = await AnalyticsMilestones.checkAndUpdateAchievements(currentCategoryValues);
+        // Sprawdź nowo osiągnięte - przekaż już pobrane milestones
+        const newlyAchieved = await AnalyticsMilestones.checkAndUpdateAchievements(
+            currentCategoryValues,
+            milestones
+        );
+        
         if (newlyAchieved.length > 0) {
             newlyAchieved.forEach(item => {
                 const label = AnalyticsMilestones.getCategoryLabel(item.kategoria);
                 showToast(`🎉 Osiągnięto kamień milowy: ${formatMoney(item.wartosc)} (${label})!`, 'success');
             });
         }
-        
-        // Pobierz kursy walut
-        await fetchCurrencyRates();
         
     } catch (error) {
         console.error('Błąd ładowania danych:', error);
@@ -172,7 +179,7 @@ async function renderDataTab(categoryFilter) {
     showAnalyticsLoading(true);
     
     try {
-        const metrics = await AnalyticsMetrics.calculateAllMetrics(categoryFilter);
+        const metrics = AnalyticsMetrics.calculateAllMetrics(categoryFilter);
         const filteredData = AnalyticsCharts.filterDataByRange(metrics.chartData, currentChartRange);
         
         container.innerHTML = `
@@ -435,7 +442,7 @@ async function analyzeSelectedAsset() {
     }
     
     const assetName = select.options[select.selectedIndex].dataset.name;
-    const metrics = await AnalyticsMetrics.calculateAssetMetrics(assetId);
+    const metrics = AnalyticsMetrics.calculateAssetMetrics(assetId);
     
     if (!metrics.hasData) {
         resultContainer.innerHTML = `
