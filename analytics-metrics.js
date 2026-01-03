@@ -5,9 +5,10 @@
 
 const AnalyticsMetrics = {
     
-    // Oblicz wszystkie metryki dla danego filtra kategorii
-    async calculateAllMetrics(categoryFilter = null) {
-        const historyData = await AnalyticsSnapshots.getCategorySumsByDate(categoryFilter);
+    // Oblicz wszystkie metryki dla danego filtra kategorii (używa globalnych analyticsSnapshots)
+    calculateAllMetrics(categoryFilter = null) {
+        // Używamy globalnej zmiennej analyticsSnapshots zamiast pobierać z API
+        const historyData = AnalyticsSnapshots.getCategorySumsByDate(analyticsSnapshots, categoryFilter);
         
         if (historyData.length === 0) {
             return this.getEmptyMetrics();
@@ -219,9 +220,9 @@ const AnalyticsMetrics = {
         return `${months[date.getMonth()]} ${date.getFullYear()}`;
     },
     
-    // Metryki dla konkretnego aktywa
-    async calculateAssetMetrics(aktywoId) {
-        const history = await AnalyticsSnapshots.getAssetHistory(aktywoId);
+    // Metryki dla konkretnego aktywa (używa globalnych analyticsSnapshots)
+    calculateAssetMetrics(aktywoId) {
+        const history = AnalyticsSnapshots.getAssetHistory(analyticsSnapshots, aktywoId);
         
         if (history.length === 0) {
             return {
