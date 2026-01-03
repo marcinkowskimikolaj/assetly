@@ -1,30 +1,50 @@
 /**
  * Assetly - Analytics Milestones
- * Zarządzanie kamieniami milowymi
+ * Zarządzanie kamieniami milowymi z podziałem na kategorie
  */
 
 const AnalyticsMilestones = {
     
-    // Pobierz kamienie milowe z informacją o statusie
-    async getMilestonesWithStatus(currentNetWorth) {
-        const milestones = await AnalyticsSheets.getMilestones();
+    // Mapowanie kategorii na filtry snapshotów
+    CATEGORY_MAP: {
+        'all': null, // wszystkie
+        'Inwestycje': 'Inwestycje',
+        'Gotówka': 'Gotówka',
+        'Konta bankowe': 'Konta bankowe'
+    },
+    
+    // Etykiety kategorii
+    CATEGORY_LABELS: {
+        'all': 'Cały majątek',
+        'Inwestycje': 'Inwestycje',
+        'Gotówka': 'Gotówka',
+        'Konta bankowe': 'Konta bankowe'
+    },
+    
+    // Pobierz kamienie milowe z informacją o statusie dla danej kategorii
+    async getMilestonesWithStatus(currentValues, kategoria = 'all') {
+        const allMilestones = await AnalyticsSheets.getMilestones();
+        const milestones = allMilestones.filter(m => m.kategoria === kategoria);
         const snapshots = await AnalyticsSheets.getSnapshots();
         
+        // Pobierz aktualną wartość dla kategorii
+        const currentValue = currentValues[kategoria] || 0;
+        
         return milestones.map(m => {
-            const isAchieved = m.osiagnietaData || currentNetWorth >= m.wartosc;
+            const isAchieved = m.osiagnietaData || currentValue >= m.wartosc;
             let achievedDate = m.osiagnietaData;
             
             // Jeśli osiągnięty ale bez daty, znajdź datę w snapshotach
             if (isAchieved && !achievedDate) {
-                achievedDate = this.findAchievementDate(m.wartosc, snapshots);
+                achievedDate = this.findAchievementDate(m.wartosc, snapshots, kategoria);
             }
             
             // Oblicz projekcję dla nieosiągniętych
             let projection = null;
-            if (!isAchieved && currentNetWorth > 0) {
-                const avgGrowthRate = this.estimateGrowthRate(snapshots);
+            if (!isAchieved && currentValue > 0) {
+                const avgGrowthRate = this.estimateGrowthRate(snapshots, kategoria);
                 projection = AnalyticsMetrics.calculateProjection(
-                    currentNetWorth, 
+                    currentValue, 
                     m.wartosc, 
                     avgGrowthRate
                 );
@@ -32,6 +52,7 @@ const AnalyticsMilestones = {
             
             return {
                 wartosc: m.wartosc,
+                kategoria: m.kategoria,
                 isAchieved: isAchieved,
                 achievedDate: achievedDate,
                 projection: projection
@@ -39,11 +60,25 @@ const AnalyticsMilestones = {
         });
     },
     
+    // Pobierz wszystkie kamienie milowe ze statusem (dla wszystkich kategorii)
+    async getAllMilestonesWithStatus(currentValues) {
+        const result = {};
+        for (const kategoria of Object.keys(this.CATEGORY_MAP)) {
+            result[kategoria] = await this.getMilestonesWithStatus(currentValues, kategoria);
+        }
+        return result;
+    },
+    
     // Znajdź datę osiągnięcia progu w snapshotach
-    findAchievementDate(targetValue, snapshots) {
+    findAchievementDate(targetValue, snapshots, kategoria = 'all') {
         // Grupuj snapshoty po dacie i oblicz sumy
         const byDate = {};
+        const categoryFilter = this.CATEGORY_MAP[kategoria];
+        
         snapshots.forEach(s => {
+            // Filtruj po kategorii jeśli nie "all"
+            if (categoryFilter && s.kategoria !== categoryFilter) return;
+            
             if (!byDate[s.data]) byDate[s.data] = 0;
             if (s.kategoria === 'Długi') {
                 byDate[s.data] -= Math.abs(s.wartoscPLN);
@@ -65,10 +100,15 @@ const AnalyticsMilestones = {
     },
     
     // Oszacuj średnią stopę wzrostu z snapshotów
-    estimateGrowthRate(snapshots) {
+    estimateGrowthRate(snapshots, kategoria = 'all') {
         // Grupuj po dacie
         const byDate = {};
+        const categoryFilter = this.CATEGORY_MAP[kategoria];
+        
         snapshots.forEach(s => {
+            // Filtruj po kategorii jeśli nie "all"
+            if (categoryFilter && s.kategoria !== categoryFilter) return;
+            
             if (!byDate[s.data]) byDate[s.data] = 0;
             if (s.kategoria === 'Długi') {
                 byDate[s.data] -= Math.abs(s.wartoscPLN);
@@ -96,15 +136,16 @@ const AnalyticsMilestones = {
     },
     
     // Sprawdź i zaktualizuj osiągnięte kamienie milowe
-    async checkAndUpdateAchievements(currentNetWorth) {
+    async checkAndUpdateAchievements(currentValues) {
         const milestones = await AnalyticsSheets.getMilestones();
         const today = new Date().toISOString().substring(0, 10);
         const newlyAchieved = [];
         
         for (const m of milestones) {
-            if (!m.osiagnietaData && currentNetWorth >= m.wartosc) {
-                await AnalyticsSheets.updateMilestoneAchieved(m.wartosc, today);
-                newlyAchieved.push(m.wartosc);
+            const currentValue = currentValues[m.kategoria] || 0;
+            if (!m.osiagnietaData && currentValue >= m.wartosc) {
+                await AnalyticsSheets.updateMilestoneAchieved(m.wartosc, m.kategoria, today);
+                newlyAchieved.push({ wartosc: m.wartosc, kategoria: m.kategoria });
             }
         }
         
@@ -112,18 +153,18 @@ const AnalyticsMilestones = {
     },
     
     // Dodaj nowy kamień milowy
-    async addMilestone(wartosc) {
+    async addMilestone(wartosc, kategoria = 'all') {
         if (wartosc <= 0) {
             throw new Error('Wartość musi być większa od 0');
         }
         
-        await AnalyticsSheets.addMilestone(wartosc);
+        await AnalyticsSheets.addMilestone(wartosc, kategoria);
         return true;
     },
     
     // Usuń kamień milowy
-    async deleteMilestone(wartosc) {
-        await AnalyticsSheets.deleteMilestone(wartosc);
+    async deleteMilestone(wartosc, kategoria) {
+        await AnalyticsSheets.deleteMilestone(wartosc, kategoria);
         return true;
     },
     
@@ -153,5 +194,10 @@ const AnalyticsMilestones = {
             return (value / 1000).toFixed(0) + 'k PLN';
         }
         return value + ' PLN';
+    },
+    
+    // Pobierz etykietę kategorii
+    getCategoryLabel(kategoria) {
+        return this.CATEGORY_LABELS[kategoria] || kategoria;
     }
 };
