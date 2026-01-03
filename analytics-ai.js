@@ -366,6 +366,14 @@ const AnalyticsAI = {
         
         const avgGrowth = metrics.avgMonthlyGrowth || 0;
         
+        // Mapowanie kategorii na etykiety
+        const categoryLabels = {
+            'all': 'Cały majątek',
+            'Inwestycje': 'Inwestycje',
+            'Gotówka': 'Gotówka',
+            'Konta bankowe': 'Konta bankowe'
+        };
+        
         return milestones.map(m => {
             const remaining = m.wartosc - currentNetWorth;
             let monthsToReach = null;
@@ -376,6 +384,8 @@ const AnalyticsAI = {
             
             return {
                 target: m.wartosc,
+                kategoria: m.kategoria || 'all',
+                kategoriaLabel: categoryLabels[m.kategoria] || m.kategoria || 'Cały majątek',
                 achieved: m.isAchieved,
                 achievedDate: m.achievedDate || null,
                 remaining: m.isAchieved ? 0 : remaining,
@@ -654,12 +664,13 @@ const AnalyticsAI = {
 ╚══════════════════════════════════════════════════════════════╝
 `;
             data.milestones.forEach(m => {
+                const katLabel = m.kategoriaLabel ? ` [${m.kategoriaLabel}]` : '';
                 if (m.achieved) {
-                    text += `✅ ${fmtPLN(m.target)} - OSIĄGNIĘTY`;
+                    text += `✅ ${fmtPLN(m.target)}${katLabel} - OSIĄGNIĘTY`;
                     if (m.achievedDate) text += ` (${m.achievedDate})`;
                     text += '\n';
                 } else {
-                    text += `⏳ ${fmtPLN(m.target)} - brakuje ${fmtPLN(m.remaining)}`;
+                    text += `⏳ ${fmtPLN(m.target)}${katLabel} - brakuje ${fmtPLN(m.remaining)}`;
                     if (m.monthsToReach) {
                         text += ` (szac. ${m.monthsToReach} mies. przy obecnym tempie)`;
                     }
