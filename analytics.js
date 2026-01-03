@@ -328,7 +328,6 @@ function renderMilestones(kategoria = 'all', growthRate = null) {
     
     // Średnie tempo wzrostu dla tej kategorii (% na miesiąc)
     const avgGrowthPercent = growthRate?.average || 0;
-    const monthlyGrowthAmount = avgGrowthPercent > 0 ? currentValue * (avgGrowthPercent / 100) : 0;
     
     if (milestones.length === 0) {
         return `
@@ -343,17 +342,23 @@ function renderMilestones(kategoria = 'all', growthRate = null) {
         <div class="milestones-list">
             ${milestones.map(m => {
                 // Oblicz projekcję dynamicznie na podstawie growthRate
-                let projectionText = '';
-                if (!m.isAchieved && monthlyGrowthAmount > 0) {
+                let projectionText = 'brak danych';
+                
+                if (!m.isAchieved) {
                     const remaining = m.wartosc - currentValue;
-                    if (remaining > 0) {
-                        const months = Math.ceil(remaining / monthlyGrowthAmount);
-                        projectionText = AnalyticsMilestones.formatProjection(months);
-                    } else {
+                    
+                    if (remaining <= 0) {
                         projectionText = 'Osiągnięty!';
+                    } else if (avgGrowthPercent > 0 && currentValue > 0) {
+                        // Oblicz miesięczny przyrost w PLN
+                        const monthlyGrowthAmount = currentValue * (avgGrowthPercent / 100);
+                        if (monthlyGrowthAmount > 0) {
+                            const months = Math.ceil(remaining / monthlyGrowthAmount);
+                            projectionText = AnalyticsMilestones.formatProjection(months);
+                        }
+                    } else if (avgGrowthPercent <= 0) {
+                        projectionText = 'brak wzrostu';
                     }
-                } else if (!m.isAchieved) {
-                    projectionText = m.projection ? AnalyticsMilestones.formatProjection(m.projection) : 'brak danych';
                 }
                 
                 return `
@@ -390,17 +395,20 @@ function renderGrowthRate(growthRate, kategoria = 'all') {
     const currentValue = currentCategoryValues[kategoria] || 0;
     
     // Oblicz projekcję na podstawie wyświetlanego średniego tempa
-    let projectionText = '';
-    if (nextMilestone && growthRate.average > 0 && currentValue < nextMilestone.wartosc) {
-        // Oblicz ile miesięcy przy obecnym średnim tempie
+    let projectionText = 'brak danych';
+    if (nextMilestone) {
         const remaining = nextMilestone.wartosc - currentValue;
-        const monthlyGrowthAmount = currentValue * (growthRate.average / 100);
         
-        if (monthlyGrowthAmount > 0) {
-            const months = Math.ceil(remaining / monthlyGrowthAmount);
-            projectionText = AnalyticsMilestones.formatProjection(months);
-        } else {
-            projectionText = 'nie da się określić';
+        if (remaining <= 0) {
+            projectionText = 'osiągnięty!';
+        } else if (growthRate.average > 0 && currentValue > 0) {
+            const monthlyGrowthAmount = currentValue * (growthRate.average / 100);
+            if (monthlyGrowthAmount > 0) {
+                const months = Math.ceil(remaining / monthlyGrowthAmount);
+                projectionText = AnalyticsMilestones.formatProjection(months);
+            }
+        } else if (growthRate.average <= 0) {
+            projectionText = 'brak wzrostu';
         }
     }
     
