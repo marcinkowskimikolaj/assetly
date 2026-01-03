@@ -8,10 +8,19 @@ let analyticsInitialized = false;
 let currentAnalyticsTab = 'networth';
 let allAnalyticsAssets = [];
 let analyticsSnapshots = [];
-let analyticsMilestones = [];
+let analyticsMilestones = {}; // Obiekt: { 'all': [...], 'Inwestycje': [...], ... }
+let currentCategoryValues = {}; // Wartości per kategoria: { 'all': 100000, 'Inwestycje': 50000, ... }
 let currentChartRange = 'all';
 let currentChartType = 'line';
 let selectedAssetForAnalysis = null;
+
+// Mapowanie tabów na kategorie kamieni milowych
+const TAB_TO_MILESTONE_CATEGORY = {
+    'networth': 'all',
+    'investments': 'Inwestycje',
+    'cash': 'Gotówka',
+    'accounts': 'Konta bankowe'
+};
 
 // ═══════════════════════════════════════════════════════════
 // INICJALIZACJA
@@ -52,26 +61,26 @@ async function loadAnalyticsData() {
     try {
         const sheetsAPI = createSheetsAPI(CONFIG.SPREADSHEET_ID);
         
-        const [assets, snapshots, milestones] = await Promise.all([
+        const [assets, snapshots] = await Promise.all([
             sheetsAPI.getAllAssets(),
-            AnalyticsSheets.getSnapshots(),
-            AnalyticsSheets.getMilestones()
+            AnalyticsSheets.getSnapshots()
         ]);
         
         allAnalyticsAssets = assets;
         analyticsSnapshots = snapshots;
         
-        // Oblicz aktualną wartość netto
-        const currentNetWorth = calculateCurrentNetWorth();
+        // Oblicz wartości per kategoria
+        currentCategoryValues = calculateCategoryValues();
         
-        // Pobierz kamienie milowe ze statusem
-        analyticsMilestones = await AnalyticsMilestones.getMilestonesWithStatus(currentNetWorth);
+        // Pobierz kamienie milowe ze statusem dla wszystkich kategorii
+        analyticsMilestones = await AnalyticsMilestones.getAllMilestonesWithStatus(currentCategoryValues);
         
         // Sprawdź nowo osiągnięte kamienie milowe
-        const newlyAchieved = await AnalyticsMilestones.checkAndUpdateAchievements(currentNetWorth);
+        const newlyAchieved = await AnalyticsMilestones.checkAndUpdateAchievements(currentCategoryValues);
         if (newlyAchieved.length > 0) {
-            newlyAchieved.forEach(value => {
-                showToast(`🎉 Osiągnięto kamień milowy: ${formatMoney(value)}!`, 'success');
+            newlyAchieved.forEach(item => {
+                const label = AnalyticsMilestones.getCategoryLabel(item.kategoria);
+                showToast(`🎉 Osiągnięto kamień milowy: ${formatMoney(item.wartosc)} (${label})!`, 'success');
             });
         }
         
@@ -154,6 +163,9 @@ async function renderDataTab(categoryFilter) {
         ? `analytics-${categoryFilter === 'Inwestycje' ? 'investments' : categoryFilter === 'Gotówka' ? 'cash' : 'accounts'}`
         : 'analytics-networth';
     
+    // Mapowanie kategorii filtra na kategorię kamieni milowych
+    const milestoneCategory = categoryFilter || 'all';
+    
     const container = document.getElementById(tabId);
     if (!container) return;
     
@@ -209,16 +221,16 @@ async function renderDataTab(categoryFilter) {
                 <div class="analytics-card">
                     <div class="analytics-card-header">
                         <h3>Kamienie milowe</h3>
-                        <button class="btn btn-ghost btn-sm" onclick="showAddMilestoneModal()">+ Dodaj</button>
+                        <button class="btn btn-ghost btn-sm" onclick="showAddMilestoneModal('${milestoneCategory}')">+ Dodaj</button>
                     </div>
-                    ${renderMilestones()}
+                    ${renderMilestones(milestoneCategory)}
                 </div>
                 
                 <div class="analytics-card">
                     <div class="analytics-card-header">
                         <h3>Tempo wzrostu</h3>
                     </div>
-                    ${renderGrowthRate(metrics.growthRate)}
+                    ${renderGrowthRate(metrics.growthRate, milestoneCategory)}
                 </div>
             </div>
             
@@ -302,19 +314,22 @@ function renderBestMonthCard(bestMonth) {
     `;
 }
 
-function renderMilestones() {
-    if (analyticsMilestones.length === 0) {
+function renderMilestones(kategoria = 'all') {
+    const milestones = analyticsMilestones[kategoria] || [];
+    const categoryLabel = AnalyticsMilestones.getCategoryLabel(kategoria);
+    
+    if (milestones.length === 0) {
         return `
             <div class="milestones-empty">
-                <p>Brak zdefiniowanych kamieni milowych</p>
-                <button class="btn btn-secondary btn-sm" onclick="showAddMilestoneModal()">Dodaj pierwszy</button>
+                <p>Brak kamieni milowych dla: ${categoryLabel}</p>
+                <button class="btn btn-secondary btn-sm" onclick="showAddMilestoneModal('${kategoria}')">Dodaj pierwszy</button>
             </div>
         `;
     }
     
     return `
         <div class="milestones-list">
-            ${analyticsMilestones.map(m => `
+            ${milestones.map(m => `
                 <div class="milestone-item ${m.isAchieved ? 'achieved' : ''}">
                     <div class="milestone-icon">
                         ${m.isAchieved 
@@ -331,7 +346,7 @@ function renderMilestones() {
                             }
                         </div>
                     </div>
-                    <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteMilestone(${m.wartosc})" title="Usuń">
+                    <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteMilestone(${m.wartosc}, '${kategoria}')" title="Usuń">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
@@ -342,8 +357,9 @@ function renderMilestones() {
     `;
 }
 
-function renderGrowthRate(growthRate) {
-    const currentNetWorth = calculateCurrentNetWorth();
+function renderGrowthRate(growthRate, kategoria = 'all') {
+    const milestones = analyticsMilestones[kategoria] || [];
+    const nextMilestone = milestones.find(m => !m.isAchieved);
     
     return `
         <div class="growth-rate-content">
@@ -359,12 +375,12 @@ function renderGrowthRate(growthRate) {
                     ${growthRate.average >= 0 ? '+' : ''}${growthRate.average.toFixed(1)}% / mies.
                 </span>
             </div>
-            ${analyticsMilestones.filter(m => !m.isAchieved).length > 0 ? `
+            ${nextMilestone ? `
                 <div class="growth-rate-projection">
                     <span class="growth-rate-label">Najbliższy cel:</span>
                     <span class="growth-rate-value">
-                        ${AnalyticsMilestones.formatMilestoneValue(analyticsMilestones.find(m => !m.isAchieved)?.wartosc || 0)}
-                        za ${AnalyticsMilestones.formatProjection(analyticsMilestones.find(m => !m.isAchieved)?.projection)}
+                        ${AnalyticsMilestones.formatMilestoneValue(nextMilestone.wartosc)}
+                        za ${AnalyticsMilestones.formatProjection(nextMilestone.projection)}
                     </span>
                 </div>
             ` : ''}
@@ -456,9 +472,17 @@ async function analyzeSelectedAsset() {
     }, 100);
 }
 
-function showAddMilestoneModal() {
+
+function showAddMilestoneModal(kategoria = 'all') {
     document.getElementById('milestoneModal').classList.add('active');
     document.getElementById('milestoneValue').value = '';
+    
+    // Ustaw domyślną kategorię
+    const categorySelect = document.getElementById('milestoneCategory');
+    if (categorySelect) {
+        categorySelect.value = kategoria;
+    }
+    
     document.getElementById('milestoneValue').focus();
 }
 
@@ -470,27 +494,31 @@ async function handleMilestoneSubmit(e) {
     e.preventDefault();
     
     const value = parseFloat(document.getElementById('milestoneValue').value);
+    const kategoria = document.getElementById('milestoneCategory')?.value || 'all';
+    
     if (!value || value <= 0) {
         showToast('Wprowadź prawidłową wartość', 'warning');
         return;
     }
     
     try {
-        await AnalyticsMilestones.addMilestone(value);
+        await AnalyticsMilestones.addMilestone(value, kategoria);
         await loadAnalyticsData();
         closeMilestoneModal();
         switchAnalyticsTab(currentAnalyticsTab);
-        showToast('Kamień milowy dodany', 'success');
+        const label = AnalyticsMilestones.getCategoryLabel(kategoria);
+        showToast(`Kamień milowy dodany (${label})`, 'success');
     } catch (error) {
         showToast(error.message || 'Błąd dodawania', 'error');
     }
 }
 
-async function deleteMilestone(value) {
-    if (!confirm(`Usunąć kamień milowy ${formatMoney(value)}?`)) return;
+async function deleteMilestone(value, kategoria = 'all') {
+    const label = AnalyticsMilestones.getCategoryLabel(kategoria);
+    if (!confirm(`Usunąć kamień milowy ${formatMoney(value)} (${label})?`)) return;
     
     try {
-        await AnalyticsMilestones.deleteMilestone(value);
+        await AnalyticsMilestones.deleteMilestone(value, kategoria);
         await loadAnalyticsData();
         switchAnalyticsTab(currentAnalyticsTab);
         showToast('Kamień milowy usunięty', 'success');
@@ -504,16 +532,33 @@ async function deleteMilestone(value) {
 // ═══════════════════════════════════════════════════════════
 
 function calculateCurrentNetWorth() {
-    let total = 0;
+    return currentCategoryValues['all'] || 0;
+}
+
+function calculateCategoryValues() {
+    const values = {
+        'all': 0,
+        'Inwestycje': 0,
+        'Gotówka': 0,
+        'Konta bankowe': 0
+    };
+    
     allAnalyticsAssets.forEach(a => {
         const valuePLN = convertToPLN(a.wartosc, a.waluta);
+        
         if (a.kategoria === 'Długi') {
-            total -= Math.abs(valuePLN);
+            values['all'] -= Math.abs(valuePLN);
         } else {
-            total += valuePLN;
+            values['all'] += valuePLN;
+            
+            // Dodaj do odpowiedniej kategorii
+            if (values.hasOwnProperty(a.kategoria)) {
+                values[a.kategoria] += valuePLN;
+            }
         }
     });
-    return total;
+    
+    return values;
 }
 
 function showAnalyticsLoading(show) {
@@ -719,11 +764,14 @@ async function runQuickAnalysis(e) {
     const resultDiv = document.getElementById('analysisResult');
     
     try {
+        // Spłaszcz kamienie milowe ze wszystkich kategorii do jednej tablicy dla AI
+        const allMilestones = Object.values(analyticsMilestones).flat();
+        
         const result = await AnalyticsAI.runQuickAnalysis(
             options, 
             allAnalyticsAssets, 
             analyticsSnapshots, 
-            analyticsMilestones
+            allMilestones
         );
         
         resultDiv.innerHTML = formatAIResponse(result);
@@ -787,11 +835,14 @@ async function sendChatMessage() {
     sendBtn.disabled = true;
     
     try {
+        // Spłaszcz kamienie milowe ze wszystkich kategorii do jednej tablicy dla AI
+        const allMilestones = Object.values(analyticsMilestones).flat();
+        
         const response = await AnalyticsAI.sendChatMessage(
             message,
             allAnalyticsAssets,
             analyticsSnapshots,
-            analyticsMilestones
+            allMilestones
         );
         
         // Zamień placeholder na odpowiedź
