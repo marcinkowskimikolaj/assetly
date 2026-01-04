@@ -26,6 +26,45 @@ let selectedYear = null;
 // INICJALIZACJA
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * Ujednolicona inicjalizacja strony Budżet (analogicznie do investments.js / analytics.js)
+ *
+ * Problem, który to naprawia:
+ * - budżet nie inicjalizował się automatycznie po wejściu na stronę,
+ *   więc BudgetSheets.ensureSheetsExist() nie odpalało i brakujące zakładki
+ *   nie były tworzone w arkuszu.
+ */
+
+async function initBudget() {
+    // Wymagaj zalogowania
+    if (!requireAuth()) return;
+    
+    try {
+        await initAuth();
+        await ensureValidToken();
+        
+        // Wylogowanie
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', handleGoogleLogout);
+        }
+        
+        // Start modułu
+        await initBudgetModule();
+        
+    } catch (error) {
+        console.error('Błąd inicjalizacji strony Budżet:', error);
+        try {
+            showToast('Błąd inicjalizacji strony Budżet', 'error');
+        } catch (e) {
+            // showToast może nie istnieć przy krytycznych błędach ładowania
+        }
+    }
+}
+
+// Automatyczny start po załadowaniu DOM (jak w innych modułach)
+document.addEventListener('DOMContentLoaded', initBudget);
+
 async function initBudgetModule() {
     if (budgetInitialized) {
         switchBudgetTab(currentBudgetTab);
@@ -62,6 +101,9 @@ async function initBudgetModule() {
         showBudgetLoading(false);
     }
 }
+
+// Start jak w pozostałych modułach
+document.addEventListener('DOMContentLoaded', initBudget);
 
 async function loadBudgetData() {
     const [expenses, income, recurring, plans, settings] = await Promise.all([
