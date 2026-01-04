@@ -994,3 +994,398 @@ function initMonthFormEvents() {
         });
     });
 }
+
+// ═══════════════════════════════════════════════════════════
+// MODAL: DODAJ/EDYTUJ POJEDYNCZY DOCHÓD
+// ═══════════════════════════════════════════════════════════
+
+let editingIncomeId = null;
+
+function showAddIncomeModal(incomeId = null) {
+    editingIncomeId = incomeId;
+    
+    // Jeśli edytujemy, pobierz dane
+    let incomeData = null;
+    if (incomeId) {
+        incomeData = allIncome.find(i => i.id === incomeId);
+        if (!incomeData) {
+            showToast('Nie znaleziono dochodu', 'error');
+            return;
+        }
+    }
+    
+    // Domyślne wartości
+    const now = new Date();
+    const defaultMonth = incomeData?.miesiac || (now.getMonth() === 0 ? 12 : now.getMonth());
+    const defaultYear = incomeData?.rok || (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+    
+    // Znajdź ostatni dochód dla podpowiedzi
+    const lastIncome = allIncome.length > 0 ? allIncome.sort((a, b) => {
+        if (a.rok !== b.rok) return b.rok - a.rok;
+        return b.miesiac - a.miesiac;
+    })[0] : null;
+    
+    const modal = document.getElementById('addIncomeModal');
+    if (!modal) {
+        // Utwórz modal jeśli nie istnieje
+        createIncomeModal();
+    }
+    
+    // Wypełnij formularz
+    document.getElementById('incomeYear').value = defaultYear;
+    document.getElementById('incomeMonth').value = defaultMonth;
+    document.getElementById('incomeSource').value = incomeData?.zrodlo || lastIncome?.zrodlo || 'Wynagrodzenie';
+    document.getElementById('incomeEmployer').value = incomeData?.pracodawca || lastIncome?.pracodawca || '';
+    document.getElementById('incomeAmount').value = incomeData?.kwotaNetto || '';
+    document.getElementById('incomeCurrency').value = incomeData?.waluta || 'PLN';
+    document.getElementById('incomeNote').value = incomeData?.notatka || '';
+    
+    // Aktualizuj tytuł
+    document.getElementById('incomeModalTitle').textContent = incomeId ? 'Edytuj dochód' : 'Dodaj dochód';
+    document.getElementById('incomeModalSubmit').textContent = incomeId ? 'Zapisz zmiany' : 'Dodaj';
+    
+    document.getElementById('addIncomeModal').classList.add('active');
+}
+
+function createIncomeModal() {
+    const modalHtml = `
+        <div id="addIncomeModal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="incomeModalTitle">Dodaj dochód</h3>
+                    <button class="modal-close" onclick="closeAddIncomeModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <form onsubmit="handleSaveIncome(event)" style="padding: 20px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="incomeMonth">Miesiąc</label>
+                            <select id="incomeMonth" class="form-select" required>
+                                ${BudgetCategories.MONTH_NAMES.map((name, i) => 
+                                    `<option value="${i + 1}">${name}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="incomeYear">Rok</label>
+                            <select id="incomeYear" class="form-select" required>
+                                ${[2023, 2024, 2025, 2026].map(y => 
+                                    `<option value="${y}">${y}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="incomeSource">Źródło</label>
+                        <select id="incomeSource" class="form-select" required>
+                            ${Object.keys(BudgetCategories.INCOME_SOURCES).map(src => 
+                                `<option value="${src}">${BudgetCategories.getIncomeIcon(src)} ${src}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="incomeEmployer">Pracodawca / Opis</label>
+                        <input type="text" id="incomeEmployer" class="form-input" placeholder="np. Firma XYZ, Freelance">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="incomeAmount">Kwota netto</label>
+                            <input type="number" id="incomeAmount" class="form-input" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="incomeCurrency">Waluta</label>
+                            <select id="incomeCurrency" class="form-select">
+                                <option value="PLN">PLN</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="GBP">GBP</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="incomeNote">Notatka (opcjonalnie)</label>
+                        <input type="text" id="incomeNote" class="form-input" placeholder="np. premia roczna">
+                    </div>
+                    
+                    <div class="modal-footer" style="padding: 0; margin-top: 20px; border: none;">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddIncomeModal()">Anuluj</button>
+                        <button type="submit" class="btn btn-primary" id="incomeModalSubmit">Dodaj</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeAddIncomeModal() {
+    const modal = document.getElementById('addIncomeModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    editingIncomeId = null;
+}
+
+async function handleSaveIncome(event) {
+    event.preventDefault();
+    
+    const data = {
+        rok: parseInt(document.getElementById('incomeYear').value),
+        miesiac: parseInt(document.getElementById('incomeMonth').value),
+        zrodlo: document.getElementById('incomeSource').value,
+        pracodawca: document.getElementById('incomeEmployer').value.trim(),
+        kwotaBrutto: 0,
+        kwotaNetto: parseFloat(document.getElementById('incomeAmount').value) || 0,
+        waluta: document.getElementById('incomeCurrency').value,
+        notatka: document.getElementById('incomeNote').value.trim()
+    };
+    
+    if (data.kwotaNetto <= 0) {
+        showToast('Podaj prawidłową kwotę', 'warning');
+        return;
+    }
+    
+    showBudgetLoading(true);
+    
+    try {
+        if (editingIncomeId) {
+            // Edycja - usuń stary i dodaj nowy
+            await BudgetSheets.deleteIncome(editingIncomeId);
+        }
+        
+        await BudgetSheets.addIncome(data);
+        await loadBudgetData();
+        
+        closeAddIncomeModal();
+        switchBudgetTab('income');
+        
+        showToast(editingIncomeId ? 'Zapisano zmiany' : 'Dodano dochód', 'success');
+        
+    } catch (error) {
+        console.error('Błąd zapisu:', error);
+        showToast('Błąd zapisu dochodu', 'error');
+    } finally {
+        showBudgetLoading(false);
+    }
+}
+
+function editIncome(incomeId) {
+    showAddIncomeModal(incomeId);
+}
+
+async function deleteIncome(incomeId) {
+    const income = allIncome.find(i => i.id === incomeId);
+    if (!income) return;
+    
+    if (!confirm(`Czy na pewno chcesz usunąć dochód "${income.zrodlo}" (${formatMoney(income.kwotaPLN)}) z ${BudgetCategories.formatPeriod(income.rok, income.miesiac)}?`)) {
+        return;
+    }
+    
+    showBudgetLoading(true);
+    
+    try {
+        await BudgetSheets.deleteIncome(incomeId);
+        await loadBudgetData();
+        switchBudgetTab('income');
+        
+        showToast('Usunięto dochód', 'success');
+        
+    } catch (error) {
+        console.error('Błąd usuwania:', error);
+        showToast('Błąd usuwania dochodu', 'error');
+    } finally {
+        showBudgetLoading(false);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODAL: DODAJ POJEDYNCZY WYDATEK
+// ═══════════════════════════════════════════════════════════
+
+function showAddExpenseModal() {
+    const modal = document.getElementById('addExpenseModal');
+    if (!modal) {
+        createExpenseModal();
+    }
+    
+    // Domyślne wartości
+    const now = new Date();
+    const defaultMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+    const defaultYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    
+    document.getElementById('expenseYear').value = defaultYear;
+    document.getElementById('expenseMonth').value = defaultMonth;
+    document.getElementById('expenseCategory').value = 'Codzienne wydatki';
+    updateExpenseSubcategories();
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseCurrency').value = 'PLN';
+    document.getElementById('expenseIsFixed').checked = false;
+    document.getElementById('expenseNote').value = '';
+    
+    document.getElementById('addExpenseModal').classList.add('active');
+}
+
+function createExpenseModal() {
+    const modalHtml = `
+        <div id="addExpenseModal" class="modal">
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3 class="modal-title">Dodaj wydatek</h3>
+                    <button class="modal-close" onclick="closeAddExpenseModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <form onsubmit="handleSaveExpense(event)" style="padding: 20px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="expenseMonth">Miesiąc</label>
+                            <select id="expenseMonth" class="form-select" required>
+                                ${BudgetCategories.MONTH_NAMES.map((name, i) => 
+                                    `<option value="${i + 1}">${name}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="expenseYear">Rok</label>
+                            <select id="expenseYear" class="form-select" required>
+                                ${[2023, 2024, 2025, 2026].map(y => 
+                                    `<option value="${y}">${y}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="expenseCategory">Kategoria</label>
+                            <select id="expenseCategory" class="form-select" required onchange="updateExpenseSubcategories()">
+                                ${BudgetCategories.getAllCategories().map(cat => 
+                                    `<option value="${cat}">${BudgetCategories.getCategoryIcon(cat)} ${cat}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="expenseSubcategory">Podkategoria</label>
+                            <select id="expenseSubcategory" class="form-select">
+                                <option value="">-- wybierz --</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="expenseAmount">Kwota</label>
+                            <input type="number" id="expenseAmount" class="form-input" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="expenseCurrency">Waluta</label>
+                            <select id="expenseCurrency" class="form-select">
+                                <option value="PLN">PLN</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="GBP">GBP</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="expenseIsFixed">
+                            <span>Wydatek stały (powtarzalny)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="expenseNote">Notatka (opcjonalnie)</label>
+                        <input type="text" id="expenseNote" class="form-input" placeholder="np. prezent urodzinowy">
+                    </div>
+                    
+                    <div class="modal-footer" style="padding: 0; margin-top: 20px; border: none;">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddExpenseModal()">Anuluj</button>
+                        <button type="submit" class="btn btn-primary">Dodaj</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeAddExpenseModal() {
+    const modal = document.getElementById('addExpenseModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function updateExpenseSubcategories() {
+    const category = document.getElementById('expenseCategory').value;
+    const subcatSelect = document.getElementById('expenseSubcategory');
+    
+    const subs = BudgetCategories.getSubcategories(category);
+    if (subs.length === 0) {
+        subcatSelect.innerHTML = '<option value="">(brak podkategorii)</option>';
+    } else {
+        subcatSelect.innerHTML = `
+            <option value="">-- wybierz --</option>
+            ${subs.map(sub => `<option value="${sub}">${sub}</option>`).join('')}
+        `;
+    }
+}
+
+async function handleSaveExpense(event) {
+    event.preventDefault();
+    
+    const category = document.getElementById('expenseCategory').value;
+    const subcategory = document.getElementById('expenseSubcategory').value;
+    
+    const data = {
+        rok: parseInt(document.getElementById('expenseYear').value),
+        miesiac: parseInt(document.getElementById('expenseMonth').value),
+        kategoria: category,
+        podkategoria: subcategory,
+        kwota: parseFloat(document.getElementById('expenseAmount').value) || 0,
+        waluta: document.getElementById('expenseCurrency').value,
+        jestStaly: document.getElementById('expenseIsFixed').checked,
+        jestTransfer: BudgetCategories.isTransferCategory(category, subcategory),
+        notatka: document.getElementById('expenseNote').value.trim()
+    };
+    
+    if (data.kwota <= 0) {
+        showToast('Podaj prawidłową kwotę', 'warning');
+        return;
+    }
+    
+    showBudgetLoading(true);
+    
+    try {
+        await BudgetSheets.addExpense(data);
+        await loadBudgetData();
+        
+        closeAddExpenseModal();
+        switchBudgetTab('expenses');
+        
+        showToast('Dodano wydatek', 'success');
+        
+    } catch (error) {
+        console.error('Błąd zapisu:', error);
+        showToast('Błąd zapisu wydatku', 'error');
+    } finally {
+        showBudgetLoading(false);
+    }
+}
