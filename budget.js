@@ -517,9 +517,14 @@ function renderExpensesTab() {
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Historia wydatków</h3>
-                <button class="btn btn-primary btn-sm" onclick="showAddMonthModal()">
-                    + Dodaj miesiąc
-                </button>
+                <div class="header-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="showAddExpenseModal()">
+                        + Dodaj wydatek
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="showAddMonthModal()">
+                        + Dodaj miesiąc
+                    </button>
+                </div>
             </div>
             
             <div class="expenses-list">
@@ -600,22 +605,41 @@ function renderIncomeTab() {
     const last12 = getLast12MonthsData();
     const incomeBySource = BudgetMetrics.aggregateIncomeBySource(last12);
     
+    // Grupuj dochody po miesiącach
+    const incomeByMonth = {};
+    allIncome.forEach(i => {
+        const key = `${i.rok}-${String(i.miesiac).padStart(2, '0')}`;
+        if (!incomeByMonth[key]) {
+            incomeByMonth[key] = { rok: i.rok, miesiac: i.miesiac, items: [], total: 0 };
+        }
+        incomeByMonth[key].items.push(i);
+        incomeByMonth[key].total += i.kwotaPLN;
+    });
+    
+    const sortedMonths = Object.keys(incomeByMonth).sort().reverse();
+    
     container.innerHTML = `
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Podsumowanie dochodów (12 mies.)</h3>
+                <button class="btn btn-primary btn-sm" onclick="showAddIncomeModal()">
+                    + Dodaj dochód
+                </button>
             </div>
             <div class="income-sources">
-                ${Object.entries(incomeBySource)
-                    .sort((a, b) => b[1].total - a[1].total)
-                    .map(([src, data]) => `
-                        <div class="income-source-row">
-                            <span class="income-source-icon">${BudgetCategories.getIncomeIcon(src)}</span>
-                            <span class="income-source-name">${src}</span>
-                            <span class="income-source-total">${formatMoney(data.total)}</span>
-                            <span class="income-source-avg">śr. ${formatMoney(data.average)}/mies.</span>
-                        </div>
-                    `).join('')}
+                ${Object.entries(incomeBySource).length > 0 ? 
+                    Object.entries(incomeBySource)
+                        .sort((a, b) => b[1].total - a[1].total)
+                        .map(([src, data]) => `
+                            <div class="income-source-row">
+                                <span class="income-source-icon">${BudgetCategories.getIncomeIcon(src)}</span>
+                                <span class="income-source-name">${src}</span>
+                                <span class="income-source-total">${formatMoney(data.total)}</span>
+                                <span class="income-source-avg">śr. ${formatMoney(data.average)}/mies.</span>
+                            </div>
+                        `).join('') 
+                    : '<p class="no-data">Brak danych o dochodach</p>'
+                }
             </div>
         </div>
         
@@ -633,19 +657,38 @@ function renderIncomeTab() {
                 <h3 class="card-title">Lista dochodów</h3>
             </div>
             <div class="income-list">
-                ${allIncome
-                    .sort((a, b) => {
-                        if (a.rok !== b.rok) return b.rok - a.rok;
-                        return b.miesiac - a.miesiac;
-                    })
-                    .slice(0, 20)
-                    .map(i => `
-                        <div class="income-row">
-                            <span class="income-period">${BudgetCategories.formatPeriod(i.rok, i.miesiac)}</span>
-                            <span class="income-source">${i.zrodlo}${i.pracodawca ? ` (${i.pracodawca})` : ''}</span>
-                            <span class="income-amount">${formatMoney(i.kwotaPLN)}</span>
+                ${sortedMonths.length > 0 ? sortedMonths.map(key => {
+                    const monthData = incomeByMonth[key];
+                    return `
+                        <div class="income-month-group">
+                            <div class="income-month-header" onclick="toggleIncomeMonth('${key}')">
+                                <span class="income-month-name">${BudgetCategories.formatPeriod(monthData.rok, monthData.miesiac)}</span>
+                                <span class="income-month-total">${formatMoney(monthData.total)}</span>
+                                <span class="income-month-count">${monthData.items.length} wpis${monthData.items.length > 1 ? 'ów' : ''}</span>
+                                <span class="income-month-toggle">▼</span>
+                            </div>
+                            <div id="income-details-${key}" class="income-month-details hidden">
+                                ${monthData.items.map(i => `
+                                    <div class="income-row-item">
+                                        <span class="income-row-icon">${BudgetCategories.getIncomeIcon(i.zrodlo)}</span>
+                                        <span class="income-row-source">${i.zrodlo}</span>
+                                        <span class="income-row-employer">${i.pracodawca || '-'}</span>
+                                        <span class="income-row-amount">${formatMoney(i.kwotaPLN)}</span>
+                                        <div class="income-row-actions">
+                                            <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation(); editIncome('${i.id}')" title="Edytuj">✏️</button>
+                                            <button class="btn btn-ghost btn-icon btn-sm" onclick="event.stopPropagation(); deleteIncome('${i.id}')" title="Usuń">🗑️</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
-                    `).join('')}
+                    `;
+                }).join('') : `
+                    <div class="empty-state">
+                        <p>Brak zapisanych dochodów</p>
+                        <button class="btn btn-primary" onclick="showAddIncomeModal()">Dodaj pierwszy dochód</button>
+                    </div>
+                `}
             </div>
         </div>
     `;
@@ -980,6 +1023,17 @@ function renderBudgetTrendChart(monthlyData) {
 // ═══════════════════════════════════════════════════════════
 
 // Funkcja renderBudgetAITab jest w budget-ai.js
+
+// ═══════════════════════════════════════════════════════════
+// TOGGLE INCOME DETAILS
+// ═══════════════════════════════════════════════════════════
+
+function toggleIncomeMonth(key) {
+    const details = document.getElementById(`income-details-${key}`);
+    if (details) {
+        details.classList.toggle('hidden');
+    }
+}
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
