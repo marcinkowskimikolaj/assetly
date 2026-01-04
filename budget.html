@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assetly - Budżet</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="budget.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2310B981' rx='20' width='100' height='100'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>A</text></svg>">
+</head>
+<body>
+    <div class="dashboard">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <a href="dashboard.html" class="sidebar-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12V7H5a2 2 0 010-4h14v4"/>
+                    <path d="M3 5v14a2 2 0 002 2h16v-5"/>
+                    <path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/>
+                </svg>
+            </a>
+            
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="sidebar-link" title="Dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                        <polyline points="9,22 9,12 15,12 15,22"/>
+                    </svg>
+                </a>
+                <a href="investments.html" class="sidebar-link" title="Inwestycje">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18"/>
+                        <path d="M18 9l-5 5-4-4-4 4"/>
+                    </svg>
+                </a>
+                <a href="budget.html" class="sidebar-link active" title="Budżet">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M2 10h20"/>
+                        <path d="M6 16h4"/>
+                        <path d="M14 16h4"/>
+                    </svg>
+                </a>
+                <a href="analytics.html" class="sidebar-link" title="Analityka">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="sidebar-link" id="logoutBtn" title="Wyloguj">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                        <polyline points="16,17 21,12 16,7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Header -->
+            <header class="header">
+                <h1 class="header-title">Budżet</h1>
+            </header>
+            
+            <!-- Loading -->
+            <div id="budgetLoader" class="loading hidden">
+                <div class="spinner"></div>
+            </div>
+            
+            <!-- Tabs Navigation -->
+            <div class="budget-tabs-nav">
+                <button class="budget-tab-btn active" data-tab="overview">Przegląd</button>
+                <button class="budget-tab-btn" data-tab="expenses">Wydatki</button>
+                <button class="budget-tab-btn" data-tab="income">Dochody</button>
+                <button class="budget-tab-btn" data-tab="plans">Plany</button>
+                <button class="budget-tab-btn" data-tab="trends">Trendy</button>
+                <button class="budget-tab-btn" data-tab="ai">AI Asystent</button>
+            </div>
+            
+            <!-- Tab Contents -->
+            <div id="budget-overview" class="budget-tab-content active">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+            <div id="budget-expenses" class="budget-tab-content">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+            <div id="budget-income" class="budget-tab-content">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+            <div id="budget-plans" class="budget-tab-content">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+            <div id="budget-trends" class="budget-tab-content">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+            <div id="budget-ai" class="budget-tab-content">
+                <!-- Renderowane dynamicznie -->
+            </div>
+            
+        </main>
+        
+    </div>
+    
+    <!-- Modal: Dodaj miesiąc -->
+    <div id="addMonthModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">Wprowadź dane za miesiąc</h3>
+                <button class="modal-close" onclick="closeAddMonthModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="addMonthContent">
+                <!-- Renderowane dynamicznie -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: Dodaj wydatek stały -->
+    <div id="addRecurringModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Dodaj wydatek stały</h3>
+                <button class="modal-close" onclick="closeAddRecurringModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <form onsubmit="handleAddRecurring(event)">
+                <div class="form-group">
+                    <label class="form-label" for="recurringName">Nazwa</label>
+                    <input type="text" id="recurringName" class="form-input" placeholder="np. Netflix, Czynsz" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="recurringCategory">Kategoria</label>
+                        <select id="recurringCategory" class="form-select" required onchange="updateRecurringSubcategories()">
+                            <option value="">-- wybierz --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="recurringSubcategory">Podkategoria</label>
+                        <select id="recurringSubcategory" class="form-select">
+                            <option value="">-- wybierz --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="recurringAmount">Kwota</label>
+                        <input type="number" id="recurringAmount" class="form-input" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="recurringFrequency">Częstotliwość</label>
+                        <select id="recurringFrequency" class="form-select" onchange="toggleRecurringMonth()">
+                            <option value="monthly">Miesięcznie</option>
+                            <option value="quarterly">Kwartalnie</option>
+                            <option value="yearly">Rocznie</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="recurringMonthGroup" style="display: none;">
+                    <label class="form-label" for="recurringMonth">Miesiąc płatności</label>
+                    <select id="recurringMonth" class="form-select">
+                        <option value="0">-- wybierz --</option>
+                        <option value="1">Styczeń</option>
+                        <option value="2">Luty</option>
+                        <option value="3">Marzec</option>
+                        <option value="4">Kwiecień</option>
+                        <option value="5">Maj</option>
+                        <option value="6">Czerwiec</option>
+                        <option value="7">Lipiec</option>
+                        <option value="8">Sierpień</option>
+                        <option value="9">Wrzesień</option>
+                        <option value="10">Październik</option>
+                        <option value="11">Listopad</option>
+                        <option value="12">Grudzień</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="recurringNote">Notatka (opcjonalnie)</label>
+                    <input type="text" id="recurringNote" class="form-input" placeholder="np. umowa do 2026-06">
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddRecurringModal()">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Dodaj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+    
+    <!-- Scripts -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="sheets.js"></script>
+    
+    <!-- Budget Module -->
+    <script src="budget-categories.js"></script>
+    <script src="budget-sheets.js"></script>
+    <script src="budget-metrics.js"></script>
+    <script src="budget-modals.js"></script>
+    <script src="budget-ai.js"></script>
+    <script src="budget.js"></script>
+    
+    <script>
+        // Stan kursów walut
+        let currencyRates = { PLN: 1 };
+        
+        // Helper functions
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const iconsSvg = {
+                success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>`,
+                error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+                warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+                info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${iconsSvg[type] || iconsSvg.info}</span>
+                <span class="toast-message">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+        
+        async function fetchCurrencyRates() {
+            const currencies = ['USD', 'EUR', 'GBP', 'CHF'];
+            
+            const promises = currencies.map(async (currency) => {
+                try {
+                    const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        return { currency, rate: data.rates[0].mid };
+                    }
+                } catch (error) {}
+                return { currency, rate: 1 };
+            });
+            
+            const results = await Promise.all(promises);
+            results.forEach(({ currency, rate }) => {
+                currencyRates[currency] = rate;
+            });
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+        
+        // Inicjalizacja po zalogowaniu
+        function onGapiLoaded() {
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({
+                        apiKey: CONFIG.API_KEY,
+                        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                    });
+                    
+                    // Sprawdź token
+                    const token = localStorage.getItem('google_access_token');
+                    if (token) {
+                        gapi.client.setToken({ access_token: token });
+                        initBudgetModule();
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                } catch (error) {
+                    console.error('Błąd inicjalizacji:', error);
+                    showToast('Błąd inicjalizacji API', 'error');
+                }
+            });
+        }
+        
+        // Wylogowanie
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('google_access_token');
+            window.location.href = 'index.html';
+        });
+        
+        // Start
+        window.onload = onGapiLoaded;
+    </script>
+</body>
+</html>
