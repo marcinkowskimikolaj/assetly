@@ -526,7 +526,7 @@
 }
 
 /* ============================================
-   INCOME TAB
+   INCOME TAB - ROZSZERZONY
    ============================================ */
 .income-sources {
     display: flex;
@@ -562,11 +562,118 @@
     font-size: 0.875rem;
 }
 
+/* Income Month Groups */
+.income-month-group {
+    border-bottom: 1px solid var(--border);
+}
+
+.income-month-group:last-child {
+    border-bottom: none;
+}
+
+.income-month-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.income-month-header:hover {
+    background: var(--bg-hover);
+    margin: 0 -20px;
+    padding: 16px 20px;
+}
+
+.income-month-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.income-month-total {
+    font-weight: 600;
+    font-size: 1.125rem;
+    color: var(--primary);
+}
+
+.income-month-count {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.income-month-toggle {
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.income-month-details {
+    padding: 0 0 16px 0;
+}
+
+.income-month-details.hidden {
+    display: none;
+}
+
+.income-row-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-md);
+}
+
+.income-row-item:last-child {
+    margin-bottom: 0;
+}
+
+.income-row-icon {
+    font-size: 1.25rem;
+}
+
+.income-row-source {
+    font-weight: 500;
+    min-width: 120px;
+}
+
+.income-row-employer {
+    flex: 1;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.income-row-amount {
+    font-weight: 600;
+    min-width: 100px;
+    text-align: right;
+}
+
+.income-row-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.income-row-actions .btn-icon {
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.income-row-item:hover .income-row-actions .btn-icon {
+    opacity: 1;
+}
+
+/* Salary History */
 .salary-history {
     padding: 16px;
     background: var(--bg-hover);
     border-radius: var(--radius-md);
     margin-bottom: 16px;
+}
+
+.salary-history:last-child {
+    margin-bottom: 0;
 }
 
 .salary-history h4 {
@@ -578,6 +685,7 @@
     display: flex;
     gap: 24px;
     margin-bottom: 12px;
+    flex-wrap: wrap;
 }
 
 .salary-stat {
@@ -607,6 +715,7 @@
     font-size: 0.875rem;
 }
 
+/* Old income list styles - keeping for compatibility */
 .income-list {
     display: flex;
     flex-direction: column;
@@ -987,6 +1096,25 @@
 .form-select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
 }
 
 /* ============================================
