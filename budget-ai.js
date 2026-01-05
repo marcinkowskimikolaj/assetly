@@ -8,9 +8,49 @@
 // ═══════════════════════════════════════════════════════════
 
 const BUDGET_AI_CONFIG = {
-    model: 'gpt-4o-mini',
+    // Primary provider (OpenAI)
+    openaiModel: 'gpt-4o-mini',
+
+    // Backup provider (LLM7.io) - OpenAI-compatible models: "default" / "fast" / "pro"
+    llm7Model: 'default',
+
+    // Generation params
     maxTokens: 2000,
     temperature: 0.3 // Niższa temperatura = bardziej precyzyjne odpowiedzi
+};
+
+// Provider routing configuration (OpenAI primary + LLM7 backup)
+const BUDGET_AI_PROVIDERS = {
+    openai: { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+    llm7: { id: 'llm7', label: 'LLM7.io', baseUrl: 'https://api.llm7.io/v1' }
+};
+
+const BUDGET_AI_ROUTER = {
+    // Heurystyka tokenów: ok. 4 znaki ≈ 1 token (w praktyce zależy od języka/tekstu)
+    approxCharsPerToken: 4,
+
+    // Jeśli CAŁY kontekst (system + dane + historia + user) przekroczy próg → kieruj do back-up
+    largeInputCharsThreshold: 50000,
+    largeInputTokensThreshold: 12000,
+
+    // Timeout requestu do LLM
+    requestTimeoutMs: 90000,
+
+    // Ile wiadomości historii utrzymywać w kontekście LLM
+    maxHistoryMessages: 10,
+
+    // Jeśli same dane budżetowe przekroczą ten limit, zostaną inteligentnie odchudzone
+    maxDataContextChars: 160000
+};
+
+const BUDGET_AI_STORAGE_KEYS = {
+    openaiKey: 'openai_api_key',
+    llm7Key: 'llm7_api_key',
+    providerMode: 'budget_ai_provider_mode', // 'auto' | 'openai' | 'llm7'
+    openaiModel: 'budget_ai_openai_model',
+    llm7Model: 'budget_ai_llm7_model',
+    routingChars: 'budget_ai_routing_chars_threshold',
+    routingTokens: 'budget_ai_routing_tokens_threshold'
 };
 
 const BUDGET_QUICK_PROMPTS = [
@@ -69,7 +109,9 @@ const BUDGET_QUICK_PROMPTS = [
 // ═══════════════════════════════════════════════════════════
 
 let budgetChatHistory = [];
-let budgetAiApiKey = null;
+let budgetAiKeys = { openai: null, llm7: null };
+let budgetAiProviderMode = 'auto'; // 'auto' | 'openai' | 'llm7'
+let budgetAiModels = { openai: BUDGET_AI_CONFIG.openaiModel, llm7: BUDGET_AI_CONFIG.llm7Model };
 let lastPreparedData = null;
 
 // ═══════════════════════════════════════════════════════════
@@ -549,80 +591,313 @@ Odpowiedź: [Tabela z danymi z monthly[] dla obu okresów]
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// ROUTING: OpenAI (primary) + LLM7.io (backup)
+// ═══════════════════════════════════════════════════════════
+
+function normalizeProviderMode(mode) {
+    const v = String(mode || '').toLowerCase().trim();
+    if (v === 'openai' || v === 'llm7' || v === 'auto') return v;
+    return 'auto';
+}
+
+function estimateTokensFromText(text) {
+    const chars = (text || '').length;
+    const approx = Math.ceil(chars / (BUDGET_AI_ROUTER.approxCharsPerToken || 4));
+    return Math.max(1, approx);
+}
+
+function getRouterThresholds() {
+    const chars = Number(localStorage.getItem(BUDGET_AI_STORAGE_KEYS.routingChars));
+    const toks = Number(localStorage.getItem(BUDGET_AI_STORAGE_KEYS.routingTokens));
+
+    return {
+        chars: Number.isFinite(chars) && chars > 1000 ? chars : BUDGET_AI_ROUTER.largeInputCharsThreshold,
+        tokens: Number.isFinite(toks) && toks > 500 ? toks : BUDGET_AI_ROUTER.largeInputTokensThreshold
+    };
+}
+
+function getOtherProvider(providerId) {
+    return providerId === 'openai' ? 'llm7' : 'openai';
+}
+
+function getProviderConfig(providerId) {
+    const cfg = BUDGET_AI_PROVIDERS[providerId];
+    if (!cfg) throw new Error(`Nieznany provider: ${providerId}`);
+    return cfg;
+}
+
+function getProviderKey(providerId) {
+    return providerId === 'openai' ? budgetAiKeys.openai : budgetAiKeys.llm7;
+}
+
+function getProviderModel(providerId) {
+    return providerId === 'openai' ? (budgetAiModels.openai || BUDGET_AI_CONFIG.openaiModel) : (budgetAiModels.llm7 || BUDGET_AI_CONFIG.llm7Model);
+}
+
+function buildAuthHeader(providerId) {
+    if (providerId === 'openai') {
+        if (!budgetAiKeys.openai) throw new Error('Brak klucza OpenAI (sk-...). Ustaw go w ⚙️.');
+        return `Bearer ${budgetAiKeys.openai}`;
+    }
+
+    // LLM7 może działać bez tokena, ale z tokenem ma wyższe limity
+    return `Bearer ${budgetAiKeys.llm7 || 'none'}`;
+}
+
+function stringifyBudgetDataForLLM(budgetData) {
+    // Zasada: najpierw compact JSON (bez wcięć), żeby oszczędzić tokeny.
+    // Jeśli nadal jest ogromny, ucinamy rawData (zostawiając agregaty + liczniki).
+    const maxChars = BUDGET_AI_ROUTER.maxDataContextChars || 160000;
+
+    try {
+        let json = JSON.stringify(budgetData);
+        if (json.length <= maxChars) return { json, truncated: false };
+
+        const slim = JSON.parse(JSON.stringify(budgetData));
+
+        if (slim?.expenses?.rawData && Array.isArray(slim.expenses.rawData)) {
+            slim.expenses.rawData = {
+                omitted: true,
+                count: budgetData.expenses.rawData.length,
+                note: 'rawData zostało pominięte z powodu limitu długości. Zadawaj pytania o agregaty / zakresy, albo zawęź okres.'
+            };
+        }
+        if (slim?.income?.rawData && Array.isArray(slim.income.rawData)) {
+            slim.income.rawData = {
+                omitted: true,
+                count: budgetData.income.rawData.length,
+                note: 'rawData zostało pominięte z powodu limitu długości. Zadawaj pytania o agregaty / zakresy, albo zawęź okres.'
+            };
+        }
+
+        json = JSON.stringify(slim);
+        if (json.length <= maxChars) return { json, truncated: true };
+
+        // Ostateczne przycięcie (najgorszy case)
+        return { json: json.slice(0, maxChars) + '\n...TRUNCATED...', truncated: true };
+    } catch (e) {
+        return { json: JSON.stringify({ error: 'Nie udało się przygotować danych dla AI.' }), truncated: true };
+    }
+}
+
+function pickInitialProvider(totalChars, estTokens) {
+    const mode = normalizeProviderMode(budgetAiProviderMode);
+    const thresholds = getRouterThresholds();
+
+    // Jeśli user wymusił provider — respektuj, ale fallback dalej działa w razie błędu.
+    if (mode === 'openai') return 'openai';
+    if (mode === 'llm7') return 'llm7';
+
+    // AUTO:
+    // 1) jeśli nie ma klucza OpenAI → LLM7
+    if (!budgetAiKeys.openai) return 'llm7';
+
+    // 2) jeśli kontekst duży → LLM7
+    if (totalChars >= thresholds.chars || estTokens >= thresholds.tokens) return 'llm7';
+
+    // 3) w pozostałych przypadkach → OpenAI
+    return 'openai';
+}
+
+async function postChatCompletions(providerId, payload) {
+    const { baseUrl } = getProviderConfig(providerId);
+
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), BUDGET_AI_ROUTER.requestTimeoutMs || 90000);
+
+    try {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': buildAuthHeader(providerId)
+            },
+            body: JSON.stringify({ ...payload, model: getProviderModel(providerId) }),
+            signal: controller.signal
+        });
+
+        if (!res.ok) {
+            let errorText = '';
+            try {
+                const errJson = await res.json();
+                errorText = errJson?.error?.message || errJson?.message || JSON.stringify(errJson);
+            } catch {
+                errorText = await res.text().catch(() => '');
+            }
+            const status = res.status;
+            const err = new Error(errorText || `HTTP ${status}`);
+            err.status = status;
+            err.providerId = providerId;
+            throw err;
+        }
+
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content;
+
+        if (!content) {
+            const err = new Error('Brak treści w odpowiedzi modelu.');
+            err.status = 500;
+            err.providerId = providerId;
+            throw err;
+        }
+
+        return { data, content };
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+async function requestChatWithFailover(initialProviderId, payload) {
+    const order = [initialProviderId, getOtherProvider(initialProviderId)];
+    let lastError = null;
+
+    for (const providerId of order) {
+        try {
+            const result = await postChatCompletions(providerId, payload);
+            return { providerId, ...result };
+        } catch (e) {
+            lastError = e;
+
+            // Jeśli pierwszy provider poleciał, spróbuj drugiego
+            // (wymóg: backup odpala się zawsze w przypadku błędu)
+            continue;
+        }
+    }
+
+    throw lastError || new Error('Nieznany błąd AI.');
+}
+
+function updateBudgetAiProviderBadges() {
+    const modeEl = document.getElementById('budgetAiModeBadge');
+    const openaiEl = document.getElementById('budgetAiOpenaiBadge');
+    const llm7El = document.getElementById('budgetAiLlm7Badge');
+
+    const mode = normalizeProviderMode(budgetAiProviderMode);
+
+    if (modeEl) {
+        modeEl.textContent = `Tryb: ${mode.toUpperCase()}`;
+    }
+    if (openaiEl) {
+        openaiEl.textContent = budgetAiKeys.openai ? 'OpenAI: OK' : 'OpenAI: brak klucza';
+    }
+    if (llm7El) {
+        llm7El.textContent = budgetAiKeys.llm7 ? 'LLM7: token' : 'LLM7: free';
+    }
+}
+
 // KOMUNIKACJA Z API
 // ═══════════════════════════════════════════════════════════
 
 async function sendBudgetMessage(customMessage = null) {
     const input = document.getElementById('budgetChatInput');
     const message = customMessage || (input ? input.value.trim() : '');
-    
+
     if (!message) return;
     if (input) input.value = '';
-    
-    // Sprawdź klucz API
-    if (!budgetAiApiKey) {
-        addBudgetChatMessage('assistant', '⚠️ Brak klucza API OpenAI. Kliknij ⚙️ aby skonfigurować.');
-        return;
-    }
-    
-    // Dodaj wiadomość użytkownika
+
+    // Upewnij się, że ustawienia/klucze są wczytane (async)
+    await checkBudgetApiKey();
+    updateBudgetAiProviderBadges();
+
+    // Dodaj wiadomość użytkownika do UI
     addBudgetChatMessage('user', message);
-    
+
     // Przygotuj dane
     const budgetData = prepareBudgetDataForAI();
     if (budgetData.error) {
         addBudgetChatMessage('assistant', `⚠️ ${budgetData.error}`);
         return;
     }
-    
+
     // Pokaż loading
     const loadingId = addBudgetChatMessage('assistant', '⏳ Analizuję dane...');
-    
+
     try {
-        // Przygotuj kontekst danych (może być duży)
-        const dataContext = JSON.stringify(budgetData, null, 2);
-        
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${budgetAiApiKey}`
+        const systemPrompt = getBudgetSystemPrompt();
+        const { json: dataJson, truncated } = stringifyBudgetDataForLLM(budgetData);
+
+        // Zbuduj kontekst wiadomości
+        const history = budgetChatHistory.slice(-BUDGET_AI_ROUTER.maxHistoryMessages);
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            {
+                role: 'system',
+                content:
+                    `DANE FINANSOWE UŻYTKOWNIKA (JSON):
+${dataJson}` +
+                    (truncated ? `
+
+(Uwaga: część surowych danych mogła zostać pominięta z powodu limitu długości.)` : '')
             },
-            body: JSON.stringify({
-                model: BUDGET_AI_CONFIG.model,
-                messages: [
-                    { role: 'system', content: getBudgetSystemPrompt() },
-                    { role: 'system', content: `## DANE FINANSOWE UŻYTKOWNIKA\n\`\`\`json\n${dataContext}\n\`\`\`` },
-                    ...budgetChatHistory.slice(-10), // Ostatnie 10 wiadomości
-                    { role: 'user', content: message }
-                ],
-                temperature: BUDGET_AI_CONFIG.temperature,
-                max_tokens: BUDGET_AI_CONFIG.maxTokens
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+            ...history,
+            { role: 'user', content: message }
+        ];
+
+        const totalChars = messages.reduce((s, m) => s + (m.content ? m.content.length : 0), 0);
+        const estTokens = Math.ceil(totalChars / (BUDGET_AI_ROUTER.approxCharsPerToken || 4));
+
+        // Routing: wybierz provider startowy
+        const initialProvider = pickInitialProvider(totalChars, estTokens);
+
+        // Jeśli user wymusił OpenAI, a nie ma klucza — nie marnuj czasu.
+        if (normalizeProviderMode(budgetAiProviderMode) === 'openai' && !budgetAiKeys.openai) {
+            throw new Error('Tryb OPENAI wymaga klucza (sk-...). Ustaw go w ⚙️ albo przełącz tryb na AUTO / LLM7.');
         }
-        
-        const data = await response.json();
-        const assistantMessage = data.choices[0].message.content;
-        
-        // Zapisz do historii
+
+        // Payload bez twardo ustawionego modelu (model dobieramy per-provider)
+        const payload = {
+            messages,
+            temperature: BUDGET_AI_CONFIG.temperature,
+            max_tokens: BUDGET_AI_CONFIG.maxTokens
+        };
+
+        const result = await requestChatWithFailover(initialProvider, payload);
+
+        const assistantMessage = result.content;
+
+        // Zapisz do historii (na potrzeby kolejnych odpowiedzi)
         budgetChatHistory.push({ role: 'user', content: message });
         budgetChatHistory.push({ role: 'assistant', content: assistantMessage });
-        
+
         // Usuń loading i dodaj odpowiedź
         removeBudgetChatMessage(loadingId);
-        addBudgetChatMessage('assistant', assistantMessage);
-        
+
+        const providerLabel = BUDGET_AI_PROVIDERS[result.providerId]?.label || result.providerId;
+        const usedFallback = result.providerId !== initialProvider;
+
+        addBudgetChatMessage('assistant', assistantMessage, {
+            provider: providerLabel,
+            fallback: usedFallback,
+            tokens: estTokens,
+            chars: totalChars
+        });
+
     } catch (error) {
-        console.error('Błąd API:', error);
+        console.error('Błąd AI:', error);
         removeBudgetChatMessage(loadingId);
-        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}\n\nSprawdź czy klucz API jest poprawny i czy masz środki na koncie OpenAI.`);
+
+        const hint =
+            error?.status === 401
+                ? '401 Unauthorized — klucz/token jest nieprawidłowy lub wygasł.'
+                : error?.status === 429
+                ? '429 Rate limit — limit zapytań został przekroczony.'
+                : error?.status
+                ? `HTTP ${error.status}`
+                : '';
+
+        addBudgetChatMessage(
+            'assistant',
+            `❌ Błąd: ${error.message}${hint ? `
+${hint}` : ''}
+
+` +
+                `Spróbuj ponownie albo przełącz tryb w ⚙️ (AUTO / OpenAI / LLM7).`
+        );
     }
 }
+
 
 function runBudgetQuickPrompt(promptId) {
     const prompt = BUDGET_QUICK_PROMPTS.find(p => p.id === promptId);
@@ -662,6 +937,13 @@ function renderBudgetAITab() {
                         ⚙️
                     </button>
                 </div>
+
+<div class="ai-provider-status" id="budgetAiProviderStatus">
+    <span class="ai-provider-pill mode" id="budgetAiModeBadge">Tryb: ...</span>
+    <span class="ai-provider-pill openai" id="budgetAiOpenaiBadge">OpenAI: ...</span>
+    <span class="ai-provider-pill llm7" id="budgetAiLlm7Badge">LLM7: ...</span>
+</div>
+
                 
                 <div class="quick-prompts">
                     ${BUDGET_QUICK_PROMPTS.map(p => `
@@ -701,9 +983,8 @@ function renderBudgetAITab() {
             </div>
         </div>
     `;
-    
-    // Sprawdź klucz API
-    checkBudgetApiKey();
+    // Sprawdź klucze/tryb providerów
+    checkBudgetApiKey().finally(updateBudgetAiProviderBadges);
 }
 
 function getMonthCount() {
@@ -713,7 +994,7 @@ function getMonthCount() {
     return periods.size;
 }
 
-function addBudgetChatMessage(role, content) {
+function addBudgetChatMessage(role, content, meta = null) {
     const container = document.getElementById('budgetChatMessages');
     if (!container) return null;
     
@@ -728,13 +1009,30 @@ function addBudgetChatMessage(role, content) {
     
     // Formatuj markdown
     const formattedContent = formatMarkdownToHtml(content);
-    
+
+    // Meta info (np. z jakiego providera przyszła odpowiedź)
+    let metaHtml = '';
+    if (meta && role === 'assistant') {
+        const provider = meta.provider ? String(meta.provider) : '';
+        const details = [];
+        if (meta.fallback) details.push('fallback');
+        if (meta.tokens) details.push(`~${meta.tokens} tok`);
+        if (meta.chars) details.push(`${meta.chars} znaków`);
+        const detailsText = details.length ? details.join(' • ') : '';
+
+        metaHtml = `
+            <div class="message-meta">
+                <span class="ai-provider-pill inline">${provider || 'AI'}</span>
+                ${detailsText ? `<span class="ai-meta-details">${detailsText}</span>` : ''}
+            </div>
+        `;
+    }
+
     div.innerHTML = `
         <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
-        <div class="message-content">${formattedContent}</div>
+        <div class="message-content">${formattedContent}${metaHtml}</div>
     `;
-    
-    container.appendChild(div);
+container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     
     return id;
@@ -823,51 +1121,145 @@ function formatMarkdownToHtml(text) {
 
 async function checkBudgetApiKey() {
     try {
-        const localKey = localStorage.getItem('openai_api_key');
-        if (localKey) {
-            budgetAiApiKey = localKey;
-            return;
-        }
-        
-        // Sprawdź ustawienia w arkuszu
-        if (typeof BudgetSheets !== 'undefined' && BudgetSheets.getSettings) {
-            const settings = await BudgetSheets.getSettings();
-            if (settings.openai_api_key) {
-                budgetAiApiKey = settings.openai_api_key;
-                localStorage.setItem('openai_api_key', budgetAiApiKey);
+        // Mode / modele
+        budgetAiProviderMode = normalizeProviderMode(localStorage.getItem(BUDGET_AI_STORAGE_KEYS.providerMode) || budgetAiProviderMode);
+
+        const storedOpenaiModel = localStorage.getItem(BUDGET_AI_STORAGE_KEYS.openaiModel);
+        const storedLlm7Model = localStorage.getItem(BUDGET_AI_STORAGE_KEYS.llm7Model);
+
+        if (storedOpenaiModel) budgetAiModels.openai = storedOpenaiModel;
+        if (storedLlm7Model) budgetAiModels.llm7 = storedLlm7Model;
+
+        // Klucze z localStorage
+        const openaiKey = localStorage.getItem(BUDGET_AI_STORAGE_KEYS.openaiKey);
+        const llm7Key = localStorage.getItem(BUDGET_AI_STORAGE_KEYS.llm7Key);
+
+        if (openaiKey) budgetAiKeys.openai = openaiKey;
+        if (llm7Key) budgetAiKeys.llm7 = llm7Key;
+
+        // Opcjonalnie: ustawienia w arkuszu (jeśli moduł BudgetSheets je udostępnia)
+        if (typeof BudgetSheets !== 'undefined' && typeof BudgetSheets.getSettings === 'function') {
+            const settings = await BudgetSheets.getSettings().catch(() => null);
+            if (settings) {
+                if (!budgetAiKeys.openai && settings.openai_api_key) {
+                    budgetAiKeys.openai = settings.openai_api_key;
+                    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.openaiKey, budgetAiKeys.openai);
+                }
+
+                const sheetLlm7 = settings.llm7_api_key || settings.llm7_token || settings.llm7_apiKey;
+                if (!budgetAiKeys.llm7 && sheetLlm7) {
+                    budgetAiKeys.llm7 = sheetLlm7;
+                    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.llm7Key, budgetAiKeys.llm7);
+                }
+
+                const sheetMode = settings.budget_ai_provider_mode || settings.ai_provider_mode;
+                if (sheetMode) {
+                    budgetAiProviderMode = normalizeProviderMode(sheetMode);
+                    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.providerMode, budgetAiProviderMode);
+                }
+
+                const sheetOpenaiModel = settings.budget_ai_openai_model;
+                const sheetLlm7Model = settings.budget_ai_llm7_model;
+                if (sheetOpenaiModel && !storedOpenaiModel) {
+                    budgetAiModels.openai = sheetOpenaiModel;
+                    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.openaiModel, sheetOpenaiModel);
+                }
+                if (sheetLlm7Model && !storedLlm7Model) {
+                    budgetAiModels.llm7 = sheetLlm7Model;
+                    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.llm7Model, sheetLlm7Model);
+                }
             }
         }
     } catch (error) {
-        console.warn('Nie można pobrać klucza API:', error);
+        console.warn('Nie można wczytać ustawień AI:', error);
+    } finally {
+        updateBudgetAiProviderBadges();
     }
 }
 
 function showBudgetApiKeyModal() {
-    const currentKey = budgetAiApiKey ? '••••••••' + budgetAiApiKey.slice(-4) : '';
-    const newKey = prompt(
-        `Klucz API OpenAI\n\n` +
-        `Aktualny: ${currentKey || '(brak)'}\n\n` +
-        `Wklej nowy klucz (zaczyna się od "sk-"):\n` +
-        `Możesz go uzyskać na: platform.openai.com/api-keys`
+    // 1) Tryb routingu (AUTO / OpenAI / LLM7)
+    const currentMode = normalizeProviderMode(budgetAiProviderMode);
+    const modeInput = prompt(
+        `Ustawienia AI — tryb routingu\n\n` +
+        `Wpisz: auto / openai / llm7\n` +
+        `- auto: małe zapytania → OpenAI, duże → LLM7; a w razie błędu fallback\n` +
+        `- openai: zawsze OpenAI (fallback na LLM7 w razie błędu)\n` +
+        `- llm7: zawsze LLM7 (fallback na OpenAI jeśli masz klucz)\n\n` +
+        `Aktualnie: ${currentMode}`,
+        currentMode
     );
-    
-    if (newKey === null) return; // Anulowano
-    
-    if (newKey === '') {
-        // Usuń klucz
-        budgetAiApiKey = null;
-        localStorage.removeItem('openai_api_key');
-        showToast('Usunięto klucz API', 'info');
-        return;
+    if (modeInput === null) return;
+    budgetAiProviderMode = normalizeProviderMode(modeInput);
+    localStorage.setItem(BUDGET_AI_STORAGE_KEYS.providerMode, budgetAiProviderMode);
+
+    // 2) Klucz OpenAI
+    const openaiMasked = budgetAiKeys.openai ? `••••••••${budgetAiKeys.openai.slice(-4)}` : '(brak)';
+    const openaiInput = prompt(
+        `OpenAI API key (wymagany dla trybu openai / jako primary w auto)\n\n` +
+        `Aktualny: ${openaiMasked}\n\n` +
+        `Wklej nowy klucz (zaczyna się od "sk-")\n` +
+        `albo wpisz REMOVE aby usunąć\n` +
+        `albo zostaw puste aby nie zmieniać.`,
+        ''
+    );
+    if (openaiInput === null) return;
+
+    const openaiTrim = openaiInput.trim();
+    if (openaiTrim.toUpperCase() === 'REMOVE') {
+        budgetAiKeys.openai = null;
+        localStorage.removeItem(BUDGET_AI_STORAGE_KEYS.openaiKey);
+    } else if (openaiTrim !== '') {
+        if (openaiTrim.startsWith('sk-')) {
+            budgetAiKeys.openai = openaiTrim;
+            localStorage.setItem(BUDGET_AI_STORAGE_KEYS.openaiKey, openaiTrim);
+        } else {
+            if (typeof showToast === 'function') showToast('Nieprawidłowy format klucza OpenAI (powinien zaczynać się od "sk-")', 'error');
+        }
     }
-    
-    if (newKey.startsWith('sk-')) {
-        budgetAiApiKey = newKey;
-        localStorage.setItem('openai_api_key', newKey);
-        showToast('Zapisano klucz API', 'success');
-    } else {
-        showToast('Nieprawidłowy format klucza (powinien zaczynać się od "sk-")', 'error');
+
+    // 3) Token LLM7 (opcjonalny)
+    const llm7Masked = budgetAiKeys.llm7 ? `••••••••${budgetAiKeys.llm7.slice(-4)}` : '(brak — tryb free)';
+    const llm7Input = prompt(
+        `LLM7 token (opcjonalny, podnosi limity)\n\n` +
+        `Aktualny: ${llm7Masked}\n\n` +
+        `Wklej token z token.llm7.io\n` +
+        `albo wpisz REMOVE aby usunąć\n` +
+        `albo zostaw puste aby nie zmieniać.`,
+        ''
+    );
+    if (llm7Input === null) return;
+
+    const llm7Trim = llm7Input.trim();
+    if (llm7Trim.toUpperCase() === 'REMOVE') {
+        budgetAiKeys.llm7 = null;
+        localStorage.removeItem(BUDGET_AI_STORAGE_KEYS.llm7Key);
+    } else if (llm7Trim !== '') {
+        budgetAiKeys.llm7 = llm7Trim;
+        localStorage.setItem(BUDGET_AI_STORAGE_KEYS.llm7Key, llm7Trim);
     }
+
+    // 4) Modele
+    const openaiModelInput = prompt(
+        `Model OpenAI (np. gpt-4o-mini)\n\nAktualnie: ${budgetAiModels.openai}`,
+        budgetAiModels.openai
+    );
+    if (openaiModelInput !== null && openaiModelInput.trim() !== '') {
+        budgetAiModels.openai = openaiModelInput.trim();
+        localStorage.setItem(BUDGET_AI_STORAGE_KEYS.openaiModel, budgetAiModels.openai);
+    }
+
+    const llm7ModelInput = prompt(
+        `Model LLM7 (default / fast / pro)\n\nAktualnie: ${budgetAiModels.llm7}`,
+        budgetAiModels.llm7
+    );
+    if (llm7ModelInput !== null && llm7ModelInput.trim() !== '') {
+        budgetAiModels.llm7 = llm7ModelInput.trim();
+        localStorage.setItem(BUDGET_AI_STORAGE_KEYS.llm7Model, budgetAiModels.llm7);
+    }
+
+    if (typeof showToast === 'function') showToast('Zapisano ustawienia AI', 'success');
+    updateBudgetAiProviderBadges();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -904,6 +1296,45 @@ if (!document.getElementById('budgetAiStyles')) {
             gap: 10px;
         }
         
+.ai-provider-status {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.ai-provider-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.ai-provider-pill.inline {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+}
+
+.message-meta {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    opacity: 0.85;
+}
+
+.ai-meta-details {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
         .quick-prompt-btn {
             display: flex;
             flex-direction: column;
