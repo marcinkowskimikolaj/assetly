@@ -26,6 +26,76 @@ let selectedYear = null;
 // INICJALIZACJA
 // ═══════════════════════════════════════════════════════════
 
+
+
+// ===========================================================
+// AUTO-INIT BUDGET PAGE (fix: blank page when budget.html no longer starts the module)
+// ===========================================================
+
+function isBudgetPage() {
+    return Boolean(
+        document.getElementById('budget-overview') ||
+        document.getElementById('budget-expenses') ||
+        document.querySelector('.budget-tabs-nav')
+    );
+}
+
+/**
+ * Unified Budget page bootstrap (same pattern as investments/analytics).
+ * - Works with "new" budget.html (no inline onGapiLoaded)
+ * - Still safe with legacy budget.html (which might call initBudgetModule() itself)
+ */
+async function initBudget() {
+    if (!isBudgetPage()) return;
+
+    // Require auth if helper exists
+    try {
+        if (typeof requireAuth === 'function') {
+            if (!requireAuth()) return;
+        }
+    } catch (e) {
+        console.warn('Budget: requireAuth failed/skipped', e);
+    }
+
+    try {
+        // Shared auth bootstrap (if present)
+        if (typeof initAuth === 'function') await initAuth();
+        if (typeof ensureValidToken === 'function') await ensureValidToken();
+
+        // Logout wiring (prefer shared handler)
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn && !logoutBtn.__budgetBound) {
+            logoutBtn.__budgetBound = true;
+            if (typeof handleGoogleLogout === 'function') {
+                logoutBtn.addEventListener('click', handleGoogleLogout);
+            } else {
+                logoutBtn.addEventListener('click', () => {
+                    try { localStorage.removeItem('google_access_token'); } catch (e) {}
+                    window.location.href = 'index.html';
+                });
+            }
+        }
+
+        await initBudgetModule();
+    } catch (error) {
+        console.error('Budget: page init failed', error);
+        try {
+            if (typeof showToast === 'function') showToast('Blad inicjalizacji strony Budzet', 'error');
+        } catch (e) {}
+    }
+}
+
+// Expose for legacy inline scripts (if any)
+if (typeof window !== 'undefined') {
+    window.initBudget = initBudget;
+}
+
+// Auto-start after DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Some setups may also call initBudgetModule() from window.onload - budgetInitialized protects us.
+    initBudget();
+});
+
 async function initBudgetModule() {
     if (budgetInitialized) {
         switchBudgetTab(currentBudgetTab);
@@ -39,7 +109,9 @@ async function initBudgetModule() {
         await BudgetSheets.ensureSheetsExist();
         
         // Pobierz kursy walut
-        await fetchCurrencyRates();
+        if (typeof fetchCurrencyRates === 'function') {
+            await fetchCurrencyRates();
+        }
         
         // Załaduj dane
         await loadBudgetData();
@@ -57,7 +129,9 @@ async function initBudgetModule() {
         
     } catch (error) {
         console.error('Błąd inicjalizacji modułu Budżet:', error);
-        showToast('Błąd ładowania modułu Budżet', 'error');
+        try {
+            if (typeof showToast === 'function') showToast('Błąd ładowania modułu Budżet', 'error');
+        } catch (e) {}
     } finally {
         showBudgetLoading(false);
     }
@@ -1248,3 +1322,9 @@ function formatMoney(amount) {
 }
 
 // Funkcje modali są w budget-modals.js
+
+
+// Legacy export
+if (typeof window !== 'undefined') {
+    window.initBudgetModule = initBudgetModule;
+}
