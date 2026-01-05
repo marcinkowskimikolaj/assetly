@@ -1,7 +1,7 @@
 /**
- * Assetly - Budget AI Assistant
- * Profesjonalny moduł AI z obsługą wielu providerów (OpenAI + LLM7)
- * Automatyczny fallback i inteligentny routing zapytań
+ * Assetly - Budget AI Assistant v2.0
+ * Architektura: Hybrid Router + Smart Cache + Kaskadowy Provider
+ * Gemini (darmowy) → LLM7 (tani) → OpenAI (rezerwowy)
  */
 
 // ═══════════════════════════════════════════════════════════
@@ -9,661 +9,521 @@
 // ═══════════════════════════════════════════════════════════
 
 const AI_PROVIDERS = {
-    openai: {
-        name: 'OpenAI',
-        endpoint: 'https://api.openai.com/v1/chat/completions',
+    gemini: {
+        name: 'Google Gemini',
+        endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
         models: [
-            { id: 'gpt-4o-mini', name: 'GPT-4o Mini (tańszy)', maxTokens: 16000, contextLimit: 128000 },
-            { id: 'gpt-4o', name: 'GPT-4o (mocniejszy)', maxTokens: 4096, contextLimit: 128000 },
-            { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (najszybszy)', maxTokens: 4096, contextLimit: 16000 }
+            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (szybki)', maxTokens: 8192 },
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (mocniejszy)', maxTokens: 8192 }
         ],
-        defaultModel: 'gpt-4o-mini',
-        keyPrefix: 'sk-',
-        icon: '🟢',
-        color: '#10a37f'
+        defaultModel: 'gemini-1.5-flash',
+        icon: '🟣',
+        color: '#8b5cf6',
+        priority: 1
     },
     llm7: {
         name: 'LLM7.io',
         endpoint: 'https://api.llm7.io/v1/chat/completions',
         models: [
-            { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano (szybki)', maxTokens: 32000, contextLimit: 1000000 },
-            { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini (zbalansowany)', maxTokens: 32000, contextLimit: 1000000 },
-            { id: 'o4-mini', name: 'O4 Mini (reasoning)', maxTokens: 100000, contextLimit: 200000 }
+            { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano (szybki)', maxTokens: 32000 },
+            { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini (zbalansowany)', maxTokens: 32000 },
+            { id: 'o4-mini', name: 'O4 Mini (reasoning)', maxTokens: 100000 }
         ],
-        defaultModel: 'gpt-4.1-nano',
-        keyPrefix: '',
+        defaultModel: 'gpt-4.1-mini',
         icon: '🔵',
-        color: '#3b82f6'
+        color: '#3b82f6',
+        priority: 2
+    },
+    openai: {
+        name: 'OpenAI',
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        models: [
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini', maxTokens: 4096 },
+            { id: 'gpt-4o', name: 'GPT-4o', maxTokens: 4096 }
+        ],
+        defaultModel: 'gpt-4o-mini',
+        icon: '🟢',
+        color: '#10a37f',
+        priority: 3
     }
 };
 
 const AI_MODES = {
-    openai: { name: 'Tylko OpenAI', description: 'Używa wyłącznie OpenAI' },
-    llm7: { name: 'Tylko LLM7', description: 'Używa wyłącznie LLM7.io' },
-    auto: { name: 'Automatyczny', description: 'Inteligentnie wybiera provider - długie zapytania → LLM7, krótkie → OpenAI' }
+    auto: { name: 'Automatyczny (zalecany)', description: 'Kaskada: Gemini → LLM7 → OpenAI' },
+    gemini: { name: 'Tylko Gemini', description: 'Google Gemini (darmowy)' },
+    llm7: { name: 'Tylko LLM7', description: 'LLM7.io (duży kontekst)' },
+    openai: { name: 'Tylko OpenAI', description: 'OpenAI (rezerwowy)' }
 };
 
-// Progi dla trybu automatycznego
-const AUTO_MODE_CONFIG = {
-    longQueryThreshold: 500,      // znaki - powyżej tego używaj LLM7
-    largeContextThreshold: 50000, // znaki JSON - powyżej tego używaj LLM7
-    enableFallback: true          // automatyczny fallback przy błędzie
-};
+const PROVIDER_TIMEOUT = 12000; // 12 sekund
+const MAX_RETRIES = 1;
 
 const BUDGET_QUICK_PROMPTS = [
-    { id: 'summary', label: 'Podsumowanie', icon: '📊', prompt: 'Podaj kompletne podsumowanie moich finansów: łączne dochody, wydatki, bilans, stopa oszczędności. Uwzględnij podział na kategorie.' },
-    { id: 'top-expenses', label: 'Top wydatki', icon: '💸', prompt: 'Podaj TOP 10 kategorii/podkategorii na które wydaję najwięcej. Dla każdej podaj sumę, średnią miesięczną i % całości wydatków.' },
-    { id: 'savings-potential', label: 'Potencjał oszczędności', icon: '💰', prompt: 'Zidentyfikuj kategorie gdzie wydaję ponadprzeciętnie dużo. Oblicz ile mógłbym zaoszczędzić gdybym zredukował je do średniej. Podaj konkretne kwoty.' },
-    { id: 'trends', label: 'Trendy', icon: '📈', prompt: 'Przeanalizuj trendy moich finansów miesiąc po miesiącu. Czy wydatki rosną czy maleją? Które kategorie rosną najszybciej?' },
-    { id: 'income-analysis', label: 'Analiza dochodów', icon: '💵', prompt: 'Przeanalizuj moje dochody: źródła, zmiany w czasie, podwyżki. Podaj średni dochód i jego trend.' },
-    { id: '503020', label: '50/30/20', icon: '🎯', prompt: 'Przeanalizuj moje wydatki według metodyki 50/30/20 (potrzeby/zachcianki/oszczędności). Czy trzymam się zdrowych proporcji? Co powinienem zmienić?' },
-    { id: 'monthly-compare', label: 'Porównanie miesięcy', icon: '📅', prompt: 'Porównaj moje finanse z ostatnich 3 miesięcy. Pokaż różnice w dochodach, wydatkach i bilansie. Który miesiąc był najlepszy/najgorszy?' },
-    { id: 'category-deep', label: 'Analiza kategorii', icon: '🔍', prompt: 'Podaj szczegółową analizę KAŻDEJ kategorii wydatków: suma, średnia, min, max, trend. Posortuj od największej do najmniejszej.' }
+    { id: 'summary', label: 'Podsumowanie', icon: '📊', prompt: 'Podaj kompletne podsumowanie moich finansów.' },
+    { id: 'top-expenses', label: 'Top wydatki', icon: '💸', prompt: 'Podaj TOP 10 kategorii/podkategorii na które wydaję najwięcej.' },
+    { id: 'savings-potential', label: 'Gdzie oszczędzić', icon: '💰', prompt: 'Gdzie mogę zaoszczędzić? Podaj konkretne kwoty.' },
+    { id: 'trends', label: 'Trendy', icon: '📈', prompt: 'Jak zmieniają się moje wydatki i dochody?' },
+    { id: 'income-analysis', label: 'Dochody', icon: '💵', prompt: 'Przeanalizuj moje dochody i historię wynagrodzeń.' },
+    { id: '503020', label: '50/30/20', icon: '🎯', prompt: 'Analiza według metodyki 50/30/20.' },
+    { id: 'monthly-compare', label: 'Porównanie', icon: '📅', prompt: 'Porównaj ostatnie miesiące.' },
+    { id: 'category-deep', label: 'Kategorie', icon: '🔍', prompt: 'Szczegółowa analiza wszystkich kategorii.' }
 ];
 
 // ═══════════════════════════════════════════════════════════
-// STAN MODUŁU AI
+// STAN MODUŁU
 // ═══════════════════════════════════════════════════════════
 
 let aiState = {
-    // Klucze API
-    keys: {
-        openai: null,
-        llm7: null
-    },
-    // Wybrany tryb: 'openai', 'llm7', 'auto'
+    keys: { gemini: null, llm7: null, openai: null },
     mode: 'auto',
-    // Wybrany model dla każdego providera
-    models: {
-        openai: 'gpt-4o-mini',
-        llm7: 'gpt-4.1-nano'
-    },
-    // Status połączeń
+    models: { gemini: 'gemini-1.5-flash', llm7: 'gpt-4.1-mini', openai: 'gpt-4o-mini' },
     status: {
-        openai: { tested: false, working: false, error: null, lastTest: null },
-        llm7: { tested: false, working: false, error: null, lastTest: null }
+        gemini: { tested: false, working: false, error: null },
+        llm7: { tested: false, working: false, error: null },
+        openai: { tested: false, working: false, error: null }
     },
-    // Który provider ostatnio użyty
-    lastUsedProvider: null,
-    // Statystyki
-    stats: {
-        openaiCalls: 0,
-        llm7Calls: 0,
-        fallbacks: 0
-    }
+    stats: { geminiCalls: 0, llm7Calls: 0, openaiCalls: 0, fallbacks: 0, cacheHits: 0 },
+    lastProvider: null,
+    cacheReady: false
 };
 
 let budgetChatHistory = [];
-let lastPreparedData = null;
-let settingsModalOpen = false;
+let settingsOpen = false;
 
 // ═══════════════════════════════════════════════════════════
-// INICJALIZACJA I PERSYSTENCJA
+// PERSYSTENCJA
 // ═══════════════════════════════════════════════════════════
 
 function loadAiSettings() {
     try {
-        // Załaduj z localStorage
-        const saved = localStorage.getItem('assetly_ai_settings');
+        const saved = localStorage.getItem('assetly_ai_settings_v2');
         if (saved) {
             const parsed = JSON.parse(saved);
-            aiState.keys = parsed.keys || aiState.keys;
-            aiState.mode = parsed.mode || aiState.mode;
-            aiState.models = parsed.models || aiState.models;
-            aiState.stats = parsed.stats || aiState.stats;
+            aiState.keys = { ...aiState.keys, ...parsed.keys };
+            aiState.mode = parsed.mode || 'auto';
+            aiState.models = { ...aiState.models, ...parsed.models };
+            aiState.stats = { ...aiState.stats, ...parsed.stats };
         }
-        
-        // Migracja starego klucza OpenAI
-        const oldKey = localStorage.getItem('openai_api_key');
-        if (oldKey && !aiState.keys.openai) {
-            aiState.keys.openai = oldKey;
-            saveAiSettings();
-        }
-    } catch (e) {
-        console.warn('Błąd ładowania ustawień AI:', e);
-    }
+        // Migracja starych kluczy
+        const oldOpenAI = localStorage.getItem('openai_api_key');
+        if (oldOpenAI && !aiState.keys.openai) aiState.keys.openai = oldOpenAI;
+    } catch (e) { console.warn('Błąd ładowania ustawień:', e); }
 }
 
 function saveAiSettings() {
     try {
-        localStorage.setItem('assetly_ai_settings', JSON.stringify({
+        localStorage.setItem('assetly_ai_settings_v2', JSON.stringify({
             keys: aiState.keys,
             mode: aiState.mode,
             models: aiState.models,
             stats: aiState.stats
         }));
-    } catch (e) {
-        console.warn('Błąd zapisywania ustawień AI:', e);
-    }
+    } catch (e) { console.warn('Błąd zapisu ustawień:', e); }
 }
 
 // ═══════════════════════════════════════════════════════════
-// WYBÓR PROVIDERA (INTELIGENTNY ROUTING)
+// WYWOŁANIA API
 // ═══════════════════════════════════════════════════════════
 
-function selectProvider(messageLength, contextLength) {
-    const mode = aiState.mode;
-    
-    // Tryb manualny
-    if (mode === 'openai') {
-        if (!aiState.keys.openai) return { provider: null, reason: 'Brak klucza OpenAI' };
-        return { provider: 'openai', reason: 'Wybrany tryb: OpenAI' };
-    }
-    
-    if (mode === 'llm7') {
-        if (!aiState.keys.llm7) return { provider: null, reason: 'Brak klucza LLM7' };
-        return { provider: 'llm7', reason: 'Wybrany tryb: LLM7' };
-    }
-    
-    // Tryb automatyczny
-    const hasOpenAI = !!aiState.keys.openai;
-    const hasLLM7 = !!aiState.keys.llm7;
-    
-    if (!hasOpenAI && !hasLLM7) {
-        return { provider: null, reason: 'Brak skonfigurowanych kluczy API' };
-    }
-    
-    // Tylko jeden provider dostępny
-    if (hasOpenAI && !hasLLM7) {
-        return { provider: 'openai', reason: 'Jedyny dostępny provider' };
-    }
-    if (hasLLM7 && !hasOpenAI) {
-        return { provider: 'llm7', reason: 'Jedyny dostępny provider' };
-    }
-    
-    // Oba dostępne - inteligentny wybór
-    const isLongQuery = messageLength > AUTO_MODE_CONFIG.longQueryThreshold;
-    const isLargeContext = contextLength > AUTO_MODE_CONFIG.largeContextThreshold;
-    
-    if (isLongQuery || isLargeContext) {
-        return { 
-            provider: 'llm7', 
-            reason: isLongQuery 
-                ? `Długie zapytanie (${messageLength} znaków) → LLM7` 
-                : `Duży kontekst (${Math.round(contextLength/1000)}k znaków) → LLM7`
-        };
-    }
-    
-    // Sprawdź czy OpenAI ostatnio działał
-    if (aiState.status.openai.tested && !aiState.status.openai.working) {
-        return { provider: 'llm7', reason: 'OpenAI niedostępny → LLM7' };
-    }
-    
-    return { provider: 'openai', reason: 'Standardowe zapytanie → OpenAI' };
-}
-
-function getFallbackProvider(currentProvider) {
-    if (!AUTO_MODE_CONFIG.enableFallback) return null;
-    
-    const other = currentProvider === 'openai' ? 'llm7' : 'openai';
-    if (aiState.keys[other]) {
-        return other;
-    }
-    return null;
-}
-
-// ═══════════════════════════════════════════════════════════
-// KOMUNIKACJA Z API
-// ═══════════════════════════════════════════════════════════
-
-async function callAiProvider(provider, messages, options = {}) {
+async function callProvider(provider, messages, options = {}) {
     const config = AI_PROVIDERS[provider];
     const apiKey = aiState.keys[provider];
     const modelId = aiState.models[provider];
     
-    if (!apiKey) {
-        throw new Error(`Brak klucza API dla ${config.name}`);
+    if (!apiKey) throw new Error(`Brak klucza API dla ${config.name}`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT);
+    
+    try {
+        let response;
+        
+        if (provider === 'gemini') {
+            response = await callGemini(apiKey, modelId, messages, controller.signal);
+        } else {
+            response = await callOpenAICompatible(config.endpoint, apiKey, modelId, messages, controller.signal);
+        }
+        
+        clearTimeout(timeoutId);
+        
+        // Aktualizuj status
+        aiState.status[provider] = { tested: true, working: true, error: null };
+        aiState.stats[`${provider}Calls`]++;
+        saveAiSettings();
+        
+        return response;
+        
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        const errorMsg = error.name === 'AbortError' ? 'Timeout (12s)' : error.message;
+        aiState.status[provider] = { tested: true, working: false, error: errorMsg };
+        
+        throw new Error(`${config.name}: ${errorMsg}`);
+    }
+}
+
+async function callGemini(apiKey, model, messages, signal) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    
+    // Konwertuj format OpenAI → Gemini
+    const contents = [];
+    let systemInstruction = '';
+    
+    messages.forEach(msg => {
+        if (msg.role === 'system') {
+            systemInstruction += msg.content + '\n\n';
+        } else {
+            contents.push({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: msg.content }]
+            });
+        }
+    });
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal,
+        body: JSON.stringify({
+            contents,
+            systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+            generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 2048
+            }
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error?.message || `HTTP ${response.status}`);
     }
     
-    const model = config.models.find(m => m.id === modelId) || config.models[0];
+    const data = await response.json();
     
-    const response = await fetch(config.endpoint, {
+    if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+        throw new Error('Brak odpowiedzi od Gemini');
+    }
+    
+    return data.candidates[0].content.parts[0].text;
+}
+
+async function callOpenAICompatible(endpoint, apiKey, model, messages, signal) {
+    const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
         },
+        signal,
         body: JSON.stringify({
-            model: model.id,
-            messages: messages,
-            temperature: options.temperature || 0.3,
-            max_tokens: options.maxTokens || Math.min(2000, model.maxTokens)
+            model,
+            messages,
+            temperature: 0.3,
+            max_tokens: 2048
         })
     });
     
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
-        
-        // Aktualizuj status
-        aiState.status[provider] = {
-            tested: true,
-            working: false,
-            error: errorMsg,
-            lastTest: new Date().toISOString()
-        };
-        
-        throw new Error(errorMsg);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error?.message || `HTTP ${response.status}`);
     }
     
     const data = await response.json();
     
-    // Aktualizuj status
-    aiState.status[provider] = {
-        tested: true,
-        working: true,
-        error: null,
-        lastTest: new Date().toISOString()
-    };
-    aiState.stats[provider === 'openai' ? 'openaiCalls' : 'llm7Calls']++;
-    saveAiSettings();
+    if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error('Brak odpowiedzi');
+    }
     
     return data.choices[0].message.content;
 }
 
-async function testConnection(provider) {
-    try {
-        const result = await callAiProvider(provider, [
-            { role: 'user', content: 'Odpowiedz jednym słowem: OK' }
-        ], { maxTokens: 10 });
-        
-        return { success: true, message: 'Połączenie działa poprawnie' };
-    } catch (error) {
-        return { success: false, message: error.message };
-    }
+// ═══════════════════════════════════════════════════════════
+// KASKADOWY FALLBACK
+// ═══════════════════════════════════════════════════════════
+
+function getProviderOrder() {
+    const mode = aiState.mode;
+    
+    if (mode === 'gemini') return ['gemini'];
+    if (mode === 'llm7') return ['llm7'];
+    if (mode === 'openai') return ['openai'];
+    
+    // Auto: kaskada według priorytetu
+    return ['gemini', 'llm7', 'openai'].filter(p => aiState.keys[p]);
 }
 
-// ═══════════════════════════════════════════════════════════
-// GŁÓWNA FUNKCJA WYSYŁANIA WIADOMOŚCI
-// ═══════════════════════════════════════════════════════════
-
-async function sendBudgetMessage(customMessage = null) {
-    const input = document.getElementById('budgetChatInput');
-    const message = customMessage || (input ? input.value.trim() : '');
+async function callWithFallback(messages, onStatusUpdate) {
+    const providers = getProviderOrder();
     
-    if (!message) return;
-    if (input) input.value = '';
-    
-    // Dodaj wiadomość użytkownika
-    addBudgetChatMessage('user', message);
-    
-    // Przygotuj dane
-    const budgetData = prepareBudgetDataForAI();
-    if (budgetData.error) {
-        addBudgetChatMessage('assistant', `⚠️ ${budgetData.error}`);
-        return;
+    if (providers.length === 0) {
+        throw new Error('Brak skonfigurowanych providerów AI. Dodaj klucz API w ustawieniach.');
     }
     
-    const dataContext = JSON.stringify(budgetData, null, 2);
+    const errors = [];
     
-    // Wybierz provider
-    const selection = selectProvider(message.length, dataContext.length);
-    
-    if (!selection.provider) {
-        addBudgetChatMessage('assistant', `⚠️ ${selection.reason}\n\nKliknij ⚙️ aby skonfigurować klucze API.`);
-        return;
-    }
-    
-    // Pokaż loading z informacją o providerze
-    const providerInfo = AI_PROVIDERS[selection.provider];
-    const loadingId = addBudgetChatMessage('assistant', 
-        `${providerInfo.icon} Analizuję dane przez ${providerInfo.name}...\n<small style="opacity:0.7">${selection.reason}</small>`
-    );
-    
-    // Przygotuj wiadomości
-    const systemPrompt = getBudgetSystemPrompt();
-    const messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'system', content: `## DANE FINANSOWE UŻYTKOWNIKA\n\`\`\`json\n${dataContext}\n\`\`\`` },
-        ...budgetChatHistory.slice(-10),
-        { role: 'user', content: message }
-    ];
-    
-    let usedProvider = selection.provider;
-    let response = null;
-    
-    try {
-        response = await callAiProvider(selection.provider, messages);
-    } catch (error) {
-        console.warn(`Błąd ${selection.provider}:`, error.message);
+    for (let i = 0; i < providers.length; i++) {
+        const provider = providers[i];
+        const config = AI_PROVIDERS[provider];
+        const isLast = i === providers.length - 1;
         
-        // Spróbuj fallback
-        const fallback = getFallbackProvider(selection.provider);
-        if (fallback) {
-            removeBudgetChatMessage(loadingId);
-            const fallbackInfo = AI_PROVIDERS[fallback];
-            const fallbackLoadingId = addBudgetChatMessage('assistant',
-                `⚠️ ${AI_PROVIDERS[selection.provider].name} niedostępny. Przełączam na ${fallbackInfo.icon} ${fallbackInfo.name}...`
-            );
+        onStatusUpdate?.(`${config.icon} ${config.name}...`);
+        
+        try {
+            const response = await callProvider(provider, messages);
+            aiState.lastProvider = provider;
+            return { response, provider };
+        } catch (error) {
+            errors.push({ provider, error: error.message });
+            console.warn(`Błąd ${provider}:`, error.message);
             
-            try {
-                response = await callAiProvider(fallback, messages);
-                usedProvider = fallback;
+            if (!isLast) {
                 aiState.stats.fallbacks++;
                 saveAiSettings();
-                removeBudgetChatMessage(fallbackLoadingId);
-            } catch (fallbackError) {
-                removeBudgetChatMessage(fallbackLoadingId);
-                addBudgetChatMessage('assistant', 
-                    `❌ Nie udało się uzyskać odpowiedzi.\n\n**${AI_PROVIDERS[selection.provider].name}:** ${error.message}\n**${fallbackInfo.name}:** ${fallbackError.message}\n\nSprawdź konfigurację w ⚙️ Ustawieniach.`
-                );
-                return;
+                onStatusUpdate?.(`⚠️ ${config.name} niedostępny, przełączam...`);
+                await sleep(500);
             }
-        } else {
-            removeBudgetChatMessage(loadingId);
-            addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}\n\nSprawdź konfigurację w ⚙️ Ustawieniach.`);
-            return;
         }
     }
     
-    // Usuń loading i dodaj odpowiedź
-    removeBudgetChatMessage(loadingId);
-    
-    // Zapisz do historii
-    budgetChatHistory.push({ role: 'user', content: message });
-    budgetChatHistory.push({ role: 'assistant', content: response });
-    
-    // Dodaj odpowiedź z badge providera
-    aiState.lastUsedProvider = usedProvider;
-    addBudgetChatMessage('assistant', response, usedProvider);
+    // Wszystkie zawiodły
+    const errorSummary = errors.map(e => `${AI_PROVIDERS[e.provider].name}: ${e.error}`).join('\n');
+    throw new Error(`Wszystkie providery zawiodły:\n${errorSummary}`);
 }
 
-function runBudgetQuickPrompt(promptId) {
-    const prompt = BUDGET_QUICK_PROMPTS.find(p => p.id === promptId);
-    if (prompt) {
-        sendBudgetMessage(prompt.prompt);
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// PRZYGOTOWANIE DANYCH DLA AI
-// ═══════════════════════════════════════════════════════════
-
-function prepareBudgetDataForAI() {
-    if (typeof allExpenses === 'undefined' || typeof allIncome === 'undefined') {
-        return { error: 'Dane budżetowe nie zostały załadowane.' };
-    }
-    
-    if (allExpenses.length === 0 && allIncome.length === 0) {
-        return { error: 'Brak danych budżetowych. Dodaj najpierw wydatki lub dochody.' };
-    }
-
-    const data = {
-        metadata: prepareMetadata(),
-        expenses: prepareExpensesData(),
-        income: prepareIncomeData(),
-        monthly: prepareMonthlyBreakdown(),
-        analytics: prepareAnalytics()
-    };
-
-    lastPreparedData = data;
-    return data;
-}
-
-function prepareMetadata() {
-    const allPeriods = new Set();
-    allExpenses.forEach(e => allPeriods.add(`${e.rok}-${String(e.miesiac).padStart(2, '0')}`));
-    allIncome.forEach(i => allPeriods.add(`${i.rok}-${String(i.miesiac).padStart(2, '0')}`));
-    
-    const sortedPeriods = [...allPeriods].sort();
-    
-    return {
-        dataRange: {
-            firstPeriod: sortedPeriods[0] || null,
-            lastPeriod: sortedPeriods[sortedPeriods.length - 1] || null,
-            totalMonths: sortedPeriods.length
-        },
-        totals: {
-            expensesCount: allExpenses.length,
-            incomeCount: allIncome.length,
-            totalExpenses: allExpenses.reduce((s, e) => s + e.kwotaPLN, 0),
-            totalIncome: allIncome.reduce((s, i) => s + i.kwotaPLN, 0),
-            totalBalance: allIncome.reduce((s, i) => s + i.kwotaPLN, 0) - allExpenses.reduce((s, e) => s + e.kwotaPLN, 0)
-        },
-        categories: typeof BudgetCategories !== 'undefined' ? BudgetCategories.getAllCategories() : [],
-        incomeSources: typeof BudgetCategories !== 'undefined' ? Object.keys(BudgetCategories.INCOME_SOURCES) : []
-    };
-}
-
-function prepareExpensesData() {
-    const byCategory = {};
-    allExpenses.forEach(e => {
-        if (!byCategory[e.kategoria]) {
-            byCategory[e.kategoria] = { total: 0, count: 0, subcategories: {} };
-        }
-        byCategory[e.kategoria].total += e.kwotaPLN;
-        byCategory[e.kategoria].count++;
-        
-        const subcat = e.podkategoria || '(brak)';
-        if (!byCategory[e.kategoria].subcategories[subcat]) {
-            byCategory[e.kategoria].subcategories[subcat] = { total: 0, count: 0, periods: {} };
-        }
-        byCategory[e.kategoria].subcategories[subcat].total += e.kwotaPLN;
-        byCategory[e.kategoria].subcategories[subcat].count++;
-        
-        const period = `${e.rok}-${String(e.miesiac).padStart(2, '0')}`;
-        if (!byCategory[e.kategoria].subcategories[subcat].periods[period]) {
-            byCategory[e.kategoria].subcategories[subcat].periods[period] = 0;
-        }
-        byCategory[e.kategoria].subcategories[subcat].periods[period] += e.kwotaPLN;
-    });
-
-    const totalExpenses = allExpenses.reduce((s, e) => s + e.kwotaPLN, 0);
-    const periods = new Set(allExpenses.map(e => `${e.rok}-${e.miesiac}`));
-    const monthCount = periods.size || 1;
-
-    Object.keys(byCategory).forEach(cat => {
-        const catData = byCategory[cat];
-        catData.monthlyAverage = catData.total / monthCount;
-        catData.percentOfTotal = totalExpenses > 0 ? (catData.total / totalExpenses * 100) : 0;
-        
-        Object.keys(catData.subcategories).forEach(sub => {
-            const subData = catData.subcategories[sub];
-            subData.monthlyAverage = subData.total / monthCount;
-            subData.percentOfCategory = catData.total > 0 ? (subData.total / catData.total * 100) : 0;
-            subData.percentOfTotal = totalExpenses > 0 ? (subData.total / totalExpenses * 100) : 0;
-        });
-    });
-
-    const allSubcategories = [];
-    Object.entries(byCategory).forEach(([cat, catData]) => {
-        Object.entries(catData.subcategories).forEach(([sub, subData]) => {
-            allSubcategories.push({
-                category: cat, subcategory: sub, total: subData.total,
-                count: subData.count, monthlyAverage: subData.monthlyAverage, percentOfTotal: subData.percentOfTotal
-            });
-        });
-    });
-    allSubcategories.sort((a, b) => b.total - a.total);
-
-    const fixed = allExpenses.filter(e => e.jestStaly);
-    const variable = allExpenses.filter(e => !e.jestStaly && !e.jestTransfer);
-    const transfers = allExpenses.filter(e => e.jestTransfer);
-
-    return {
-        byCategory,
-        topSubcategories: allSubcategories.slice(0, 20),
-        breakdown: {
-            fixed: { total: fixed.reduce((s, e) => s + e.kwotaPLN, 0), count: fixed.length },
-            variable: { total: variable.reduce((s, e) => s + e.kwotaPLN, 0), count: variable.length },
-            transfers: { total: transfers.reduce((s, e) => s + e.kwotaPLN, 0), count: transfers.length }
-        },
-        rawData: allExpenses.map(e => ({
-            period: `${e.rok}-${String(e.miesiac).padStart(2, '0')}`,
-            category: e.kategoria, subcategory: e.podkategoria || null,
-            amount: e.kwotaPLN, isFixed: e.jestStaly, isTransfer: e.jestTransfer
-        }))
-    };
-}
-
-function prepareIncomeData() {
-    const bySource = {};
-    allIncome.forEach(i => {
-        if (!bySource[i.zrodlo]) {
-            bySource[i.zrodlo] = { total: 0, count: 0, employers: {}, periods: {} };
-        }
-        bySource[i.zrodlo].total += i.kwotaPLN;
-        bySource[i.zrodlo].count++;
-        
-        const emp = i.pracodawca || '(nieokreślony)';
-        if (!bySource[i.zrodlo].employers[emp]) {
-            bySource[i.zrodlo].employers[emp] = { total: 0, count: 0 };
-        }
-        bySource[i.zrodlo].employers[emp].total += i.kwotaPLN;
-        bySource[i.zrodlo].employers[emp].count++;
-        
-        const period = `${i.rok}-${String(i.miesiac).padStart(2, '0')}`;
-        if (!bySource[i.zrodlo].periods[period]) {
-            bySource[i.zrodlo].periods[period] = 0;
-        }
-        bySource[i.zrodlo].periods[period] += i.kwotaPLN;
-    });
-
-    const totalIncome = allIncome.reduce((s, i) => s + i.kwotaPLN, 0);
-    const periods = new Set(allIncome.map(i => `${i.rok}-${i.miesiac}`));
-    const monthCount = periods.size || 1;
-
-    Object.keys(bySource).forEach(src => {
-        bySource[src].monthlyAverage = bySource[src].total / monthCount;
-        bySource[src].percentOfTotal = totalIncome > 0 ? (bySource[src].total / totalIncome * 100) : 0;
-    });
-
-    const salaryHistory = [];
-    const employers = [...new Set(allIncome.filter(i => i.pracodawca && i.zrodlo === 'Wynagrodzenie').map(i => i.pracodawca))];
-    
-    employers.forEach(emp => {
-        const empIncome = allIncome
-            .filter(i => i.pracodawca === emp && i.zrodlo === 'Wynagrodzenie')
-            .sort((a, b) => a.rok !== b.rok ? a.rok - b.rok : a.miesiac - b.miesiac);
-        
-        if (empIncome.length > 0) {
-            const history = empIncome.map((inc, idx) => {
-                const prev = idx > 0 ? empIncome[idx - 1] : null;
-                return {
-                    period: `${inc.rok}-${String(inc.miesiac).padStart(2, '0')}`,
-                    amount: inc.kwotaPLN,
-                    change: prev ? inc.kwotaPLN - prev.kwotaPLN : 0,
-                    changePercent: prev && prev.kwotaPLN > 0 ? ((inc.kwotaPLN - prev.kwotaPLN) / prev.kwotaPLN * 100) : 0
-                };
-            });
-            
-            salaryHistory.push({
-                employer: emp, history,
-                summary: {
-                    firstSalary: empIncome[0].kwotaPLN,
-                    currentSalary: empIncome[empIncome.length - 1].kwotaPLN,
-                    totalGrowth: empIncome[0].kwotaPLN > 0 ? ((empIncome[empIncome.length - 1].kwotaPLN - empIncome[0].kwotaPLN) / empIncome[0].kwotaPLN * 100) : 0,
-                    monthsEmployed: empIncome.length
-                }
-            });
-        }
-    });
-
-    return {
-        bySource, salaryHistory,
-        rawData: allIncome.map(i => ({
-            period: `${i.rok}-${String(i.miesiac).padStart(2, '0')}`,
-            source: i.zrodlo, employer: i.pracodawca || null, amount: i.kwotaPLN
-        }))
-    };
-}
-
-function prepareMonthlyBreakdown() {
-    const months = {};
-    
-    allExpenses.forEach(e => {
-        const period = `${e.rok}-${String(e.miesiac).padStart(2, '0')}`;
-        if (!months[period]) {
-            months[period] = { period, income: 0, expenses: 0, fixed: 0, variable: 0, transfers: 0, expensesByCategory: {}, incomeBySource: {} };
-        }
-        months[period].expenses += e.kwotaPLN;
-        if (e.jestStaly) months[period].fixed += e.kwotaPLN;
-        else if (e.jestTransfer) months[period].transfers += e.kwotaPLN;
-        else months[period].variable += e.kwotaPLN;
-        
-        if (!months[period].expensesByCategory[e.kategoria]) months[period].expensesByCategory[e.kategoria] = 0;
-        months[period].expensesByCategory[e.kategoria] += e.kwotaPLN;
-    });
-    
-    allIncome.forEach(i => {
-        const period = `${i.rok}-${String(i.miesiac).padStart(2, '0')}`;
-        if (!months[period]) {
-            months[period] = { period, income: 0, expenses: 0, fixed: 0, variable: 0, transfers: 0, expensesByCategory: {}, incomeBySource: {} };
-        }
-        months[period].income += i.kwotaPLN;
-        if (!months[period].incomeBySource[i.zrodlo]) months[period].incomeBySource[i.zrodlo] = 0;
-        months[period].incomeBySource[i.zrodlo] += i.kwotaPLN;
-    });
-    
-    Object.values(months).forEach(m => {
-        m.balance = m.income - m.expenses + m.transfers;
-        m.savingsRate = m.income > 0 ? (m.balance / m.income * 100) : 0;
-    });
-    
-    return Object.values(months).sort((a, b) => a.period.localeCompare(b.period));
-}
-
-function prepareAnalytics() {
-    const monthly = prepareMonthlyBreakdown();
-    if (monthly.length === 0) return {};
-    
-    const avgIncome = monthly.reduce((s, m) => s + m.income, 0) / monthly.length;
-    const avgExpenses = monthly.reduce((s, m) => s + m.expenses, 0) / monthly.length;
-    const avgBalance = monthly.reduce((s, m) => s + m.balance, 0) / monthly.length;
-    
-    const maxExpMonth = monthly.reduce((max, m) => m.expenses > max.expenses ? m : max, monthly[0]);
-    const minExpMonth = monthly.reduce((min, m) => m.expenses < min.expenses ? m : min, monthly[0]);
-    
-    const totalIncome = monthly.reduce((s, m) => s + m.income, 0);
-    const needs = allExpenses.filter(e => typeof BudgetCategories !== 'undefined' && BudgetCategories.getMethodology(e.kategoria) === 'needs' && !e.jestTransfer).reduce((s, e) => s + e.kwotaPLN, 0);
-    const wants = allExpenses.filter(e => typeof BudgetCategories !== 'undefined' && BudgetCategories.getMethodology(e.kategoria) === 'wants' && !e.jestTransfer).reduce((s, e) => s + e.kwotaPLN, 0);
-    
-    return {
-        averages: { income: avgIncome, expenses: avgExpenses, balance: avgBalance },
-        extremes: { maxExpenses: { period: maxExpMonth.period, amount: maxExpMonth.expenses }, minExpenses: { period: minExpMonth.period, amount: minExpMonth.expenses } },
-        methodology503020: {
-            needs: { amount: needs, percent: totalIncome > 0 ? (needs / totalIncome * 100) : 0 },
-            wants: { amount: wants, percent: totalIncome > 0 ? (wants / totalIncome * 100) : 0 },
-            savings: { amount: totalIncome - needs - wants, percent: totalIncome > 0 ? ((totalIncome - needs - wants) / totalIncome * 100) : 0 }
-        }
-    };
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ═══════════════════════════════════════════════════════════
 // SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════
 
-function getBudgetSystemPrompt() {
-    return `Jesteś EKSPERTEM od finansów osobistych. Analizujesz dane budżetowe użytkownika.
+function getSystemPrompt() {
+    return `Jesteś ekspertem od finansów osobistych. Analizujesz dane budżetowe użytkownika.
 
-## ZASADY
-1. Używaj WYŁĄCZNIE danych z kontekstu - nie wymyślaj
-2. Podawaj DOKŁADNE kwoty (format: "X XXX zł")
-3. Procenty z 1 miejscem po przecinku
-4. **ZAWSZE używaj tabel markdown** dla rankingów i porównań
-5. Odpowiadaj po polsku, konkretnie i rzeczowo
-
-## STRUKTURA DANYCH
-- expenses.byCategory[X].subcategories[Y] - wydatki po kategoriach
-- expenses.topSubcategories - TOP 20 podkategorii
-- income.bySource - dochody po źródłach
-- income.salaryHistory - historia wynagrodzeń
-- monthly[] - dane miesięczne
-- analytics - średnie, ekstrema, 50/30/20
+## BEZWZGLĘDNE ZASADY
+1. Odpowiadaj TYLKO po polsku
+2. Używaj TYLKO danych z kontekstu - NIE wymyślaj
+3. Podawaj DOKŁADNE kwoty (format: "1 234,56 zł")
+4. Procenty z 1 miejscem po przecinku (np. "23,5%")
+5. Dla rankingów i porównań ZAWSZE używaj tabel markdown
 
 ## FORMAT TABEL
-| Kategoria | Suma | Średnia | % |
-|-----------|------|---------|---|
-| Żywność | 3 500 zł | 875 zł | 25% |
+| Kolumna1 | Kolumna2 | Kolumna3 |
+|----------|----------|----------|
+| wartość1 | wartość2 | wartość3 |
 
-## PAMIĘTAJ
-- TRANSFERY to nie wydatki konsumpcyjne
-- Wydatki STAŁE vs ZMIENNE to różne kategorie
-- Dawaj konkretne wnioski i rekomendacje`;
+## STRUKTURA DANYCH
+Dane są w formacie: SEKCJA → nagłówki → wiersze
+- SUMMARY: metryki ogólne (dochody, wydatki, bilans)
+- TOP_CATEGORIES: ranking kategorii
+- TOP_SUBCATEGORIES: ranking podkategorii  
+- MONTHLY: dane miesięczne (dochód, wydatki, bilans)
+- SALARY_HISTORY: historia wynagrodzeń
+- METHODOLOGY: analiza 50/30/20
+- TRENDS: trendy (rosnący/malejący/stabilny)
+
+## STYL ODPOWIEDZI
+- Bądź konkretny i zwięzły
+- Dawaj wnioski i rekomendacje
+- Używaj emoji dla czytelności: 📈📉💰✅⚠️
+- NIE przepraszaj, NIE tłumacz się - po prostu odpowiadaj`;
 }
 
 // ═══════════════════════════════════════════════════════════
-// UI - RENDEROWANIE GŁÓWNE
+// GŁÓWNA LOGIKA WYSYŁANIA
+// ═══════════════════════════════════════════════════════════
+
+async function sendBudgetMessage(customMessage = null) {
+    const input = document.getElementById('budgetChatInput');
+    const message = customMessage || (input?.value.trim() || '');
+    
+    if (!message) return;
+    if (input) input.value = '';
+    
+    // Dodaj wiadomość użytkownika
+    addChatMessage('user', message);
+    
+    // Upewnij się że cache istnieje
+    if (typeof BudgetAICache !== 'undefined' && !aiState.cacheReady) {
+        await BudgetAICache.ensureCacheExists();
+        await BudgetAICache.refreshCache();
+        aiState.cacheReady = true;
+    }
+    
+    // Router - określ intencję i potrzebne dane
+    let routingResult;
+    if (typeof BudgetAIRouter !== 'undefined') {
+        routingResult = await BudgetAIRouter.routeQuestion(message, aiState);
+        console.log('🎯 Routing:', routingResult);
+    } else {
+        routingResult = { intent: 'unknown', requiredData: ['SUMMARY', 'TOP_CATEGORIES', 'MONTHLY'], filters: {} };
+    }
+    
+    // Pobierz dane z cache
+    let contextData = '';
+    if (typeof BudgetAICache !== 'undefined') {
+        try {
+            const cacheData = await BudgetAICache.getDataForIntent(routingResult.intent, routingResult.filters);
+            contextData = BudgetAICache.formatCacheForAI(cacheData);
+            aiState.stats.cacheHits++;
+            console.log('📦 Kontekst z cache:', contextData.length, 'znaków');
+        } catch (e) {
+            console.warn('Błąd pobierania cache:', e);
+        }
+    }
+    
+    // Fallback na stare dane jeśli cache pusty
+    if (!contextData && typeof allExpenses !== 'undefined') {
+        contextData = buildLegacyContext();
+    }
+    
+    if (!contextData) {
+        addChatMessage('assistant', '⚠️ Brak danych do analizy. Dodaj najpierw wydatki lub dochody.');
+        return;
+    }
+    
+    // Loading
+    const loadingId = addChatMessage('assistant', '⏳ Analizuję...');
+    
+    // Przygotuj wiadomości
+    const messages = [
+        { role: 'system', content: getSystemPrompt() },
+        { role: 'system', content: `## DANE FINANSOWE\n${contextData}` },
+        ...budgetChatHistory.slice(-6),
+        { role: 'user', content: message }
+    ];
+    
+    try {
+        const { response, provider } = await callWithFallback(messages, (status) => {
+            updateChatMessage(loadingId, `⏳ ${status}`);
+        });
+        
+        // Zapisz historię
+        budgetChatHistory.push({ role: 'user', content: message });
+        budgetChatHistory.push({ role: 'assistant', content: response });
+        
+        // Wyświetl odpowiedź
+        removeChatMessage(loadingId);
+        addChatMessage('assistant', response, provider);
+        
+    } catch (error) {
+        removeChatMessage(loadingId);
+        addChatMessage('assistant', `❌ ${error.message}\n\nKliknij ⚙️ aby sprawdzić ustawienia.`);
+    }
+}
+
+function runQuickPrompt(promptId) {
+    const prompt = BUDGET_QUICK_PROMPTS.find(p => p.id === promptId);
+    if (prompt) sendBudgetMessage(prompt.prompt);
+}
+
+function buildLegacyContext() {
+    // Fallback gdy cache niedostępny - stara metoda
+    if (!allExpenses?.length && !allIncome?.length) return '';
+    
+    const summary = {
+        totalExpenses: allExpenses.reduce((s, e) => s + e.kwotaPLN, 0),
+        totalIncome: allIncome.reduce((s, i) => s + i.kwotaPLN, 0),
+        expenseCount: allExpenses.length,
+        incomeCount: allIncome.length
+    };
+    summary.balance = summary.totalIncome - summary.totalExpenses;
+    
+    return `### PODSUMOWANIE (legacy)
+Wydatki: ${summary.totalExpenses.toFixed(2)} PLN
+Dochody: ${summary.totalIncome.toFixed(2)} PLN
+Bilans: ${summary.balance.toFixed(2)} PLN
+Liczba wydatków: ${summary.expenseCount}
+Liczba dochodów: ${summary.incomeCount}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI - CHAT
+// ═══════════════════════════════════════════════════════════
+
+let msgCounter = 0;
+
+function addChatMessage(role, content, provider = null) {
+    const container = document.getElementById('budgetChatMessages');
+    if (!container) return null;
+    
+    container.querySelector('.chat-welcome')?.remove();
+    
+    const id = `msg-${++msgCounter}`;
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = `chat-message ${role}`;
+    
+    const providerBadge = provider && role === 'assistant' 
+        ? `<span class="provider-badge" style="background:${AI_PROVIDERS[provider].color}">${AI_PROVIDERS[provider].icon} ${AI_PROVIDERS[provider].name}</span>` 
+        : '';
+    
+    div.innerHTML = `
+        <div class="msg-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+        <div class="msg-bubble">
+            ${providerBadge}
+            <div class="msg-content">${formatMarkdown(content)}</div>
+        </div>
+    `;
+    
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return id;
+}
+
+function updateChatMessage(id, content) {
+    const msg = document.getElementById(id);
+    if (msg) {
+        const contentEl = msg.querySelector('.msg-content');
+        if (contentEl) contentEl.innerHTML = formatMarkdown(content);
+    }
+}
+
+function removeChatMessage(id) {
+    document.getElementById(id)?.remove();
+}
+
+function formatMarkdown(text) {
+    // Code blocks
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    
+    // Tables
+    text = text.replace(/(\|.+\|[\r\n]+)+/g, (match) => {
+        const rows = match.trim().split(/[\r\n]+/).filter(r => r.trim());
+        let html = '<table>';
+        rows.forEach((row, i) => {
+            if (row.match(/^\|[\s\-:]+\|$/)) return;
+            const cells = row.split('|').filter(c => c !== '');
+            const tag = i === 0 ? 'th' : 'td';
+            html += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+        });
+        return html + '</table>';
+    });
+    
+    // Lists
+    text = text.replace(/^[\t ]*[-*]\s+(.+)$/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    
+    // Formatting
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    text = text.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    text = text.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    
+    // Newlines
+    text = text.replace(/\n/g, '<br>');
+    text = text.replace(/<\/(table|ul|pre|h[34])><br>/g, '</$1>');
+    text = text.replace(/<br><(table|ul|pre|h[34])/g, '<$1');
+    
+    return text;
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI - GŁÓWNY RENDER
 // ═══════════════════════════════════════════════════════════
 
 function renderBudgetAITab() {
@@ -674,675 +534,263 @@ function renderBudgetAITab() {
     
     const expCount = typeof allExpenses !== 'undefined' ? allExpenses.length : 0;
     const incCount = typeof allIncome !== 'undefined' ? allIncome.length : 0;
+    const hasAnyKey = Object.values(aiState.keys).some(k => k);
     
     // Status providerów
-    const hasOpenAI = !!aiState.keys.openai;
-    const hasLLM7 = !!aiState.keys.llm7;
-    const currentMode = AI_MODES[aiState.mode];
+    const providerStatuses = Object.entries(AI_PROVIDERS).map(([id, cfg]) => {
+        const hasKey = !!aiState.keys[id];
+        return `<span class="prov-badge ${hasKey ? 'active' : ''}" title="${cfg.name}">${cfg.icon}</span>`;
+    }).join('');
     
     container.innerHTML = `
         <div class="ai-container">
-            <!-- Status bar -->
             <div class="ai-status-bar">
-                <div class="ai-data-info">
-                    <span class="data-badge">📊 ${expCount} wydatków</span>
-                    <span class="data-badge">💵 ${incCount} dochodów</span>
-                    <span class="data-badge">📅 ${getMonthCount()} miesięcy</span>
+                <div class="data-badges">
+                    <span class="badge">📊 ${expCount} wydatków</span>
+                    <span class="badge">💵 ${incCount} dochodów</span>
                 </div>
-                <div class="ai-provider-status">
-                    <span class="provider-badge ${hasOpenAI ? 'active' : 'inactive'}" title="OpenAI ${hasOpenAI ? 'skonfigurowany' : 'brak klucza'}">
-                        ${AI_PROVIDERS.openai.icon} OpenAI
-                    </span>
-                    <span class="provider-badge ${hasLLM7 ? 'active' : 'inactive'}" title="LLM7 ${hasLLM7 ? 'skonfigurowany' : 'brak klucza'}">
-                        ${AI_PROVIDERS.llm7.icon} LLM7
-                    </span>
-                    <span class="mode-badge" title="${currentMode.description}">
-                        ⚡ ${currentMode.name}
-                    </span>
+                <div class="provider-statuses">
+                    ${providerStatuses}
+                    <span class="mode-badge">${AI_MODES[aiState.mode].name}</span>
+                    <button class="btn-icon" onclick="openAiSettings()" title="Ustawienia">⚙️</button>
                 </div>
             </div>
             
-            <!-- Szybkie analizy -->
             <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">🤖 Asystent budżetowy AI</h3>
-                    <button class="btn btn-ghost btn-sm" onclick="openAiSettingsModal()" title="Ustawienia AI">
-                        ⚙️ Ustawienia
-                    </button>
-                </div>
-                
+                <h3 class="card-title">🤖 Asystent AI</h3>
                 <div class="quick-prompts">
                     ${BUDGET_QUICK_PROMPTS.map(p => `
-                        <button class="quick-prompt-btn" onclick="runBudgetQuickPrompt('${p.id}')" title="${p.prompt}">
-                            <span class="quick-prompt-icon">${p.icon}</span>
-                            <span class="quick-prompt-label">${p.label}</span>
+                        <button class="qp-btn" onclick="runQuickPrompt('${p.id}')" title="${p.prompt}">
+                            <span class="qp-icon">${p.icon}</span>
+                            <span class="qp-label">${p.label}</span>
                         </button>
                     `).join('')}
                 </div>
             </div>
             
-            <!-- Chat -->
             <div class="card chat-card">
                 <div id="budgetChatMessages" class="chat-messages">
                     <div class="chat-welcome">
-                        <h4>👋 Witaj w Asystencie Budżetowym!</h4>
-                        <p>Mam dostęp do wszystkich Twoich danych finansowych. Mogę odpowiedzieć na pytania typu:</p>
-                        <ul>
-                            <li>💸 "Ile wydałem na paliwo?"</li>
-                            <li>📊 "Pokaż TOP 10 kategorii wydatków"</li>
-                            <li>📈 "Jak zmieniało się wynagrodzenie?"</li>
-                            <li>⚖️ "Porównaj wydatki grudzień vs listopad"</li>
-                        </ul>
-                        ${!hasOpenAI && !hasLLM7 ? `
-                            <div class="chat-warning">
-                                ⚠️ <strong>Brak skonfigurowanych kluczy API.</strong><br>
-                                Kliknij "⚙️ Ustawienia" aby dodać klucz OpenAI lub LLM7.
-                            </div>
-                        ` : ''}
+                        <h4>👋 Witaj!</h4>
+                        <p>Zadaj pytanie o swoje finanse lub wybierz szybką analizę.</p>
+                        ${!hasAnyKey ? '<p class="warning">⚠️ Skonfiguruj klucz API w ⚙️ Ustawieniach</p>' : ''}
                     </div>
                 </div>
-                
-                <div class="chat-input-container">
+                <div class="chat-input-row">
                     <input type="text" id="budgetChatInput" class="chat-input" 
-                        placeholder="Zadaj pytanie o swój budżet..."
-                        onkeypress="if(event.key==='Enter') sendBudgetMessage()"
-                        ${!hasOpenAI && !hasLLM7 ? 'disabled' : ''}>
-                    <button class="btn btn-primary" onclick="sendBudgetMessage()" ${!hasOpenAI && !hasLLM7 ? 'disabled' : ''}>
-                        Wyślij
-                    </button>
+                        placeholder="Zadaj pytanie..." 
+                        onkeypress="if(event.key==='Enter')sendBudgetMessage()"
+                        ${!hasAnyKey ? 'disabled' : ''}>
+                    <button class="btn-send" onclick="sendBudgetMessage()" ${!hasAnyKey ? 'disabled' : ''}>➤</button>
                 </div>
             </div>
         </div>
         
-        <!-- Modal ustawień -->
-        <div id="aiSettingsModal" class="ai-settings-modal ${settingsModalOpen ? 'active' : ''}">
-            <div class="ai-settings-content">
-                ${renderSettingsContent()}
+        <div id="aiSettingsModal" class="modal ${settingsOpen ? 'open' : ''}">
+            <div class="modal-content">
+                ${renderSettings()}
             </div>
         </div>
     `;
 }
 
-function renderSettingsContent() {
-    const openaiStatus = aiState.status.openai;
-    const llm7Status = aiState.status.llm7;
-    
+// ═══════════════════════════════════════════════════════════
+// UI - USTAWIENIA
+// ═══════════════════════════════════════════════════════════
+
+function renderSettings() {
     return `
-        <div class="settings-header">
-            <h3>⚙️ Ustawienia Asystenta AI</h3>
-            <button class="btn btn-ghost btn-icon" onclick="closeAiSettingsModal()">✕</button>
+        <div class="modal-header">
+            <h3>⚙️ Ustawienia AI</h3>
+            <button class="btn-close" onclick="closeAiSettings()">✕</button>
         </div>
-        
-        <div class="settings-body">
-            <!-- Tryb działania -->
-            <div class="settings-section">
+        <div class="modal-body">
+            <section class="settings-section">
                 <h4>Tryb działania</h4>
-                <p class="settings-hint">Wybierz jak asystent ma wybierać dostawcę AI</p>
-                
-                <div class="mode-selector">
-                    ${Object.entries(AI_MODES).map(([key, mode]) => `
-                        <label class="mode-option ${aiState.mode === key ? 'selected' : ''}">
-                            <input type="radio" name="aiMode" value="${key}" 
-                                ${aiState.mode === key ? 'checked' : ''} 
-                                onchange="setAiMode('${key}')">
-                            <div class="mode-option-content">
-                                <span class="mode-option-name">${mode.name}</span>
-                                <span class="mode-option-desc">${mode.description}</span>
-                            </div>
+                <div class="mode-options">
+                    ${Object.entries(AI_MODES).map(([id, mode]) => `
+                        <label class="mode-option ${aiState.mode === id ? 'selected' : ''}">
+                            <input type="radio" name="mode" value="${id}" ${aiState.mode === id ? 'checked' : ''} onchange="setMode('${id}')">
+                            <span class="mode-name">${mode.name}</span>
+                            <span class="mode-desc">${mode.description}</span>
                         </label>
                     `).join('')}
                 </div>
-            </div>
+            </section>
             
-            <!-- OpenAI -->
-            <div class="settings-section provider-section">
-                <div class="provider-header">
-                    <h4>${AI_PROVIDERS.openai.icon} OpenAI</h4>
-                    <span class="provider-status ${openaiStatus.working ? 'ok' : openaiStatus.tested ? 'error' : 'unknown'}">
-                        ${openaiStatus.working ? '✓ Działa' : openaiStatus.tested ? '✗ Błąd' : '? Nie testowany'}
-                    </span>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Klucz API</label>
-                    <div class="input-with-action">
-                        <input type="password" id="openaiKeyInput" class="form-input" 
-                            value="${aiState.keys.openai || ''}" 
-                            placeholder="sk-..."
-                            onchange="updateApiKey('openai', this.value)">
-                        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('openaiKeyInput')" title="Pokaż/ukryj">👁️</button>
+            ${Object.entries(AI_PROVIDERS).map(([id, cfg]) => `
+                <section class="settings-section provider-section">
+                    <div class="provider-header">
+                        <h4>${cfg.icon} ${cfg.name}</h4>
+                        <span class="status ${aiState.status[id].working ? 'ok' : aiState.status[id].tested ? 'error' : ''}">
+                            ${aiState.status[id].working ? '✓ OK' : aiState.status[id].tested ? '✗ Błąd' : '—'}
+                        </span>
                     </div>
-                    <small class="form-hint">Pobierz na <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></small>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Model</label>
-                    <select class="form-select" onchange="setModel('openai', this.value)">
-                        ${AI_PROVIDERS.openai.models.map(m => `
-                            <option value="${m.id}" ${aiState.models.openai === m.id ? 'selected' : ''}>${m.name}</option>
-                        `).join('')}
+                    <div class="form-row">
+                        <input type="password" id="key-${id}" class="form-input" 
+                            value="${aiState.keys[id] || ''}" 
+                            placeholder="${id === 'gemini' ? 'AIza...' : 'sk-...'}"
+                            onchange="setKey('${id}', this.value)">
+                        <button class="btn-sm" onclick="toggleVis('key-${id}')">👁️</button>
+                        <button class="btn-sm" onclick="testProvider('${id}')" ${!aiState.keys[id] ? 'disabled' : ''}>Test</button>
+                    </div>
+                    <select class="form-select" onchange="setModel('${id}', this.value)">
+                        ${cfg.models.map(m => `<option value="${m.id}" ${aiState.models[id] === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
                     </select>
-                </div>
-                
-                <button class="btn btn-secondary btn-sm" onclick="testProviderConnection('openai')" ${!aiState.keys.openai ? 'disabled' : ''}>
-                    🔌 Testuj połączenie
-                </button>
-                
-                ${openaiStatus.error ? `<div class="provider-error">❌ ${openaiStatus.error}</div>` : ''}
-            </div>
+                    ${aiState.status[id].error ? `<p class="error-msg">${aiState.status[id].error}</p>` : ''}
+                </section>
+            `).join('')}
             
-            <!-- LLM7 -->
-            <div class="settings-section provider-section">
-                <div class="provider-header">
-                    <h4>${AI_PROVIDERS.llm7.icon} LLM7.io</h4>
-                    <span class="provider-status ${llm7Status.working ? 'ok' : llm7Status.tested ? 'error' : 'unknown'}">
-                        ${llm7Status.working ? '✓ Działa' : llm7Status.tested ? '✗ Błąd' : '? Nie testowany'}
-                    </span>
+            <section class="settings-section">
+                <h4>📈 Statystyki</h4>
+                <div class="stats-row">
+                    <div class="stat"><span class="stat-val">${aiState.stats.geminiCalls}</span><span class="stat-lbl">Gemini</span></div>
+                    <div class="stat"><span class="stat-val">${aiState.stats.llm7Calls}</span><span class="stat-lbl">LLM7</span></div>
+                    <div class="stat"><span class="stat-val">${aiState.stats.openaiCalls}</span><span class="stat-lbl">OpenAI</span></div>
+                    <div class="stat"><span class="stat-val">${aiState.stats.fallbacks}</span><span class="stat-lbl">Fallback</span></div>
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Klucz API</label>
-                    <div class="input-with-action">
-                        <input type="password" id="llm7KeyInput" class="form-input" 
-                            value="${aiState.keys.llm7 || ''}" 
-                            placeholder="Twój klucz LLM7..."
-                            onchange="updateApiKey('llm7', this.value)">
-                        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('llm7KeyInput')" title="Pokaż/ukryj">👁️</button>
-                    </div>
-                    <small class="form-hint">Pobierz na <a href="https://llm7.io" target="_blank">llm7.io</a> - obsługuje duże konteksty</small>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Model</label>
-                    <select class="form-select" onchange="setModel('llm7', this.value)">
-                        ${AI_PROVIDERS.llm7.models.map(m => `
-                            <option value="${m.id}" ${aiState.models.llm7 === m.id ? 'selected' : ''}>${m.name}</option>
-                        `).join('')}
-                    </select>
-                </div>
-                
-                <button class="btn btn-secondary btn-sm" onclick="testProviderConnection('llm7')" ${!aiState.keys.llm7 ? 'disabled' : ''}>
-                    🔌 Testuj połączenie
-                </button>
-                
-                ${llm7Status.error ? `<div class="provider-error">❌ ${llm7Status.error}</div>` : ''}
-            </div>
-            
-            <!-- Statystyki -->
-            <div class="settings-section">
-                <h4>📈 Statystyki użycia</h4>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-value">${aiState.stats.openaiCalls}</span>
-                        <span class="stat-label">Zapytań OpenAI</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value">${aiState.stats.llm7Calls}</span>
-                        <span class="stat-label">Zapytań LLM7</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value">${aiState.stats.fallbacks}</span>
-                        <span class="stat-label">Przełączeń awaryjnych</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="settings-footer">
-            <button class="btn btn-secondary" onclick="closeAiSettingsModal()">Zamknij</button>
+            </section>
         </div>
     `;
 }
 
-// ═══════════════════════════════════════════════════════════
-// UI - FUNKCJE POMOCNICZE
-// ═══════════════════════════════════════════════════════════
-
-function openAiSettingsModal() {
-    settingsModalOpen = true;
+function openAiSettings() {
+    settingsOpen = true;
     const modal = document.getElementById('aiSettingsModal');
     if (modal) {
-        modal.classList.add('active');
-        modal.querySelector('.ai-settings-content').innerHTML = renderSettingsContent();
+        modal.classList.add('open');
+        modal.querySelector('.modal-content').innerHTML = renderSettings();
     }
 }
 
-function closeAiSettingsModal() {
-    settingsModalOpen = false;
-    const modal = document.getElementById('aiSettingsModal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-    // Odśwież główny widok
+function closeAiSettings() {
+    settingsOpen = false;
+    document.getElementById('aiSettingsModal')?.classList.remove('open');
     renderBudgetAITab();
 }
 
-function updateApiKey(provider, value) {
-    aiState.keys[provider] = value.trim() || null;
-    aiState.status[provider] = { tested: false, working: false, error: null, lastTest: null };
-    saveAiSettings();
-}
-
-function setAiMode(mode) {
+function setMode(mode) {
     aiState.mode = mode;
     saveAiSettings();
-    // Odśwież modal
-    const content = document.querySelector('.ai-settings-content');
-    if (content) content.innerHTML = renderSettingsContent();
+    document.querySelector('.modal-content').innerHTML = renderSettings();
 }
 
-function setModel(provider, modelId) {
-    aiState.models[provider] = modelId;
+function setKey(provider, value) {
+    aiState.keys[provider] = value.trim() || null;
+    aiState.status[provider] = { tested: false, working: false, error: null };
     saveAiSettings();
 }
 
-function toggleKeyVisibility(inputId) {
-    const input = document.getElementById(inputId);
-    if (input) {
-        input.type = input.type === 'password' ? 'text' : 'password';
-    }
+function setModel(provider, model) {
+    aiState.models[provider] = model;
+    saveAiSettings();
 }
 
-async function testProviderConnection(provider) {
+function toggleVis(inputId) {
+    const input = document.getElementById(inputId);
+    if (input) input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function testProvider(provider) {
     const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '⏳ Testuję...';
+    btn.textContent = '...';
     btn.disabled = true;
     
-    const result = await testConnection(provider);
-    
-    btn.textContent = originalText;
-    btn.disabled = false;
-    
-    // Odśwież modal
-    const content = document.querySelector('.ai-settings-content');
-    if (content) content.innerHTML = renderSettingsContent();
-    
-    if (result.success) {
-        showToast(`${AI_PROVIDERS[provider].name}: Połączenie OK!`, 'success');
-    } else {
-        showToast(`${AI_PROVIDERS[provider].name}: ${result.message}`, 'error');
+    try {
+        await callProvider(provider, [{ role: 'user', content: 'Odpowiedz: OK' }]);
+        showToast?.(`${AI_PROVIDERS[provider].name}: OK!`, 'success');
+    } catch (e) {
+        showToast?.(`${AI_PROVIDERS[provider].name}: ${e.message}`, 'error');
     }
-}
-
-function getMonthCount() {
-    const periods = new Set();
-    if (typeof allExpenses !== 'undefined') allExpenses.forEach(e => periods.add(`${e.rok}-${e.miesiac}`));
-    if (typeof allIncome !== 'undefined') allIncome.forEach(i => periods.add(`${i.rok}-${i.miesiac}`));
-    return periods.size;
-}
-
-// ═══════════════════════════════════════════════════════════
-// UI - CHAT MESSAGES
-// ═══════════════════════════════════════════════════════════
-
-let budgetMessageCounter = 0;
-
-function addBudgetChatMessage(role, content, provider = null) {
-    const container = document.getElementById('budgetChatMessages');
-    if (!container) return null;
     
-    const welcome = container.querySelector('.chat-welcome');
-    if (welcome) welcome.remove();
-    
-    const id = `budget-msg-${++budgetMessageCounter}`;
-    const div = document.createElement('div');
-    div.id = id;
-    div.className = `chat-message ${role}`;
-    
-    const formattedContent = formatMarkdownToHtml(content);
-    const providerBadge = provider && role === 'assistant' 
-        ? `<span class="message-provider" style="background:${AI_PROVIDERS[provider].color}">${AI_PROVIDERS[provider].icon} ${AI_PROVIDERS[provider].name}</span>` 
-        : '';
-    
-    div.innerHTML = `
-        <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
-        <div class="message-bubble">
-            ${providerBadge}
-            <div class="message-content">${formattedContent}</div>
-        </div>
-    `;
-    
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    
-    return id;
-}
-
-function removeBudgetChatMessage(id) {
-    const msg = document.getElementById(id);
-    if (msg) msg.remove();
-}
-
-function formatMarkdownToHtml(text) {
-    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-    
-    text = text.replace(/(\|.+\|[\r\n]+)+/g, (tableMatch) => {
-        const rows = tableMatch.trim().split('\n').filter(row => row.trim());
-        let html = '<table class="ai-table">';
-        
-        rows.forEach((row, idx) => {
-            if (row.match(/^\|[\s\-:]+\|$/)) return;
-            const cells = row.split('|').filter(c => c.trim() !== '');
-            const tag = idx === 0 ? 'th' : 'td';
-            html += '<tr>' + cells.map(cell => `<${tag}>${cell.trim()}</${tag}>`).join('') + '</tr>';
-        });
-        
-        return html + '</table>';
-    });
-    
-    text = text.replace(/^(\s*[-*]\s+.+(\n|$))+/gm, (listMatch) => {
-        const items = listMatch.trim().split('\n')
-            .filter(item => item.trim())
-            .map(item => `<li>${item.replace(/^\s*[-*]\s+/, '')}</li>`)
-            .join('');
-        return `<ul>${items}</ul>`;
-    });
-    
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    text = text.replace(/^#### (.+)$/gm, '<h5>$1</h5>');
-    text = text.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-    text = text.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-    text = text.replace(/\n/g, '<br>');
-    text = text.replace(/<\/(table|ul|ol|pre|h[1-5])><br>/g, '</$1>');
-    text = text.replace(/<br><(table|ul|ol|pre|h[1-5])/g, '<$1');
-    
-    return text;
+    btn.textContent = 'Test';
+    btn.disabled = false;
+    document.querySelector('.modal-content').innerHTML = renderSettings();
 }
 
 // ═══════════════════════════════════════════════════════════
 // STYLE
 // ═══════════════════════════════════════════════════════════
 
-if (!document.getElementById('budgetAiStyles')) {
-    const styles = document.createElement('style');
-    styles.id = 'budgetAiStyles';
-    styles.textContent = `
-        /* Container */
-        .ai-container { display: flex; flex-direction: column; gap: 20px; }
-        
-        /* Status Bar */
-        .ai-status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-        .ai-data-info { display: flex; gap: 8px; flex-wrap: wrap; }
-        .data-badge {
-            background: var(--bg-hover);
-            padding: 6px 12px;
-            border-radius: var(--radius-md);
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        .ai-provider-status { display: flex; gap: 8px; align-items: center; }
-        .provider-badge {
-            padding: 4px 10px;
-            border-radius: var(--radius-md);
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .provider-badge.active { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        .provider-badge.inactive { background: var(--bg-hover); color: var(--text-muted); }
-        .mode-badge {
-            background: var(--primary);
-            color: white;
-            padding: 4px 10px;
-            border-radius: var(--radius-md);
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        
-        /* Quick Prompts */
-        .quick-prompts {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-            gap: 10px;
-        }
-        .quick-prompt-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            padding: 14px 10px;
-            background: var(--bg-hover);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .quick-prompt-btn:hover {
-            background: var(--bg-card);
-            border-color: var(--primary);
-            transform: translateY(-2px);
-        }
-        .quick-prompt-icon { font-size: 1.4rem; }
-        .quick-prompt-label { font-size: 0.75rem; color: var(--text-primary); text-align: center; }
-        
-        /* Chat */
-        .chat-card { display: flex; flex-direction: column; min-height: 450px; }
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            max-height: 500px;
-        }
-        .chat-welcome {
-            padding: 20px;
-            background: var(--bg-hover);
-            border-radius: var(--radius-md);
-            color: var(--text-secondary);
-        }
-        .chat-welcome h4 { margin: 0 0 12px 0; color: var(--text-primary); }
-        .chat-welcome ul { margin: 12px 0; padding-left: 20px; }
-        .chat-welcome li { margin: 6px 0; }
-        .chat-warning {
-            margin-top: 16px;
-            padding: 12px;
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: var(--radius-md);
-            color: #f59e0b;
-        }
-        
-        .chat-message { display: flex; gap: 12px; max-width: 90%; }
-        .chat-message.user { align-self: flex-end; flex-direction: row-reverse; }
-        .message-avatar {
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            background: var(--bg-hover);
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
-            font-size: 1rem;
-        }
-        .message-bubble { display: flex; flex-direction: column; gap: 4px; }
-        .message-provider {
-            align-self: flex-start;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.65rem;
-            color: white;
-            font-weight: 500;
-        }
-        .message-content {
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            line-height: 1.6;
-            font-size: 0.9rem;
-        }
-        .chat-message.user .message-content {
-            background: var(--primary);
-            color: white;
-            border: none;
-        }
-        
-        .message-content h3, .message-content h4, .message-content h5 { margin: 12px 0 6px 0; }
-        .message-content h3:first-child, .message-content h4:first-child { margin-top: 0; }
-        .message-content code { background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
-        .message-content pre { background: var(--bg-hover); padding: 12px; border-radius: var(--radius-md); overflow-x: auto; margin: 8px 0; }
-        .message-content pre code { background: none; padding: 0; }
-        .message-content ul, .message-content ol { margin: 8px 0; padding-left: 20px; }
-        .message-content li { margin: 4px 0; }
-        
-        .message-content table, .message-content .ai-table {
-            border-collapse: collapse;
-            margin: 12px 0;
-            font-size: 0.8rem;
-            width: 100%;
-            display: block;
-            overflow-x: auto;
-        }
-        .message-content th, .message-content td {
-            border: 1px solid var(--border);
-            padding: 8px 10px;
-            text-align: left;
-        }
-        .message-content th { background: var(--primary); color: white; font-weight: 600; }
-        .message-content tr:nth-child(even) td { background: var(--bg-hover); }
-        
-        .chat-input-container {
-            display: flex;
-            gap: 12px;
-            padding: 16px;
-            border-top: 1px solid var(--border);
-        }
-        .chat-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            font-size: 0.9rem;
-        }
-        .chat-input:focus { outline: none; border-color: var(--primary); }
-        .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        /* Settings Modal */
-        .ai-settings-modal {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s;
-        }
-        .ai-settings-modal.active { opacity: 1; visibility: visible; }
-        .ai-settings-content {
-            background: var(--bg-card);
-            border-radius: var(--radius-lg);
-            width: 90%;
-            max-width: 600px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        
-        .settings-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border);
-        }
-        .settings-header h3 { margin: 0; font-size: 1.25rem; }
-        
-        .settings-body { padding: 24px; }
-        .settings-section {
-            margin-bottom: 28px;
-            padding-bottom: 24px;
-            border-bottom: 1px solid var(--border);
-        }
-        .settings-section:last-child { margin-bottom: 0; border-bottom: none; }
-        .settings-section h4 { margin: 0 0 8px 0; font-size: 1rem; }
-        .settings-hint { margin: 0 0 16px 0; font-size: 0.85rem; color: var(--text-muted); }
-        
-        /* Mode Selector */
-        .mode-selector { display: flex; flex-direction: column; gap: 8px; }
-        .mode-option {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border: 2px solid var(--border);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .mode-option:hover { border-color: var(--primary); }
-        .mode-option.selected { border-color: var(--primary); background: rgba(139, 92, 246, 0.1); }
-        .mode-option input { display: none; }
-        .mode-option-content { display: flex; flex-direction: column; }
-        .mode-option-name { font-weight: 600; font-size: 0.95rem; }
-        .mode-option-desc { font-size: 0.8rem; color: var(--text-muted); }
-        
-        /* Provider Section */
-        .provider-section { background: var(--bg-hover); padding: 20px; border-radius: var(--radius-md); }
-        .provider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .provider-header h4 { margin: 0; }
-        .provider-status {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .provider-status.ok { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        .provider-status.error { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-        .provider-status.unknown { background: var(--bg-card); color: var(--text-muted); }
-        .provider-error {
-            margin-top: 12px;
-            padding: 10px;
-            background: rgba(239, 68, 68, 0.1);
-            border-radius: var(--radius-md);
-            font-size: 0.8rem;
-            color: #ef4444;
-        }
-        
-        .input-with-action { display: flex; gap: 8px; }
-        .input-with-action .form-input { flex: 1; }
-        
-        .form-hint {
-            display: block;
-            margin-top: 6px;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .form-hint a { color: var(--primary); }
-        
-        /* Stats Grid */
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .stat-item { text-align: center; padding: 16px; background: var(--bg-hover); border-radius: var(--radius-md); }
-        .stat-value { display: block; font-size: 1.5rem; font-weight: 700; color: var(--primary); }
-        .stat-label { font-size: 0.75rem; color: var(--text-muted); }
-        
-        .settings-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border);
-            text-align: right;
-        }
-        
-        @media (max-width: 768px) {
-            .ai-status-bar { flex-direction: column; align-items: flex-start; }
-            .quick-prompts { grid-template-columns: repeat(2, 1fr); }
-            .stats-grid { grid-template-columns: 1fr; }
-            .chat-message { max-width: 95%; }
-        }
+if (!document.getElementById('budgetAiStyles2')) {
+    const style = document.createElement('style');
+    style.id = 'budgetAiStyles2';
+    style.textContent = `
+.ai-container{display:flex;flex-direction:column;gap:16px}
+.ai-status-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.data-badges,.provider-statuses{display:flex;gap:6px;align-items:center}
+.badge{background:var(--bg-hover);padding:4px 10px;border-radius:6px;font-size:.75rem}
+.prov-badge{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--bg-hover);font-size:.9rem;opacity:.4}
+.prov-badge.active{opacity:1;background:rgba(139,92,246,.15)}
+.mode-badge{background:var(--primary);color:#fff;padding:3px 8px;border-radius:4px;font-size:.7rem}
+.btn-icon{background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px}
+.quick-prompts{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.qp-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:.2s}
+.qp-btn:hover{border-color:var(--primary);transform:translateY(-2px)}
+.qp-icon{font-size:1.3rem}
+.qp-label{font-size:.7rem;text-align:center}
+.chat-card{display:flex;flex-direction:column;min-height:400px}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:450px}
+.chat-welcome{padding:16px;background:var(--bg-hover);border-radius:8px}
+.chat-welcome h4{margin:0 0 8px}
+.chat-welcome .warning{color:#f59e0b;margin-top:12px}
+.chat-message{display:flex;gap:10px;max-width:90%}
+.chat-message.user{align-self:flex-end;flex-direction:row-reverse}
+.msg-avatar{width:32px;height:32px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0}
+.msg-bubble{display:flex;flex-direction:column;gap:4px}
+.provider-badge{align-self:flex-start;padding:2px 6px;border-radius:8px;font-size:.6rem;color:#fff}
+.msg-content{padding:10px 14px;border-radius:10px;background:var(--bg-card);border:1px solid var(--border);font-size:.85rem;line-height:1.5}
+.chat-message.user .msg-content{background:var(--primary);color:#fff;border:none}
+.msg-content h3,.msg-content h4{margin:10px 0 6px}
+.msg-content h3:first-child,.msg-content h4:first-child{margin-top:0}
+.msg-content table{border-collapse:collapse;margin:10px 0;font-size:.8rem;width:100%;display:block;overflow-x:auto}
+.msg-content th,.msg-content td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.msg-content th{background:var(--primary);color:#fff}
+.msg-content tr:nth-child(even) td{background:var(--bg-hover)}
+.msg-content ul{margin:8px 0;padding-left:20px}
+.msg-content code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:.8em}
+.msg-content pre{background:var(--bg-hover);padding:10px;border-radius:6px;overflow-x:auto}
+.chat-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}
+.chat-input{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-hover);color:var(--text-primary)}
+.chat-input:focus{outline:none;border-color:var(--primary)}
+.btn-send{width:40px;height:40px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:1.1rem;cursor:pointer}
+.btn-send:disabled{opacity:.5;cursor:not-allowed}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:.2s}
+.modal.open{opacity:1;visibility:visible}
+.modal-content{background:var(--bg-card);border-radius:12px;width:90%;max-width:500px;max-height:85vh;overflow-y:auto}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-header h3{margin:0}
+.btn-close{background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-secondary)}
+.modal-body{padding:20px}
+.settings-section{margin-bottom:24px}
+.settings-section h4{margin:0 0 12px;font-size:.95rem}
+.mode-options{display:flex;flex-direction:column;gap:8px}
+.mode-option{display:flex;flex-direction:column;padding:12px;border:2px solid var(--border);border-radius:8px;cursor:pointer}
+.mode-option.selected{border-color:var(--primary);background:rgba(139,92,246,.1)}
+.mode-option input{display:none}
+.mode-name{font-weight:600;font-size:.9rem}
+.mode-desc{font-size:.75rem;color:var(--text-muted)}
+.provider-section{background:var(--bg-hover);padding:16px;border-radius:8px}
+.provider-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.provider-header h4{margin:0}
+.status{font-size:.75rem;padding:2px 8px;border-radius:10px}
+.status.ok{background:rgba(16,185,129,.15);color:#10b981}
+.status.error{background:rgba(239,68,68,.15);color:#ef4444}
+.form-row{display:flex;gap:6px;margin-bottom:8px}
+.form-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text-primary)}
+.form-select{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text-primary)}
+.btn-sm{padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);cursor:pointer;font-size:.8rem}
+.btn-sm:disabled{opacity:.5;cursor:not-allowed}
+.error-msg{color:#ef4444;font-size:.75rem;margin:8px 0 0}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{text-align:center;padding:12px;background:var(--bg-card);border-radius:8px}
+.stat-val{display:block;font-size:1.4rem;font-weight:700;color:var(--primary)}
+.stat-lbl{font-size:.7rem;color:var(--text-muted)}
+@media(max-width:600px){.quick-prompts{grid-template-columns:repeat(2,1fr)}.stats-row{grid-template-columns:repeat(2,1fr)}}
     `;
-    document.head.appendChild(styles);
+    document.head.appendChild(style);
 }
 
-// Inicjalizacja przy załadowaniu
+// Inicjalizacja
 loadAiSettings();
