@@ -26,45 +26,6 @@ let selectedYear = null;
 // INICJALIZACJA
 // ═══════════════════════════════════════════════════════════
 
-/**
- * Ujednolicona inicjalizacja strony Budżet (analogicznie do investments.js / analytics.js)
- *
- * Problem, który to naprawia:
- * - budżet nie inicjalizował się automatycznie po wejściu na stronę,
- *   więc BudgetSheets.ensureSheetsExist() nie odpalało i brakujące zakładki
- *   nie były tworzone w arkuszu.
- */
-
-async function initBudget() {
-    // Wymagaj zalogowania
-    if (!requireAuth()) return;
-    
-    try {
-        await initAuth();
-        await ensureValidToken();
-        
-        // Wylogowanie
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', handleGoogleLogout);
-        }
-        
-        // Start modułu
-        await initBudgetModule();
-        
-    } catch (error) {
-        console.error('Błąd inicjalizacji strony Budżet:', error);
-        try {
-            showToast('Błąd inicjalizacji strony Budżet', 'error');
-        } catch (e) {
-            // showToast może nie istnieć przy krytycznych błędach ładowania
-        }
-    }
-}
-
-// Automatyczny start po załadowaniu DOM (jak w innych modułach)
-document.addEventListener('DOMContentLoaded', initBudget);
-
 async function initBudgetModule() {
     if (budgetInitialized) {
         switchBudgetTab(currentBudgetTab);
@@ -101,9 +62,6 @@ async function initBudgetModule() {
         showBudgetLoading(false);
     }
 }
-
-// Start jak w pozostałych modułach
-document.addEventListener('DOMContentLoaded', initBudget);
 
 async function loadBudgetData() {
     const [expenses, income, recurring, plans, settings] = await Promise.all([
@@ -739,32 +697,83 @@ function renderIncomeTab() {
 function renderSalaryHistory(sh) {
     if (!sh.history || sh.history.length === 0) return '';
     
+    // Przygotuj dane z porównaniami do poprzedniego miesiąca
+    const historyWithComparison = sh.history.map((item, index) => {
+        const prev = index > 0 ? sh.history[index - 1] : null;
+        const diff = prev ? item.kwotaPLN - prev.kwotaPLN : 0;
+        const percentChange = prev && prev.kwotaPLN !== 0 
+            ? (diff / prev.kwotaPLN * 100) 
+            : 0;
+        
+        return {
+            ...item,
+            diff,
+            percentChange,
+            isRaise: diff > 0,
+            isDecrease: diff < 0,
+            isFirst: index === 0
+        };
+    });
+    
+    // Odwróć kolejność - najnowsze na górze
+    const reversedHistory = [...historyWithComparison].reverse();
+    
     return `
         <div class="salary-history">
-            <h4>${sh.pracodawca}</h4>
-            <div class="salary-stats">
-                <div class="salary-stat">
-                    <span class="stat-label">Zatrudnienie:</span>
-                    <span class="stat-value">${sh.employmentMonths} mies.</span>
-                </div>
-                <div class="salary-stat">
-                    <span class="stat-label">Aktualne:</span>
-                    <span class="stat-value">${formatMoney(sh.currentSalary)}</span>
-                </div>
-                <div class="salary-stat">
-                    <span class="stat-label">Wzrost łączny:</span>
-                    <span class="stat-value positive">+${sh.totalGrowth.toFixed(1)}%</span>
+            <div class="salary-history-header">
+                <h4>${sh.pracodawca}</h4>
+                <div class="salary-stats">
+                    <div class="salary-stat">
+                        <span class="stat-label">Zatrudnienie:</span>
+                        <span class="stat-value">${sh.employmentMonths} mies.</span>
+                    </div>
+                    <div class="salary-stat">
+                        <span class="stat-label">Pierwsza:</span>
+                        <span class="stat-value">${formatMoney(sh.firstSalary)}</span>
+                    </div>
+                    <div class="salary-stat">
+                        <span class="stat-label">Aktualna:</span>
+                        <span class="stat-value">${formatMoney(sh.currentSalary)}</span>
+                    </div>
+                    <div class="salary-stat">
+                        <span class="stat-label">Wzrost łączny:</span>
+                        <span class="stat-value ${sh.totalGrowth >= 0 ? 'positive' : 'negative'}">
+                            ${sh.totalGrowth >= 0 ? '+' : ''}${sh.totalGrowth.toFixed(1)}%
+                        </span>
+                    </div>
                 </div>
             </div>
-            ${sh.raises.length > 0 ? `
-                <div class="salary-raises">
-                    <h5>Podwyżki:</h5>
-                    ${sh.raises.map(r => `
-                        <div class="raise-row">
-                            <span class="raise-date">${BudgetCategories.formatPeriod(r.rok, r.miesiac)}</span>
-                            <span class="raise-amount positive">+${formatMoney(r.roznica)} (+${r.procent.toFixed(1)}%)</span>
+            
+            <div class="salary-history-table">
+                <div class="salary-table-header">
+                    <span class="salary-col-period">Okres</span>
+                    <span class="salary-col-amount">Kwota netto</span>
+                    <span class="salary-col-change">Zmiana</span>
+                    <span class="salary-col-percent">%</span>
+                </div>
+                <div class="salary-table-body">
+                    ${reversedHistory.map(item => `
+                        <div class="salary-table-row ${item.isRaise ? 'row-raise' : ''} ${item.isDecrease ? 'row-decrease' : ''}">
+                            <span class="salary-col-period">${BudgetCategories.formatPeriod(item.rok, item.miesiac)}</span>
+                            <span class="salary-col-amount">${formatMoney(item.kwotaPLN)}</span>
+                            <span class="salary-col-change ${item.diff > 0 ? 'positive' : item.diff < 0 ? 'negative' : ''}">
+                                ${item.isFirst ? '—' : (item.diff > 0 ? '+' : '') + formatMoney(item.diff)}
+                            </span>
+                            <span class="salary-col-percent ${item.percentChange > 0 ? 'positive' : item.percentChange < 0 ? 'negative' : ''}">
+                                ${item.isFirst ? '—' : (item.percentChange > 0 ? '+' : '') + item.percentChange.toFixed(1) + '%'}
+                            </span>
                         </div>
                     `).join('')}
+                </div>
+            </div>
+            
+            ${sh.raises.length > 0 ? `
+                <div class="salary-raises-summary">
+                    <span class="raises-label">Liczba podwyżek:</span>
+                    <span class="raises-count">${sh.raises.length}</span>
+                    <span class="raises-total">
+                        (łącznie +${formatMoney(sh.raises.reduce((sum, r) => sum + (r.roznica > 0 ? r.roznica : 0), 0))})
+                    </span>
                 </div>
             ` : ''}
         </div>
