@@ -492,8 +492,16 @@ Gdy użytkownik pyta o sumę/średnią/porównanie:
 ### 3. FORMAT ODPOWIEDZI
 - Kwoty: formatuj jako "X XXX zł" (ze spacją tysięcy)
 - Procenty: 1 miejsce po przecinku
-- Używaj tabel markdown dla porównań
+- **ZAWSZE używaj tabel markdown** dla rankingów, porównań i list z liczbami
+- Tabele: używaj | Kolumna1 | Kolumna2 | z nagłówkami
 - Używaj emoji dla czytelności: 📈📉💰⚠️✅❌
+- Listy punktowane tylko dla krótkich wniosków/obserwacji
+- Unikaj bardzo długich akapitów - dziel na sekcje z nagłówkami ###
+
+### Przykład tabeli:
+| Kategoria | Suma | Średnia | % |
+|-----------|------|---------|---|
+| Żywność | 3 500 zł | 875 zł | 25% |
 
 ### 4. STRUKTURA DANYCH
 
@@ -738,31 +746,75 @@ function removeBudgetChatMessage(id) {
 }
 
 function formatMarkdownToHtml(text) {
-    return text
-        // Code blocks
-        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-        // Inline code
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        // Bold
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        // Headers
-        .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-        .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-        // Lists
-        .replace(/^\- (.+)$/gm, '<li>$1</li>')
-        // Tables (basic)
-        .replace(/\|(.+)\|/g, (match) => {
-            const cells = match.split('|').filter(c => c.trim());
-            if (cells.every(c => c.trim().match(/^[-:]+$/))) {
-                return ''; // Skip separator row
-            }
-            const tag = 'td';
-            return '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
-        })
-        // Newlines
-        .replace(/\n/g, '<br>');
+    // Najpierw obsłuż bloki kodu
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    
+    // Obsłuż tabele markdown
+    text = text.replace(/(\|.+\|[\r\n]+)+/g, (tableMatch) => {
+        const rows = tableMatch.trim().split('\n').filter(row => row.trim());
+        let html = '<table class="ai-table">';
+        
+        rows.forEach((row, idx) => {
+            // Pomiń wiersz separatora (|---|---|)
+            if (row.match(/^\|[\s\-:]+\|$/)) return;
+            
+            const cells = row.split('|').filter(c => c.trim() !== '');
+            const tag = idx === 0 ? 'th' : 'td';
+            
+            html += '<tr>';
+            cells.forEach(cell => {
+                html += `<${tag}>${cell.trim()}</${tag}>`;
+            });
+            html += '</tr>';
+        });
+        
+        html += '</table>';
+        return html;
+    });
+    
+    // Obsłuż listy (wieloliniowe)
+    text = text.replace(/^(\s*[-*]\s+.+(\n|$))+/gm, (listMatch) => {
+        const items = listMatch.trim().split('\n')
+            .filter(item => item.trim())
+            .map(item => `<li>${item.replace(/^\s*[-*]\s+/, '')}</li>`)
+            .join('');
+        return `<ul>${items}</ul>`;
+    });
+    
+    // Obsłuż listy numerowane
+    text = text.replace(/^(\s*\d+\.\s+.+(\n|$))+/gm, (listMatch) => {
+        const items = listMatch.trim().split('\n')
+            .filter(item => item.trim())
+            .map(item => `<li>${item.replace(/^\s*\d+\.\s+/, '')}</li>`)
+            .join('');
+        return `<ol>${items}</ol>`;
+    });
+    
+    // Inline code
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Bold
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    
+    // Italic
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    
+    // Headers
+    text = text.replace(/^#### (.+)$/gm, '<h5>$1</h5>');
+    text = text.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    text = text.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    
+    // Horizontal rule
+    text = text.replace(/^---$/gm, '<hr>');
+    
+    // Newlines (ale nie wewnątrz tagów HTML)
+    text = text.replace(/\n/g, '<br>');
+    
+    // Usuń nadmiarowe <br> po blokowych elementach
+    text = text.replace(/<\/(table|ul|ol|pre|h[1-5]|hr)><br>/g, '</$1>');
+    text = text.replace(/<br><(table|ul|ol|pre|h[1-5]|hr)/g, '<$1');
+    
+    return text;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -982,20 +1034,47 @@ if (!document.getElementById('budgetAiStyles')) {
             margin: 4px 0;
         }
         
-        .message-content table {
+        .message-content table,
+        .message-content .ai-table {
             border-collapse: collapse;
-            margin: 8px 0;
+            margin: 12px 0;
             font-size: 0.85em;
+            width: 100%;
+            display: block;
+            overflow-x: auto;
         }
         
         .message-content th, .message-content td {
             border: 1px solid var(--border);
-            padding: 6px 10px;
+            padding: 8px 12px;
             text-align: left;
+            white-space: nowrap;
         }
         
         .message-content th {
-            background: var(--bg-card);
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .message-content tr:nth-child(even) td {
+            background: var(--bg-hover);
+        }
+        
+        .message-content tr:hover td {
+            background: rgba(139, 92, 246, 0.1);
+        }
+        
+        .message-content ul,
+        .message-content ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+        
+        .message-content hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 16px 0;
         }
         
         .chat-message.user .message-content {
