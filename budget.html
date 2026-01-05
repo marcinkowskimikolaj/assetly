@@ -231,7 +231,12 @@
     <script src="budget-sheets.js"></script>
     <script src="budget-metrics.js"></script>
     <script src="budget-modals.js"></script>
+    
+    <!-- AI Module (Cache → Router → Main) -->
+    <script src="budget-ai-cache.js"></script>
+    <script src="budget-ai-router.js"></script>
     <script src="budget-ai.js"></script>
+    
     <script src="budget.js"></script>
     
     <script>
@@ -289,8 +294,38 @@
             return div.innerHTML;
         }
         
-        // Inicjalizacja modułu Budżet jest teraz spójna z resztą aplikacji
-        // (DOMContentLoaded -> initBudget w budget.js + initAuth/restoreToken).
+        // Inicjalizacja po zalogowaniu
+        function onGapiLoaded() {
+            gapi.load('client', async () => {
+                try {
+                    await gapi.client.init({
+                        apiKey: CONFIG.API_KEY,
+                        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+                    });
+                    
+                    // Sprawdź token
+                    const token = localStorage.getItem('google_access_token');
+                    if (token) {
+                        gapi.client.setToken({ access_token: token });
+                        initBudgetModule();
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                } catch (error) {
+                    console.error('Błąd inicjalizacji:', error);
+                    showToast('Błąd inicjalizacji API', 'error');
+                }
+            });
+        }
+        
+        // Wylogowanie
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('google_access_token');
+            window.location.href = 'index.html';
+        });
+        
+        // Start
+        window.onload = onGapiLoaded;
     </script>
 </body>
 </html>
