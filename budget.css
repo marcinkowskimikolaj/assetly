@@ -664,7 +664,7 @@
     opacity: 1;
 }
 
-/* Salary History */
+/* Salary History - rozszerzona */
 .salary-history {
     padding: 16px;
     background: var(--bg-hover);
@@ -676,9 +676,14 @@
     margin-bottom: 0;
 }
 
-.salary-history h4 {
+.salary-history-header {
+    margin-bottom: 16px;
+}
+
+.salary-history-header h4 {
     margin: 0 0 12px 0;
     font-size: 1rem;
+    color: var(--primary);
 }
 
 .salary-stats {
@@ -702,6 +707,104 @@
     font-weight: 600;
 }
 
+/* Salary Table */
+.salary-history-table {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+.salary-table-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 100px 80px;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.salary-table-body {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.salary-table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 100px 80px;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+.salary-table-row:last-child {
+    border-bottom: none;
+}
+
+.salary-table-row:hover {
+    background: var(--bg-card);
+}
+
+.salary-table-row.row-raise {
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.salary-table-row.row-raise:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.salary-table-row.row-decrease {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.salary-table-row.row-decrease:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.salary-col-period {
+    color: var(--text-secondary);
+}
+
+.salary-col-amount {
+    font-weight: 600;
+}
+
+.salary-col-change,
+.salary-col-percent {
+    text-align: right;
+}
+
+/* Raises summary */
+.salary-raises-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.raises-label {
+    color: var(--text-secondary);
+}
+
+.raises-count {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.raises-total {
+    color: var(--text-muted);
+}
+
+/* Old styles kept for compatibility */
 .salary-raises h5 {
     font-size: 0.875rem;
     color: var(--text-secondary);
@@ -1635,6 +1738,30 @@
     .month-form-header {
         flex-direction: column;
         align-items: stretch;
+    }
+    
+    .salary-table-header,
+    .salary-table-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    
+    .salary-col-change,
+    .salary-col-percent {
+        text-align: left;
+    }
+    
+    .salary-stats {
+        gap: 12px;
+    }
+    
+    .income-row-item {
+        flex-wrap: wrap;
+    }
+    
+    .income-row-employer {
+        flex-basis: 100%;
+        order: 10;
     }
 }
 
