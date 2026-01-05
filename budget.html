@@ -239,93 +239,103 @@
     
     <script src="budget.js"></script>
     
-    <script>
-        // Stan kursów walut
-        let currencyRates = { PLN: 1 };
-        
-        // Helper functions
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const iconsSvg = {
-                success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>`,
-                error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-                warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-                info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
-            };
-            
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `
-                <span class="toast-icon">${iconsSvg[type] || iconsSvg.info}</span>
-                <span class="toast-message">${message}</span>
-            `;
-            
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+<script>
+  // Stan kursów walut
+  let currencyRates = { PLN: 1 };
+
+  // Helper functions
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const iconsSvg = {
+      success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>`,
+      error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+      warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+      info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+    };
+
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${iconsSvg[type] || iconsSvg.info}</span>
+      <span class="toast-message">${message}</span>
+    `;
+
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+  }
+
+  async function fetchCurrencyRates() {
+    const currencies = ['USD', 'EUR', 'GBP', 'CHF'];
+
+    const promises = currencies.map(async (currency) => {
+      try {
+        const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
+        if (response.ok) {
+          const data = await response.json();
+          return { currency, rate: data.rates[0].mid };
         }
-        
-        async function fetchCurrencyRates() {
-            const currencies = ['USD', 'EUR', 'GBP', 'CHF'];
-            
-            const promises = currencies.map(async (currency) => {
-                try {
-                    const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        return { currency, rate: data.rates[0].mid };
-                    }
-                } catch (error) {}
-                return { currency, rate: 1 };
-            });
-            
-            const results = await Promise.all(promises);
-            results.forEach(({ currency, rate }) => {
-                currencyRates[currency] = rate;
-            });
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text || '';
-            return div.innerHTML;
-        }
-        
-        // Inicjalizacja po zalogowaniu
-        function onGapiLoaded() {
-            gapi.load('client', async () => {
-                try {
-                    await gapi.client.init({
-                        apiKey: CONFIG.API_KEY,
-                        discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
-                    });
-                    
-                    // Sprawdź token
-                    const token = localStorage.getItem('google_access_token');
-                    if (token) {
-                        gapi.client.setToken({ access_token: token });
-                        initBudgetModule();
-                    } else {
-                        window.location.href = 'index.html';
-                    }
-                } catch (error) {
-                    console.error('Błąd inicjalizacji:', error);
-                    showToast('Błąd inicjalizacji API', 'error');
-                }
-            });
-        }
-        
-        // Wylogowanie
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('google_access_token');
-            window.location.href = 'index.html';
-        });
-        
-        // Start
-        window.onload = onGapiLoaded;
-    </script>
+      } catch (error) {}
+      return { currency, rate: 1 };
+    });
+
+    const results = await Promise.all(promises);
+    results.forEach(({ currency, rate }) => {
+      currencyRates[currency] = rate;
+    });
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+  }
+
+  // Wylogowanie – użyj wspólnego flow jeśli istnieje
+  document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+    try {
+      if (typeof handleGoogleLogout === 'function') {
+        await handleGoogleLogout();
+      } else {
+        // awaryjnie: czyść stare klucze
+        localStorage.removeItem('google_access_token');
+        window.location.href = 'index.html';
+      }
+    } catch (e) {
+      localStorage.removeItem('google_access_token');
+      window.location.href = 'index.html';
+    }
+  });
+
+  // Start budżetu (jeden, spójny)
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      // jeśli masz nowy auth flow:
+      if (typeof initAuth === 'function') await initAuth();
+      if (typeof ensureValidToken === 'function') await ensureValidToken({ interactive: true });
+
+      // kursy mogą się przydać od razu
+      await fetchCurrencyRates();
+
+      // uruchom budżet
+      if (typeof initBudgetModule !== 'function') {
+        throw new Error('Brak initBudgetModule() – sprawdź czy budget.js ładuje się poprawnie');
+      }
+
+      await initBudgetModule();
+    } catch (error) {
+      console.error('Budżet init error:', error);
+      showToast('Problem z inicjalizacją budżetu. Zaloguj się ponownie.', 'error');
+      // Jeśli i tak byłeś “wywalany”, to tu zobaczysz w konsoli prawdziwą przyczynę
+      // Nie przekierowuję na dashboard, żeby nie maskować błędu.
+    }
+  });
+</script>
+
 </body>
 </html>
