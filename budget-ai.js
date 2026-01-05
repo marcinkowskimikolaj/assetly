@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const BUDGET_AI_CONFIG = {
-    model: 'gpt-4o',
+    model: 'gpt-4o-mini',
     maxTokens: 2000,
     temperature: 0.3 // Niższa temperatura = bardziej precyzyjne odpowiedzi
 };
