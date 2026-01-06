@@ -55,6 +55,36 @@ let budgetAiInitialized = false;
 let budgetAiProcessing = false;
 let lastUsedProvider = null;
 
+// Stan ostatniego zapytania (do czyszczenia)
+let _lastQueryState = {
+    routing: null,
+    computeResults: null,
+    factsCapsule: null
+};
+
+/**
+ * Czyści stan poprzedniego zapytania - zapobiega "wyciekowi" danych
+ */
+function clearPreviousQueryState() {
+    _lastQueryState = {
+        routing: null,
+        computeResults: null,
+        factsCapsule: null
+    };
+    
+    // Reset stanu w routerze jeśli istnieje
+    if (typeof BudgetAIRouter !== 'undefined' && BudgetAIRouter._lastRouting) {
+        BudgetAIRouter._lastRouting = null;
+    }
+    
+    // Reset stanu w compute jeśli istnieje
+    if (typeof BudgetAICompute !== 'undefined' && BudgetAICompute._lastResults) {
+        BudgetAICompute._lastResults = null;
+    }
+    
+    console.log('BudgetAI: Cleared previous query state');
+}
+
 // ═══════════════════════════════════════════════════════════
 // INICJALIZACJA
 // ═══════════════════════════════════════════════════════════
@@ -207,6 +237,10 @@ async function sendBudgetMessage(customMessage = null) {
     // Wyczyść input
     if (input) input.value = '';
     
+    // === CZYSZCZENIE STANU POPRZEDNIEGO ZAPYTANIA ===
+    // Zapobiega "wyciekowi" danych z poprzednich zapytań
+    clearPreviousQueryState();
+    
     // Dodaj wiadomość użytkownika
     addBudgetChatMessage('user', message);
     
@@ -216,7 +250,7 @@ async function sendBudgetMessage(customMessage = null) {
     const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Analizuję...', null, true);
     
     try {
-        // KROK 1: Pobierz cache
+        // KROK 1: Pobierz cache (nie wymuszamy odświeżenia - cache jest ok)
         const cache = await BudgetAICache.getCache();
         
         // Debug info - zbieramy informacje o procesie
