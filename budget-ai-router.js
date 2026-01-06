@@ -5,6 +5,9 @@
 
 const BudgetAIRouter = {
     
+    // Stan ostatniego routingu (do czyszczenia między zapytaniami)
+    _lastRouting: null,
+    
     // ═══════════════════════════════════════════════════════════
     // SCHEMA ODPOWIEDZI ROUTERA
     // ═══════════════════════════════════════════════════════════
@@ -29,6 +32,9 @@ const BudgetAIRouter = {
      * Klasyfikuje zapytanie użytkownika i zwraca routing
      */
     async classifyIntent(userQuery, cache = null) {
+        // Wyczyść poprzedni routing
+        this._lastRouting = null;
+        
         // Pobierz cache jeśli nie podano
         if (!cache) {
             cache = await BudgetAICache.getCache();
@@ -60,7 +66,32 @@ const BudgetAIRouter = {
         
         // Parsuj i waliduj odpowiedź
         try {
-            const parsed = JSON.parse(result.content);
+            // Wyciągnij JSON z markdown code blocks jeśli obecne
+            let jsonContent = result.content.trim();
+            
+            // Metoda 1: Usuń ```json ... ``` lub ``` ... ```
+            const codeBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) {
+                jsonContent = codeBlockMatch[1].trim();
+            }
+            
+            // Metoda 2: Jeśli nadal zaczyna się od ``` - usuń ręcznie
+            if (jsonContent.startsWith('```')) {
+                jsonContent = jsonContent.replace(/^```(?:json)?[\r\n]*/, '').replace(/[\r\n]*```$/, '').trim();
+            }
+            
+            // Metoda 3: Znajdź pierwszy { i ostatni }
+            if (!jsonContent.startsWith('{')) {
+                const firstBrace = jsonContent.indexOf('{');
+                const lastBrace = jsonContent.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                    jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
+                }
+            }
+            
+            console.log('BudgetAIRouter: Parsing JSON:', jsonContent.substring(0, 100) + '...');
+            
+            const parsed = JSON.parse(jsonContent);
             const validated = this._validateRouterResponse(parsed, cache);
             
             if (!validated.valid) {
@@ -247,18 +278,16 @@ FORMAT ODPOWIEDZI:
     _fallbackRouting(userQuery, cache) {
         const query = userQuery.toLowerCase();
         
-        // Wykryj kategorię/podkategorię
-        const categoryMatch = BudgetAICompute.normalizeCategory(userQuery);
+        // Wykryj WSZYSTKIE kategorie/podkategorie w zapytaniu
+        const detectedCategories = this._detectAllCategories(userQuery);
+        
+        // Jeśli wykryto wiele kategorii, użyj pierwszej jako głównej
         let category = null;
         let subcategory = null;
         
-        if (categoryMatch) {
-            if (typeof categoryMatch === 'object') {
-                category = categoryMatch.category;
-                subcategory = categoryMatch.subcategory;
-            } else {
-                category = categoryMatch;
-            }
+        if (detectedCategories.length > 0) {
+            category = detectedCategories[0].category;
+            subcategory = detectedCategories[0].subcategory;
         }
         
         // Wykryj okres
@@ -271,16 +300,68 @@ FORMAT ODPOWIEDZI:
         let operations = [];
         let intentSummary = 'Ogólne pytanie o finanse';
         
-        // Suma / wydatki na X
-        if (query.match(/suma|ile|wydatki na|wydałem|wydałam|koszt|koszty/)) {
-            route = 'compute_sum';
-            const catLabel = subcategory ? `"${subcategory}"` : (category ? `"${category}"` : '');
-            intentSummary = `Suma wydatków${catLabel ? ` dla ${catLabel}` : ''}`;
+        // Jeśli wykryto wiele kategorii - generuj operacje dla każdej
+        const hasMultipleCategories = detectedCategories.length > 1;
+        
+        // Suma / wydatki na X / trend / zmiana w czasie
+        if (query.match(/suma|ile|wydatki na|wydałem|wydałam|koszt|koszty|jak się zmien|w poszczególnych|miesiącach|zmieniało/)) {
             
-            operations.push({
-                function: 'sumByCategory',
-                params: { category, subcategory, periodFrom, periodTo }
-            });
+            // Jeśli pytanie o zmiany w czasie - użyj trendByPeriod
+            if (query.match(/jak się zmien|zmieniało|w poszczególnych|miesiącach|miesięcznie/)) {
+                route = 'compute_trend';
+                
+                if (hasMultipleCategories) {
+                    intentSummary = `Wydatki miesięczne dla: ${detectedCategories.map(c => c.subcategory || c.category).join(', ')}`;
+                    
+                    // Generuj operację dla każdej wykrytej kategorii
+                    detectedCategories.forEach(cat => {
+                        operations.push({
+                            function: 'trendByPeriod',
+                            params: { 
+                                category: cat.category, 
+                                subcategory: cat.subcategory, 
+                                periodFrom, 
+                                periodTo,
+                                metric: 'expenses'
+                            }
+                        });
+                    });
+                } else {
+                    const catLabel = subcategory ? `"${subcategory}"` : (category ? `"${category}"` : '');
+                    intentSummary = `Wydatki miesięczne${catLabel ? ` dla ${catLabel}` : ''}`;
+                    
+                    operations.push({
+                        function: 'trendByPeriod',
+                        params: { category, subcategory, periodFrom, periodTo, metric: 'expenses' }
+                    });
+                }
+            } else {
+                route = 'compute_sum';
+                
+                if (hasMultipleCategories) {
+                    intentSummary = `Suma wydatków dla: ${detectedCategories.map(c => c.subcategory || c.category).join(', ')}`;
+                    
+                    detectedCategories.forEach(cat => {
+                        operations.push({
+                            function: 'sumByCategory',
+                            params: { 
+                                category: cat.category, 
+                                subcategory: cat.subcategory, 
+                                periodFrom, 
+                                periodTo 
+                            }
+                        });
+                    });
+                } else {
+                    const catLabel = subcategory ? `"${subcategory}"` : (category ? `"${category}"` : '');
+                    intentSummary = `Suma wydatków${catLabel ? ` dla ${catLabel}` : ''}`;
+                    
+                    operations.push({
+                        function: 'sumByCategory',
+                        params: { category, subcategory, periodFrom, periodTo }
+                    });
+                }
+            }
         }
         
         // Top / ranking
@@ -424,6 +505,62 @@ FORMAT ODPOWIEDZI:
         };
     },
     
+    /**
+     * Wykrywa WSZYSTKIE kategorie/podkategorie wymienione w zapytaniu
+     */
+    _detectAllCategories(userQuery) {
+        const detected = [];
+        const query = userQuery.toLowerCase();
+        const words = query.split(/[\s,;]+/);
+        
+        // Sprawdź każde słowo i frazę
+        for (const word of words) {
+            if (word.length < 3) continue; // Pomijaj krótkie słowa
+            
+            const match = BudgetAICompute.normalizeCategory(word);
+            if (match) {
+                const entry = typeof match === 'object' 
+                    ? { category: match.category, subcategory: match.subcategory }
+                    : { category: match, subcategory: null };
+                
+                // Sprawdź czy już nie mamy tej kategorii/podkategorii
+                const isDuplicate = detected.some(d => 
+                    d.category === entry.category && d.subcategory === entry.subcategory
+                );
+                
+                if (!isDuplicate) {
+                    detected.push(entry);
+                }
+            }
+        }
+        
+        // Sprawdź też frazy (2-3 słowa)
+        for (let i = 0; i < words.length - 1; i++) {
+            const phrase2 = words.slice(i, i + 2).join(' ');
+            const phrase3 = i < words.length - 2 ? words.slice(i, i + 3).join(' ') : null;
+            
+            for (const phrase of [phrase2, phrase3].filter(Boolean)) {
+                const match = BudgetAICompute.normalizeCategory(phrase);
+                if (match) {
+                    const entry = typeof match === 'object' 
+                        ? { category: match.category, subcategory: match.subcategory }
+                        : { category: match, subcategory: null };
+                    
+                    const isDuplicate = detected.some(d => 
+                        d.category === entry.category && d.subcategory === entry.subcategory
+                    );
+                    
+                    if (!isDuplicate) {
+                        detected.push(entry);
+                    }
+                }
+            }
+        }
+        
+        console.log('BudgetAIRouter: Detected categories:', detected);
+        return detected;
+    },
+    
     // ═══════════════════════════════════════════════════════════
     // BUDOWANIE KAPSUŁY FAKTÓW
     // ═══════════════════════════════════════════════════════════
@@ -496,7 +633,6 @@ FORMAT ODPOWIEDZI:
 - Zacznij od bezpośredniej odpowiedzi na pytanie
 - Podaj kluczowe liczby
 - Dodaj krótki kontekst lub wnioski
-- Maksymalnie 3-4 akapity
 
 Odpowiadaj po polsku w naturalnym, przyjaznym tonie.`;
     }
