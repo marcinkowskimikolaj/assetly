@@ -219,8 +219,29 @@ async function sendBudgetMessage(customMessage = null) {
         // KROK 1: Pobierz cache
         const cache = await BudgetAICache.getCache();
         
+        // Debug info - zbieramy informacje o procesie
+        const debugInfo = {
+            timestamp: new Date().toISOString(),
+            routerSource: null,
+            route: null,
+            category: null,
+            subcategory: null,
+            operations: [],
+            computeSuccess: null,
+            generatorProvider: null,
+            error: null
+        };
+        
         // KROK 2: Router - klasyfikacja intencji
         const routing = await BudgetAIRouter.classifyIntent(message, cache);
+        
+        // Zapisz debug info
+        debugInfo.routerSource = routing.source || 'unknown';
+        debugInfo.route = routing.route;
+        debugInfo.category = routing.canonical_category;
+        debugInfo.subcategory = routing.canonical_subcategory;
+        debugInfo.intentSummary = routing.intent_summary;
+        debugInfo.operations = (routing.operations || []).map(op => op.function);
         
         console.log('BudgetAI: Routing:', routing);
         
@@ -234,6 +255,7 @@ async function sendBudgetMessage(customMessage = null) {
                 content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami`,
                 provider: 'system'
             };
+            debugInfo.generatorProvider = 'system';
         } else if (routing.route === 'general') {
             // Ogólne pytanie - przekaż do AI z minimalnym kontekstem
             const capsule = BudgetAIRouter.buildFactsCapsule(routing, [], cache);
@@ -241,9 +263,17 @@ async function sendBudgetMessage(customMessage = null) {
                 BudgetAIRouter.getGeneratorSystemPrompt(),
                 capsule
             );
+            debugInfo.generatorProvider = response.provider;
         } else {
             // KROK 4: Wykonaj obliczenia
             const computeResults = await BudgetAICompute.executeOperations(routing.operations, cache);
+            
+            debugInfo.computeSuccess = computeResults.every(r => r.success);
+            debugInfo.computeResults = computeResults.map(r => ({
+                operation: r.operation,
+                success: r.success,
+                error: r.error || null
+            }));
             
             console.log('BudgetAI: Compute results:', computeResults);
             
@@ -257,6 +287,7 @@ async function sendBudgetMessage(customMessage = null) {
                 BudgetAIRouter.getGeneratorSystemPrompt(),
                 capsule
             );
+            debugInfo.generatorProvider = response.provider;
         }
         
         // Usuń loading
@@ -264,18 +295,19 @@ async function sendBudgetMessage(customMessage = null) {
         
         if (response.success) {
             lastUsedProvider = response.provider;
-            addBudgetChatMessage('assistant', response.content, response.provider);
+            addBudgetChatMessage('assistant', response.content, response.provider, debugInfo);
             
             // Zapisz do historii
             saveBudgetChatHistory();
         } else {
-            addBudgetChatMessage('assistant', `❌ Błąd: ${response.error}`, 'error');
+            debugInfo.error = response.error;
+            addBudgetChatMessage('assistant', `❌ Błąd: ${response.error}`, 'error', debugInfo);
         }
         
     } catch (error) {
         console.error('BudgetAI: Błąd:', error);
         removeBudgetChatMessageFromUI(loadingId);
-        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`, 'error');
+        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`, 'error', { error: error.message });
     } finally {
         budgetAiProcessing = false;
         updateChatUIState();
@@ -295,7 +327,7 @@ function runBudgetQuickPrompt(promptId) {
 
 let budgetMessageCounter = 0;
 
-function addBudgetChatMessage(role, content, provider = null) {
+function addBudgetChatMessage(role, content, provider = null, debugInfo = null) {
     // Dodaj do historii
     budgetChatHistory.push({ 
         role, 
@@ -310,10 +342,10 @@ function addBudgetChatMessage(role, content, provider = null) {
     }
     
     // Dodaj do UI
-    return addBudgetChatMessageToUI(role, content, provider);
+    return addBudgetChatMessageToUI(role, content, provider, false, debugInfo);
 }
 
-function addBudgetChatMessageToUI(role, content, provider = null, isLoading = false) {
+function addBudgetChatMessageToUI(role, content, provider = null, isLoading = false, debugInfo = null) {
     const container = document.getElementById('budgetChatMessages');
     if (!container) return null;
     
@@ -336,11 +368,18 @@ function addBudgetChatMessageToUI(role, content, provider = null, isLoading = fa
         ? `<span class="provider-badge provider-${provider.toLowerCase()}">${getProviderIcon(provider)}</span>`
         : '';
     
+    // Debug panel (tylko dla odpowiedzi asystenta z debugInfo)
+    let debugPanel = '';
+    if (debugInfo && role === 'assistant' && !isLoading) {
+        debugPanel = renderDebugPanel(debugInfo);
+    }
+    
     div.innerHTML = `
         <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
         <div class="message-content">
             ${formattedContent}
             ${providerBadge}
+            ${debugPanel}
         </div>
     `;
     
@@ -348,6 +387,94 @@ function addBudgetChatMessageToUI(role, content, provider = null, isLoading = fa
     container.scrollTop = container.scrollHeight;
     
     return id;
+}
+
+/**
+ * Renderuje panel debug z informacjami o procesie przetwarzania
+ */
+function renderDebugPanel(debugInfo) {
+    if (!debugInfo) return '';
+    
+    // Określ status ogólny
+    let statusIcon = '✅';
+    let statusText = 'Sukces';
+    let statusClass = 'success';
+    
+    if (debugInfo.error) {
+        statusIcon = '❌';
+        statusText = 'Błąd';
+        statusClass = 'error';
+    } else if (debugInfo.routerSource === 'fallback') {
+        statusIcon = '⚠️';
+        statusText = 'Fallback (bez AI)';
+        statusClass = 'warning';
+    } else if (debugInfo.computeSuccess === false) {
+        statusIcon = '⚠️';
+        statusText = 'Błąd obliczeń';
+        statusClass = 'warning';
+    }
+    
+    // Router info
+    const routerInfo = debugInfo.routerSource === 'llm7' ? '🤖 LLM7' :
+                       debugInfo.routerSource === 'fallback' ? '📋 Regex/Fallback' :
+                       debugInfo.routerSource || '?';
+    
+    // Generator info
+    const generatorInfo = debugInfo.generatorProvider ? 
+        `${getProviderIcon(debugInfo.generatorProvider)} ${debugInfo.generatorProvider}` : 
+        '—';
+    
+    // Kategoria/podkategoria
+    const categoryInfo = debugInfo.category ? 
+        (debugInfo.subcategory ? `${debugInfo.category} → ${debugInfo.subcategory}` : debugInfo.category) :
+        '(nie wykryto)';
+    
+    // Operacje
+    const operationsInfo = debugInfo.operations?.length > 0 ?
+        debugInfo.operations.join(', ') : '(brak)';
+    
+    return `
+        <div class="debug-panel">
+            <div class="debug-header" onclick="this.parentElement.classList.toggle('expanded')">
+                <span class="debug-status ${statusClass}">${statusIcon} ${statusText}</span>
+                <span class="debug-toggle">▼</span>
+            </div>
+            <div class="debug-content">
+                <div class="debug-row">
+                    <span class="debug-label">Router:</span>
+                    <span class="debug-value">${routerInfo}</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Intencja:</span>
+                    <span class="debug-value">${debugInfo.route || '?'}</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Kategoria:</span>
+                    <span class="debug-value ${debugInfo.subcategory ? 'has-subcategory' : ''}">${categoryInfo}</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Operacje:</span>
+                    <span class="debug-value">${operationsInfo}</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Generator:</span>
+                    <span class="debug-value">${generatorInfo}</span>
+                </div>
+                ${debugInfo.intentSummary ? `
+                <div class="debug-row">
+                    <span class="debug-label">Opis:</span>
+                    <span class="debug-value debug-summary">${escapeHtml(debugInfo.intentSummary)}</span>
+                </div>
+                ` : ''}
+                ${debugInfo.error ? `
+                <div class="debug-row debug-error">
+                    <span class="debug-label">Błąd:</span>
+                    <span class="debug-value">${escapeHtml(debugInfo.error)}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
 }
 
 function removeBudgetChatMessageFromUI(id) {
@@ -830,6 +957,105 @@ function renderProactiveInsight(insight) {
         
         .insight-close:hover {
             color: var(--text-primary);
+        }
+        
+        /* Debug Panel Styles */
+        .debug-panel {
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            cursor: pointer;
+            user-select: none;
+            background: rgba(0, 0, 0, 0.05);
+        }
+        
+        .debug-header:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        
+        .debug-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+        }
+        
+        .debug-status.success {
+            color: #22c55e;
+        }
+        
+        .debug-status.warning {
+            color: #f59e0b;
+        }
+        
+        .debug-status.error {
+            color: #ef4444;
+        }
+        
+        .debug-toggle {
+            color: var(--text-muted);
+            font-size: 0.625rem;
+            transition: transform 0.2s;
+        }
+        
+        .debug-panel.expanded .debug-toggle {
+            transform: rotate(180deg);
+        }
+        
+        .debug-content {
+            display: none;
+            padding: 8px 10px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .debug-panel.expanded .debug-content {
+            display: block;
+        }
+        
+        .debug-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+        
+        .debug-row:last-child {
+            border-bottom: none;
+        }
+        
+        .debug-label {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        
+        .debug-value {
+            color: var(--text-secondary);
+            text-align: right;
+            word-break: break-word;
+        }
+        
+        .debug-value.has-subcategory {
+            color: #22c55e;
+            font-weight: 500;
+        }
+        
+        .debug-summary {
+            font-style: italic;
+            max-width: 200px;
+        }
+        
+        .debug-row.debug-error .debug-value {
+            color: #ef4444;
         }
     `;
     
