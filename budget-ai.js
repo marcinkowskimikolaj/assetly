@@ -1,1110 +1,274 @@
 /**
- * Assetly - Budget AI (v2)
- * Przebudowany moduł AI z rotacją providerów, cache i inteligentnym routingiem
+ * Assetly - Budget AI (v2.1 Refined)
+ * Zaktualizowana orkiestracja z obsługą nowego Routera i Second-Pass
  */
 
 // ═══════════════════════════════════════════════════════════
-// KONFIGURACJA
+// KONFIGURACJA UI
 // ═══════════════════════════════════════════════════════════
 
 const BUDGET_QUICK_PROMPTS = [
-    {
-        id: 'summary',
-        label: 'Podsumowanie',
-        icon: '📊',
-        prompt: 'Podsumuj moje finanse z ostatniego zamkniętego miesiąca. Podaj: bilans, wykonanie planu, 3 najważniejsze obserwacje.'
-    },
-    {
-        id: 'top',
-        label: 'Top wydatki',
-        icon: '📈',
-        prompt: 'Pokaż top 10 kategorii wydatków w całej historii. Które pochłaniają najwięcej pieniędzy?'
-    },
-    {
-        id: 'savings',
-        label: 'Gdzie oszczędzić',
-        icon: '💰',
-        prompt: 'Zidentyfikuj 3 kategorie gdzie wydaję więcej niż średnia historyczna. Dla każdej podaj konkretną kwotę potencjalnej oszczędności.'
-    },
-    {
-        id: 'trends',
-        label: 'Trendy',
-        icon: '📉',
-        prompt: 'Jak zmieniały się moje wydatki i dochody przez ostatnie 6 miesięcy? Czy widzisz niepokojące trendy?'
-    },
-    {
-        id: 'compare',
-        label: 'Porównanie m/m',
-        icon: '📅',
-        prompt: 'Porównaj moje finanse z ostatniego miesiąca z poprzednim miesiącem. Co się zmieniło?'
-    },
-    {
-        id: '503020',
-        label: 'Analiza 50/30/20',
-        icon: '🎯',
-        prompt: 'Przeanalizuj moje wydatki według metodyki 50/30/20. Czy trzymam się zdrowych proporcji?'
-    }
+    { id: 'summary', label: 'Podsumowanie', icon: '📊', prompt: 'Podsumuj ostatni miesiąc finansowy.' },
+    { id: 'top', label: 'Top wydatki', icon: '📈', prompt: 'Na co wydaję najwięcej pieniędzy w tym roku?' },
+    { id: 'savings', label: 'Gdzie oszczędzić', icon: '💰', prompt: 'Znajdź 3 kategorie gdzie wydatki rosną.' },
+    { id: 'trends', label: 'Trendy', icon: '📉', prompt: 'Jaki jest trend moich wydatków przez ostatnie 6 miesięcy?' },
+    { id: 'compare', label: 'Porównanie m/m', icon: '📅', prompt: 'Porównaj ostatni miesiąc z poprzednim.' },
+    { id: '503020', label: 'Zasada 50/30/20', icon: '🎯', prompt: 'Sprawdź czy mój budżet spełnia zasadę 50/30/20.' }
 ];
-
-// ═══════════════════════════════════════════════════════════
-// STAN
-// ═══════════════════════════════════════════════════════════
 
 let budgetChatHistory = [];
 let budgetAiInitialized = false;
 let budgetAiProcessing = false;
-let lastUsedProvider = null;
-
-// Stan ostatniego zapytania (do czyszczenia)
-let _lastQueryState = {
-    routing: null,
-    computeResults: null,
-    factsCapsule: null
-};
-
-/**
- * Czyści stan poprzedniego zapytania - zapobiega "wyciekowi" danych
- */
-function clearPreviousQueryState() {
-    _lastQueryState = {
-        routing: null,
-        computeResults: null,
-        factsCapsule: null
-    };
-    
-    // Reset stanu w routerze jeśli istnieje
-    if (typeof BudgetAIRouter !== 'undefined' && BudgetAIRouter._lastRouting) {
-        BudgetAIRouter._lastRouting = null;
-    }
-    
-    // Reset stanu w compute jeśli istnieje
-    if (typeof BudgetAICompute !== 'undefined' && BudgetAICompute._lastResults) {
-        BudgetAICompute._lastResults = null;
-    }
-    
-    console.log('BudgetAI: Cleared previous query state');
-}
 
 // ═══════════════════════════════════════════════════════════
-// INICJALIZACJA
+// INIT
 // ═══════════════════════════════════════════════════════════
 
 async function initBudgetAI() {
     if (budgetAiInitialized) return;
-    
     try {
-        // Załaduj klucze API
         await AIProviders.loadApiKeys();
-        
-        // Aktualizuj AI cache jeśli potrzeba
-        await BudgetAICache.updateIfNeeded();
-        
-        // Załaduj historię czatu
+        // Upewnij się, że cache jest świeży
+        if (typeof BudgetAICache !== 'undefined') {
+            await BudgetAICache.updateIfNeeded();
+        }
         loadBudgetChatHistory();
-        
         budgetAiInitialized = true;
-        
     } catch (error) {
-        console.error('BudgetAI: Błąd inicjalizacji:', error);
+        console.error('BudgetAI Init Error:', error);
     }
 }
 
 // ═══════════════════════════════════════════════════════════
-// RENDEROWANIE TAB AI
+// RENDER UI
 // ═══════════════════════════════════════════════════════════
 
 async function renderBudgetAITab() {
     const container = document.getElementById('budget-ai');
     if (!container) return;
     
-    // Inicjalizuj jeśli jeszcze nie
     await initBudgetAI();
-    
-    // Sprawdź konfigurację
     const config = AIProviders.getConfigurationStatus();
     
     container.innerHTML = `
         <div class="ai-container">
-            <!-- Status i ustawienia -->
             <div class="card ai-config-card">
                 <div class="card-header card-header-ai">
                     <div class="ai-header-left">
-                        <h3 class="card-title">🤖 Asystent budżetowy</h3>
-                        <span class="ai-config-badge ${config.level}">${config.ready ? '✓ Gotowy' : '⚠️ Konfiguracja wymagana'}</span>
+                        <h3 class="card-title">🤖 Asystent Finansowy</h3>
+                        <span class="ai-config-badge ${config.level}">${config.ready ? 'Gotowy' : 'Konfiguracja'}</span>
                     </div>
                     <div class="header-actions">
-                        <button class="btn btn-ghost btn-sm" onclick="clearBudgetChatHistory()" title="Wyczyść historię">
-                            🗑️
-                        </button>
-                        <button class="btn btn-ghost btn-sm" onclick="BudgetAISettings.show()" title="Ustawienia AI">
-                            ⚙️
-                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearBudgetChatHistory()">🗑️</button>
+                        <button class="btn btn-ghost btn-sm" onclick="BudgetAISettings.show()">⚙️</button>
                     </div>
                 </div>
-                
-                ${!config.ready ? `
-                    <div class="ai-config-warning">
-                        <p>${config.message}</p>
-                        <button class="btn btn-primary btn-sm" onclick="BudgetAISettings.show()">
-                            ⚙️ Skonfiguruj AI
-                        </button>
-                    </div>
-                ` : ''}
-                
-                <!-- Szybkie prompty -->
+                ${!config.ready ? `<div class="ai-config-warning"><p>${config.message}</p></div>` : ''}
                 ${config.ready ? `
                     <div class="quick-prompts">
                         ${BUDGET_QUICK_PROMPTS.map(p => `
                             <button class="quick-prompt-btn" onclick="runBudgetQuickPrompt('${p.id}')" ${budgetAiProcessing ? 'disabled' : ''}>
-                                <span class="quick-prompt-icon">${p.icon}</span>
-                                <span class="quick-prompt-label">${p.label}</span>
+                                <span class="quick-prompt-icon">${p.icon}</span> ${p.label}
                             </button>
                         `).join('')}
                     </div>
                 ` : ''}
             </div>
             
-            <!-- Chat -->
             <div class="card chat-card">
                 <div id="budgetChatMessages" class="chat-messages">
-                    ${budgetChatHistory.length === 0 ? `
-                        <div class="chat-welcome">
-                            <p>👋 Cześć! Jestem Twoim asystentem budżetowym.</p>
-                            <p>Mogę pomóc Ci przeanalizować wydatki, znaleźć oszczędności, porównać trendy i odpowiedzieć na pytania o Twój budżet.</p>
-                            ${config.ready ? `
-                                <p>Wybierz jedną z szybkich analiz powyżej lub zadaj własne pytanie.</p>
-                            ` : `
-                                <p>⚠️ Najpierw skonfiguruj klucze API w ustawieniach.</p>
-                            `}
-                        </div>
-                    ` : ''}
+                    ${budgetChatHistory.length === 0 ? `<div class="chat-welcome"><p>W czym mogę pomóc?</p></div>` : ''}
                 </div>
-                
                 <div class="chat-input-container">
-                    <input type="text" 
-                           id="budgetChatInput" 
-                           class="chat-input" 
-                           placeholder="${config.ready ? 'Zadaj pytanie o swój budżet...' : 'Najpierw skonfiguruj AI w ustawieniach...'}"
-                           ${!config.ready || budgetAiProcessing ? 'disabled' : ''}
+                    <input type="text" id="budgetChatInput" class="chat-input" placeholder="Zadaj pytanie..." 
                            onkeypress="if(event.key==='Enter' && !event.shiftKey) sendBudgetMessage()">
-                    <button class="btn btn-primary" 
-                            onclick="sendBudgetMessage()" 
-                            ${!config.ready || budgetAiProcessing ? 'disabled' : ''}>
-                        ${budgetAiProcessing ? '⏳' : 'Wyślij'}
-                    </button>
+                    <button class="btn btn-primary" onclick="sendBudgetMessage()" id="sendMsgBtn">Wyślij</button>
                 </div>
             </div>
         </div>
     `;
     
-    // Odtwórz historię czatu w UI
+    // Restore history
     if (budgetChatHistory.length > 0) {
-        const messagesContainer = document.getElementById('budgetChatMessages');
-        if (messagesContainer) {
-            messagesContainer.innerHTML = '';
-            budgetChatHistory.forEach(msg => {
-                if (msg.role === 'user' || msg.role === 'assistant') {
-                    addBudgetChatMessageToUI(msg.role, msg.content, msg.provider);
-                }
-            });
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-    }
-    
-    // Proaktywne Insight (raz na sesję)
-    if (config.ready) {
-        checkAndRunProactiveInsights();
+        budgetChatHistory.forEach(msg => addBudgetChatMessageToUI(msg.role, msg.content, msg.provider, false, msg.debugInfo));
     }
 }
 
 // ═══════════════════════════════════════════════════════════
-// WYSYŁANIE WIADOMOŚCI (NOWY FLOW)
+// LOGIKA WIADOMOŚCI (ORCHESTRATION)
 // ═══════════════════════════════════════════════════════════
 
 async function sendBudgetMessage(customMessage = null) {
     const input = document.getElementById('budgetChatInput');
     const message = customMessage || input?.value.trim();
-    
-    if (!message) return;
-    if (budgetAiProcessing) return;
-    
-    // Sprawdź konfigurację
+    if (!message || budgetAiProcessing) return;
+
     if (!AIProviders.isReady()) {
-        addBudgetChatMessage('assistant', '⚠️ Brak skonfigurowanych providerów AI. Kliknij ⚙️ aby skonfigurować.');
+        addBudgetChatMessage('assistant', '⚠️ Skonfiguruj klucze API w ustawieniach.');
         return;
     }
-    
-    // Wyczyść input
+
     if (input) input.value = '';
     
-    // === CZYSZCZENIE STANU POPRZEDNIEGO ZAPYTANIA ===
-    // Zapobiega "wyciekowi" danych z poprzednich zapytań
-    clearPreviousQueryState();
-    
-    // Dodaj wiadomość użytkownika
+    // UI Update
     addBudgetChatMessage('user', message);
-    
-    // Pokaż loading
     budgetAiProcessing = true;
     updateChatUIState();
-    const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Analizuję...', null, true);
-    
+    const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Myślę...', null, true);
+
     try {
-        // KROK 1: Pobierz cache (nie wymuszamy odświeżenia - cache jest ok)
         const cache = await BudgetAICache.getCache();
         
-        // Debug info - zbieramy informacje o procesie
-        const debugInfo = {
-            timestamp: new Date().toISOString(),
-            routerSource: null,
-            route: null,
-            category: null,
-            subcategory: null,
-            operations: [],
-            computeSuccess: null,
-            generatorProvider: null,
-            error: null
-        };
-        
-        // KROK 2: Router - klasyfikacja intencji
+        // 1. ROUTING (LLM7 + Validation + Repair)
         const routing = await BudgetAIRouter.classifyIntent(message, cache);
         
-        // Zapisz debug info
-        debugInfo.routerSource = routing.source || 'unknown';
-        debugInfo.route = routing.route;
-        debugInfo.category = routing.canonical_category;
-        debugInfo.subcategory = routing.canonical_subcategory;
-        debugInfo.intentSummary = routing.intent_summary;
-        debugInfo.operations = (routing.operations || []).map(op => op.function);
-        
-        console.log('BudgetAI: Routing:', routing);
-        
-        // KROK 3: Obsłuż routing
-        let response;
-        
-        if (routing.route === 'clarify') {
-            // Potrzebne doprecyzowanie
-            response = {
-                success: true,
-                content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami`,
-                provider: 'system'
-            };
-            debugInfo.generatorProvider = 'system';
-        } else if (routing.route === 'general') {
-            // Ogólne pytanie - przekaż do AI z minimalnym kontekstem
-            const capsule = BudgetAIRouter.buildFactsCapsule(routing, [], cache);
-            response = await AIProviders.generateResponse(
-                BudgetAIRouter.getGeneratorSystemPrompt(),
-                capsule
-            );
-            debugInfo.generatorProvider = response.provider;
+        // Debug Data Collection
+        const debugInfo = {
+            router: {
+                intent: routing.intent_summary,
+                shape: routing.question_shape,
+                confidence: routing.confidence,
+                route: routing.route,
+                category: routing.canonical_category,
+                subcategory: routing.canonical_subcategory
+            },
+            compute: [],
+            generator: null
+        };
+
+        let responseContent = '';
+        let providerName = 'System';
+
+        if (routing.route === 'clarify' || routing.route === 'general') {
+             // Skip compute, go straight to LLM
+             const capsule = BudgetAIRouter.buildFactsCapsule(message, routing, [], cache);
+             const genRes = await AIProviders.generateResponse(BudgetAIRouter.getGeneratorSystemPrompt(), capsule);
+             responseContent = genRes.content;
+             providerName = genRes.provider;
         } else {
-            // KROK 4: Wykonaj obliczenia
-            const computeResults = await BudgetAICompute.executeOperations(routing.operations, cache);
-            
-            debugInfo.computeSuccess = computeResults.every(r => r.success);
-            debugInfo.computeResults = computeResults.map(r => ({
-                operation: r.operation,
-                success: r.success,
-                error: r.error || null
-            }));
-            
-            console.log('BudgetAI: Compute results:', computeResults);
-            
-            // KROK 5: Zbuduj kapsułę faktów
-            const capsule = BudgetAIRouter.buildFactsCapsule(routing, computeResults, cache);
-            
-            console.log('BudgetAI: Facts capsule:', capsule);
-            
-            // KROK 6: Wygeneruj odpowiedź (Gemini lub OpenAI)
-            response = await AIProviders.generateResponse(
-                BudgetAIRouter.getGeneratorSystemPrompt(),
-                capsule
-            );
-            debugInfo.generatorProvider = response.provider;
+             // 2. COMPUTE
+             const computeResults = await BudgetAICompute.executeOperations(routing.operations, cache);
+             debugInfo.compute = computeResults.map(r => ({ op: r.operation, ok: r.success }));
+
+             // 3. FACTS & GENERATION
+             const capsule = BudgetAIRouter.buildFactsCapsule(message, routing, computeResults, cache);
+             const genRes = await AIProviders.generateResponse(BudgetAIRouter.getGeneratorSystemPrompt(), capsule);
+             
+             if (genRes.success) {
+                 responseContent = genRes.content;
+                 providerName = genRes.provider;
+             } else {
+                 responseContent = `Przepraszam, wystąpił błąd generatora: ${genRes.error}`;
+                 providerName = 'Error';
+             }
         }
-        
-        // Usuń loading
+
         removeBudgetChatMessageFromUI(loadingId);
-        
-        if (response.success) {
-            lastUsedProvider = response.provider;
-            addBudgetChatMessage('assistant', response.content, response.provider, debugInfo);
-            
-            // Zapisz do historii
-            saveBudgetChatHistory();
-        } else {
-            debugInfo.error = response.error;
-            addBudgetChatMessage('assistant', `❌ Błąd: ${response.error}`, 'error', debugInfo);
-        }
-        
-    } catch (error) {
-        console.error('BudgetAI: Błąd:', error);
+        addBudgetChatMessage('assistant', responseContent, providerName, debugInfo);
+
+    } catch (e) {
+        console.error(e);
         removeBudgetChatMessageFromUI(loadingId);
-        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`, 'error', { error: error.message });
+        addBudgetChatMessage('assistant', `Błąd krytyczny: ${e.message}`, 'Error');
     } finally {
         budgetAiProcessing = false;
         updateChatUIState();
     }
 }
 
-function runBudgetQuickPrompt(promptId) {
-    const prompt = BUDGET_QUICK_PROMPTS.find(p => p.id === promptId);
-    if (prompt) {
-        sendBudgetMessage(prompt.prompt);
-    }
-}
-
 // ═══════════════════════════════════════════════════════════
-// UI CZATU
+// UI HELPERS
 // ═══════════════════════════════════════════════════════════
-
-let budgetMessageCounter = 0;
 
 function addBudgetChatMessage(role, content, provider = null, debugInfo = null) {
-    // Dodaj do historii
-    budgetChatHistory.push({ 
-        role, 
-        content, 
-        provider,
-        timestamp: new Date().toISOString() 
-    });
-    
-    // Ogranicz historię
-    if (budgetChatHistory.length > 50) {
-        budgetChatHistory = budgetChatHistory.slice(-50);
-    }
-    
-    // Dodaj do UI
-    return addBudgetChatMessageToUI(role, content, provider, false, debugInfo);
+    budgetChatHistory.push({ role, content, provider, debugInfo, timestamp: Date.now() });
+    if (budgetChatHistory.length > 30) budgetChatHistory.shift();
+    saveBudgetChatHistory();
+    addBudgetChatMessageToUI(role, content, provider, false, debugInfo);
 }
 
-function addBudgetChatMessageToUI(role, content, provider = null, isLoading = false, debugInfo = null) {
+function addBudgetChatMessageToUI(role, content, provider, isLoading, debugInfo) {
     const container = document.getElementById('budgetChatMessages');
-    if (!container) return null;
+    if (!container) return;
     
-    // Usuń welcome message
-    const welcome = container.querySelector('.chat-welcome');
-    if (welcome) welcome.remove();
-    
-    const id = `budget-msg-${++budgetMessageCounter}`;
+    // Remove welcome
+    const w = container.querySelector('.chat-welcome');
+    if (w) w.remove();
+
     const div = document.createElement('div');
-    div.id = id;
-    div.className = `chat-message ${role}${isLoading ? ' loading' : ''}`;
+    div.className = `chat-message ${role} ${isLoading ? 'loading' : ''}`;
+    div.id = `msg-${Date.now()}`;
     
-    // Formatuj treść
-    const formattedContent = role === 'assistant' && !isLoading
-        ? formatBudgetRichResponse(content)
-        : escapeHtml(content).replace(/\n/g, '<br>');
-    
-    // Badge providera
-    const providerBadge = provider && !isLoading && role === 'assistant' && provider !== 'system' && provider !== 'error'
-        ? `<span class="provider-badge provider-${provider.toLowerCase()}">${getProviderIcon(provider)}</span>`
-        : '';
-    
-    // Debug panel (tylko dla odpowiedzi asystenta z debugInfo)
-    let debugPanel = '';
-    if (debugInfo && role === 'assistant' && !isLoading) {
-        debugPanel = renderDebugPanel(debugInfo);
-    }
-    
-    div.innerHTML = `
+    let html = `
         <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
         <div class="message-content">
-            ${formattedContent}
-            ${providerBadge}
-            ${debugPanel}
+            ${formatMessageContent(content)}
+            ${provider ? `<div class="provider-badge">${getProviderIcon(provider)}</div>` : ''}
+            ${debugInfo ? renderDebugInfo(debugInfo) : ''}
         </div>
     `;
     
+    div.innerHTML = html;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
-    
-    return id;
+    return div.id;
 }
 
-/**
- * Renderuje panel debug z informacjami o procesie przetwarzania
- */
-function renderDebugPanel(debugInfo) {
-    if (!debugInfo) return '';
-    
-    // Określ status ogólny
-    let statusIcon = '✅';
-    let statusText = 'Sukces';
-    let statusClass = 'success';
-    
-    if (debugInfo.error) {
-        statusIcon = '❌';
-        statusText = 'Błąd';
-        statusClass = 'error';
-    } else if (debugInfo.routerSource === 'fallback') {
-        statusIcon = '⚠️';
-        statusText = 'Fallback (bez AI)';
-        statusClass = 'warning';
-    } else if (debugInfo.computeSuccess === false) {
-        statusIcon = '⚠️';
-        statusText = 'Błąd obliczeń';
-        statusClass = 'warning';
-    }
-    
-    // Router info
-    const routerInfo = debugInfo.routerSource === 'llm7' ? '🤖 LLM7' :
-                       debugInfo.routerSource === 'fallback' ? '📋 Regex/Fallback' :
-                       debugInfo.routerSource || '?';
-    
-    // Generator info
-    const generatorInfo = debugInfo.generatorProvider ? 
-        `${getProviderIcon(debugInfo.generatorProvider)} ${debugInfo.generatorProvider}` : 
-        '—';
-    
-    // Kategoria/podkategoria
-    const categoryInfo = debugInfo.category ? 
-        (debugInfo.subcategory ? `${debugInfo.category} → ${debugInfo.subcategory}` : debugInfo.category) :
-        '(nie wykryto)';
-    
-    // Operacje
-    const operationsInfo = debugInfo.operations?.length > 0 ?
-        debugInfo.operations.join(', ') : '(brak)';
-    
+function renderDebugInfo(info) {
+    if (!info || !info.router) return '';
     return `
-        <div class="debug-panel">
-            <div class="debug-header" onclick="this.parentElement.classList.toggle('expanded')">
-                <span class="debug-status ${statusClass}">${statusIcon} ${statusText}</span>
-                <span class="debug-toggle">▼</span>
-            </div>
-            <div class="debug-content">
-                <div class="debug-row">
-                    <span class="debug-label">Router:</span>
-                    <span class="debug-value">${routerInfo}</span>
-                </div>
-                <div class="debug-row">
-                    <span class="debug-label">Intencja:</span>
-                    <span class="debug-value">${debugInfo.route || '?'}</span>
-                </div>
-                <div class="debug-row">
-                    <span class="debug-label">Kategoria:</span>
-                    <span class="debug-value ${debugInfo.subcategory ? 'has-subcategory' : ''}">${categoryInfo}</span>
-                </div>
-                <div class="debug-row">
-                    <span class="debug-label">Operacje:</span>
-                    <span class="debug-value">${operationsInfo}</span>
-                </div>
-                <div class="debug-row">
-                    <span class="debug-label">Generator:</span>
-                    <span class="debug-value">${generatorInfo}</span>
-                </div>
-                ${debugInfo.intentSummary ? `
-                <div class="debug-row">
-                    <span class="debug-label">Opis:</span>
-                    <span class="debug-value debug-summary">${escapeHtml(debugInfo.intentSummary)}</span>
-                </div>
-                ` : ''}
-                ${debugInfo.error ? `
-                <div class="debug-row debug-error">
-                    <span class="debug-label">Błąd:</span>
-                    <span class="debug-value">${escapeHtml(debugInfo.error)}</span>
-                </div>
-                ` : ''}
-            </div>
+        <div class="debug-toggle" onclick="this.nextElementSibling.classList.toggle('hidden')">
+            🔍 Debug: ${info.router.shape} (${(info.router.confidence*100).toFixed(0)}%)
+        </div>
+        <div class="debug-details hidden">
+            <div>Intent: ${info.router.intent}</div>
+            <div>Route: ${info.router.route}</div>
+            <div>Cat: ${info.router.category || '-'} / ${info.router.subcategory || '-'}</div>
+            <div>Ops: ${info.compute.length} executed</div>
         </div>
     `;
+}
+
+function formatMessageContent(text) {
+    return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
 }
 
 function removeBudgetChatMessageFromUI(id) {
-    const msg = document.getElementById(id);
-    if (msg) msg.remove();
-}
-
-function getProviderIcon(provider) {
-    switch (provider) {
-        case 'GEMINI': return '✨';
-        case 'OPENAI': return '🤖';
-        case 'LLM7': return '🔀';
-        default: return '';
-    }
-}
-
-function formatBudgetRichResponse(text) {
-    if (!text) return '';
-    
-    // Escape HTML first
-    let html = escapeHtml(text);
-    
-    // Markdown formatting
-    html = html
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
-    
-    // Emoji highlights dla liczb
-    html = html.replace(/(\d[\d\s]*(?:,\d{2})?\s*(?:zł|PLN))/g, '<span class="amount-highlight">$1</span>');
-    
-    return html;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text || '';
-    return div.innerHTML;
+    const el = document.getElementById(id);
+    if (el) el.remove();
 }
 
 function updateChatUIState() {
-    const input = document.getElementById('budgetChatInput');
-    const sendBtn = document.querySelector('.chat-input-container .btn-primary');
-    const quickBtns = document.querySelectorAll('.quick-prompt-btn');
-    
-    if (input) input.disabled = budgetAiProcessing;
-    if (sendBtn) {
-        sendBtn.disabled = budgetAiProcessing;
-        sendBtn.textContent = budgetAiProcessing ? '⏳' : 'Wyślij';
+    const btn = document.getElementById('sendMsgBtn');
+    if (btn) {
+        btn.disabled = budgetAiProcessing;
+        btn.innerText = budgetAiProcessing ? '...' : 'Wyślij';
     }
-    quickBtns.forEach(btn => btn.disabled = budgetAiProcessing);
 }
 
-// ═══════════════════════════════════════════════════════════
-// HISTORIA I PERSISTENCE
-// ═══════════════════════════════════════════════════════════
-
-function saveBudgetChatHistory() {
-    try {
-        localStorage.setItem('budget_chat_history_v2', JSON.stringify(budgetChatHistory));
-    } catch (e) {
-        console.warn('Nie udało się zapisać historii czatu:', e);
-    }
+function runBudgetQuickPrompt(id) {
+    const p = BUDGET_QUICK_PROMPTS.find(x => x.id === id);
+    if (p) sendBudgetMessage(p.prompt);
 }
 
 function loadBudgetChatHistory() {
-    try {
-        // Próbuj nową wersję
-        let saved = localStorage.getItem('budget_chat_history_v2');
-        
-        // Fallback do starej wersji
-        if (!saved) {
-            saved = localStorage.getItem('budget_chat_history');
-            if (saved) {
-                // Migruj do nowej wersji
-                localStorage.setItem('budget_chat_history_v2', saved);
-                localStorage.removeItem('budget_chat_history');
-            }
-        }
-        
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed)) {
-                budgetChatHistory = parsed;
-            }
-        }
-    } catch (e) {
-        console.error('Błąd odczytu historii czatu:', e);
-        budgetChatHistory = [];
-    }
+    const s = localStorage.getItem('assetly_budget_chat');
+    if (s) budgetChatHistory = JSON.parse(s);
+}
+
+function saveBudgetChatHistory() {
+    localStorage.setItem('assetly_budget_chat', JSON.stringify(budgetChatHistory));
 }
 
 function clearBudgetChatHistory() {
     budgetChatHistory = [];
-    localStorage.removeItem('budget_chat_history_v2');
-    localStorage.removeItem('budget_chat_history');
+    saveBudgetChatHistory();
     renderBudgetAITab();
 }
 
-// ═══════════════════════════════════════════════════════════
-// PROACTIVE INSIGHTS
-// ═══════════════════════════════════════════════════════════
-
-async function checkAndRunProactiveInsights() {
-    // Sprawdź czy już generowaliśmy w tej sesji
-    if (sessionStorage.getItem('budget_proactive_insight_shown_v2')) {
-        return;
-    }
-    
-    if (!AIProviders.isReady()) {
-        return;
-    }
-    
-    const container = document.getElementById('budget-ai')?.querySelector('.ai-container');
-    if (!container) return;
-    
-    // Placeholder dla insightu
-    const insightId = 'proactive-insight-banner';
-    if (document.getElementById(insightId)) return;
-    
-    const placeholder = document.createElement('div');
-    placeholder.id = insightId;
-    placeholder.className = 'proactive-insight';
-    placeholder.style.display = 'none';
-    container.insertBefore(placeholder, container.firstChild);
-    
-    try {
-        // Pobierz cache
-        const cache = await BudgetAICache.getCache();
-        
-        if (!cache.availablePeriods || cache.availablePeriods.length === 0) {
-            placeholder.remove();
-            return;
-        }
-        
-        // Zbuduj minimalną kapsułę dla insightu
-        const capsule = {
-            query_intent: 'Wygeneruj jeden krótki insight finansowy na start dnia',
-            lastMonth: cache.monthlyTotals[Object.keys(cache.monthlyTotals).sort().pop()],
-            trends: cache.trends,
-            topAnomalies: (cache.anomalies || []).slice(0, 2)
-        };
-        
-        const systemPrompt = `Wygeneruj jeden, krótki (max 2 zdania) "Financial Insight" dla użytkownika na start dnia.
-Odpowiedz TYLKO poprawnym JSON: { "type": "info|warning|success", "title": "...", "message": "..." }
-Skup się na najważniejszej zmianie lub obserwacji. Nie pytaj o nic, tylko stwierdzaj fakt.`;
-        
-        const response = await AIProviders.generateResponse(systemPrompt, capsule, { maxTokens: 200 });
-        
-        if (response.success) {
-            try {
-                // Wyczyść odpowiedź z markdown code blocks i innych śmieci
-                let cleanContent = response.content.trim();
-                cleanContent = cleanContent.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
-                
-                // Spróbuj wyekstrahować JSON z odpowiedzi
-                const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
-                if (!jsonMatch) {
-                    throw new Error('Nie znaleziono JSON w odpowiedzi');
-                }
-                cleanContent = jsonMatch[0];
-                
-                // Napraw częste problemy z JSON
-                cleanContent = cleanContent
-                    .replace(/[\r\n]+/g, ' ')  // Usuń znaki nowej linii
-                    .replace(/,\s*}/g, '}')    // Usuń trailing comma
-                    .replace(/,\s*]/g, ']');   // Usuń trailing comma w tablicach
-                
-                const insight = JSON.parse(cleanContent);
-                
-                // Waliduj strukturę
-                if (insight.type && insight.title && insight.message) {
-                    renderProactiveInsight(insight);
-                    sessionStorage.setItem('budget_proactive_insight_shown_v2', 'true');
-                } else {
-                    throw new Error('Niepełna struktura insight');
-                }
-            } catch (e) {
-                console.warn('Proactive insight: błąd parsowania JSON:', e.message);
-                // Nie pokazuj nic - to nie jest krytyczny błąd
-                placeholder.remove();
-            }
-        } else {
-            placeholder.remove();
-        }
-    } catch (e) {
-        console.warn('Proactive insight failed:', e);
-        placeholder.remove();
-    }
-}
-
-function renderProactiveInsight(insight) {
-    const banner = document.getElementById('proactive-insight-banner');
-    if (!banner) return;
-    
-    const icon = insight.type === 'warning' ? '⚠️' : insight.type === 'success' ? '📈' : '💡';
-    
-    banner.innerHTML = `
-        <div class="insight-icon-container">
-            ${icon}
-        </div>
-        <div class="insight-content">
-            <h4 class="insight-title">${escapeHtml(insight.title)}</h4>
-            <p class="insight-body">${escapeHtml(insight.message)}</p>
-        </div>
-        <button class="insight-close" onclick="this.parentElement.remove()">
-            ✕
-        </button>
-    `;
-    
-    banner.style.display = 'flex';
-}
-
-// ═══════════════════════════════════════════════════════════
-// DODATKOWE STYLE DLA NOWEGO UI
-// ═══════════════════════════════════════════════════════════
-
-(function injectBudgetAIStyles() {
-    if (document.getElementById('budget-ai-v2-styles')) return;
-    
-    const styles = document.createElement('style');
-    styles.id = 'budget-ai-v2-styles';
-    styles.textContent = `
-        .ai-config-card .card-header-ai {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .ai-header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .ai-config-badge {
-            font-size: 0.75rem;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            font-weight: 500;
-        }
-        
-        .ai-config-badge.success {
-            background: rgba(34, 197, 94, 0.1);
-            color: #22c55e;
-        }
-        
-        .ai-config-badge.warning {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
-        }
-        
-        .ai-config-badge.error {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-        }
-        
-        .ai-config-warning {
-            padding: 16px;
-            background: rgba(245, 158, 11, 0.1);
-            border-radius: var(--radius-md);
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        
-        .ai-config-warning p {
-            margin: 0 0 12px 0;
-            color: #f59e0b;
-        }
-        
-        .quick-prompts {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding-top: 16px;
-        }
-        
-        .quick-prompt-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            border: 1px solid var(--border);
-            background: var(--bg-hover);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.2s;
-            font-family: inherit;
-            font-size: 0.875rem;
-        }
-        
-        .quick-prompt-btn:hover:not(:disabled) {
-            background: var(--bg-card);
-            border-color: var(--primary);
-        }
-        
-        .quick-prompt-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .quick-prompt-icon {
-            font-size: 1rem;
-        }
-        
-        .quick-prompt-label {
-            color: var(--text-primary);
-        }
-        
-        .chat-card {
-            display: flex;
-            flex-direction: column;
-            min-height: 400px;
-        }
-        
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        
-        .chat-welcome {
-            text-align: center;
-            color: var(--text-secondary);
-            padding: 40px 20px;
-        }
-        
-        .chat-welcome p {
-            margin: 8px 0;
-        }
-        
-        .chat-message {
-            display: flex;
-            gap: 12px;
-            max-width: 85%;
-        }
-        
-        .chat-message.user {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-        
-        .chat-message.assistant {
-            align-self: flex-start;
-        }
-        
-        .chat-message.loading .message-content {
-            opacity: 0.7;
-        }
-        
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--bg-hover);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            font-size: 1rem;
-        }
-        
-        .message-content {
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            background: var(--bg-hover);
-            line-height: 1.5;
-            position: relative;
-        }
-        
-        .chat-message.user .message-content {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .message-content code {
-            background: rgba(0, 0, 0, 0.1);
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-            font-size: 0.875em;
-        }
-        
-        .amount-highlight {
-            font-weight: 600;
-            color: var(--primary);
-        }
-        
-        .chat-message.user .amount-highlight {
-            color: inherit;
-            text-decoration: underline;
-        }
-        
-        .provider-badge {
-            position: absolute;
-            bottom: -6px;
-            right: -6px;
-            font-size: 0.75rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .chat-input-container {
-            display: flex;
-            gap: 8px;
-            padding: 16px;
-            border-top: 1px solid var(--border);
-        }
-        
-        .chat-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            font-family: inherit;
-        }
-        
-        .chat-input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        
-        .chat-input:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .proactive-insight {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 16px;
-            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            margin-bottom: 16px;
-        }
-        
-        .insight-icon-container {
-            font-size: 1.5rem;
-            flex-shrink: 0;
-        }
-        
-        .insight-content {
-            flex: 1;
-        }
-        
-        .insight-title {
-            margin: 0 0 4px 0;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-        
-        .insight-body {
-            margin: 0;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-        
-        .insight-close {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--text-muted);
-            font-size: 1rem;
-            padding: 4px;
-        }
-        
-        .insight-close:hover {
-            color: var(--text-primary);
-        }
-        
-        /* Debug Panel Styles */
-        .debug-panel {
-            margin-top: 12px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            font-size: 0.75rem;
-            background: rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        
-        .debug-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 10px;
-            cursor: pointer;
-            user-select: none;
-            background: rgba(0, 0, 0, 0.05);
-        }
-        
-        .debug-header:hover {
-            background: rgba(0, 0, 0, 0.1);
-        }
-        
-        .debug-status {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-weight: 500;
-        }
-        
-        .debug-status.success {
-            color: #22c55e;
-        }
-        
-        .debug-status.warning {
-            color: #f59e0b;
-        }
-        
-        .debug-status.error {
-            color: #ef4444;
-        }
-        
-        .debug-toggle {
-            color: var(--text-muted);
-            font-size: 0.625rem;
-            transition: transform 0.2s;
-        }
-        
-        .debug-panel.expanded .debug-toggle {
-            transform: rotate(180deg);
-        }
-        
-        .debug-content {
-            display: none;
-            padding: 8px 10px;
-            border-top: 1px solid var(--border);
-        }
-        
-        .debug-panel.expanded .debug-content {
-            display: block;
-        }
-        
-        .debug-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 3px 0;
-            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
-        }
-        
-        .debug-row:last-child {
-            border-bottom: none;
-        }
-        
-        .debug-label {
-            color: var(--text-muted);
-            flex-shrink: 0;
-        }
-        
-        .debug-value {
-            color: var(--text-secondary);
-            text-align: right;
-            word-break: break-word;
-        }
-        
-        .debug-value.has-subcategory {
-            color: #22c55e;
-            font-weight: 500;
-        }
-        
-        .debug-summary {
-            font-style: italic;
-            max-width: 200px;
-        }
-        
-        .debug-row.debug-error .debug-value {
-            color: #ef4444;
-        }
-    `;
-    
-    document.head.appendChild(styles);
-})();
-
-// ═══════════════════════════════════════════════════════════
-// KOMPATYBILNOŚĆ WSTECZNA
-// ═══════════════════════════════════════════════════════════
-
-// Zachowaj stare funkcje dla kompatybilności
-function showBudgetApiKeyModal() {
-    BudgetAISettings.show();
-}
-
-async function checkBudgetApiKey() {
-    await AIProviders.loadApiKeys();
+function getProviderIcon(p) {
+    if (p.includes('Gemini')) return '✨';
+    if (p.includes('OpenAI')) return '🧠';
+    if (p.includes('LLM7')) return '🔀';
+    return '⚙️';
 }
