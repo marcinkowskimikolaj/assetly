@@ -9,13 +9,12 @@ const BudgetAICompute = {
     // SŁOWNIK SYNONIMÓW I NORMALIZACJA
     // ═══════════════════════════════════════════════════════════
     
-    SYNONYMS: {
-        // Kategorie
+    // Synonimy kategorii (mapowanie na nazwę kategorii)
+    CATEGORY_SYNONYMS: {
         'auto': 'Auto i transport',
         'samochód': 'Auto i transport',
         'transport': 'Auto i transport',
         'jazda': 'Auto i transport',
-        'podróż': 'Auto i transport',
         'jedzenie': 'Codzienne wydatki',
         'żywność': 'Codzienne wydatki',
         'zakupy': 'Codzienne wydatki',
@@ -39,55 +38,156 @@ const BudgetAICompute = {
         'opłaty': 'Płatności',
         'rozrywka': 'Rozrywka',
         'zabawa': 'Rozrywka',
-        'hobby': 'Rozrywka',
-        
-        // Podkategorie - paliwo
-        'paliwo': 'Paliwo',
-        'benzyna': 'Paliwo',
-        'diesel': 'Paliwo',
-        'tankowanie': 'Paliwo',
-        'stacja': 'Paliwo',
-        'stacja benzynowa': 'Paliwo',
-        
-        // Podkategorie - jedzenie
-        'restauracja': 'Jedzenie poza domem',
-        'restauracje': 'Jedzenie poza domem',
-        'bar': 'Jedzenie poza domem',
-        'kawiarnia': 'Jedzenie poza domem',
-        'na mieście': 'Jedzenie poza domem',
-        'na zewnątrz': 'Jedzenie poza domem',
-        
-        // Podkategorie - płatności
-        'czynsz': 'Czynsz i wynajem',
-        'najem': 'Czynsz i wynajem',
-        'wynajem': 'Czynsz i wynajem',
-        'prąd': 'Prąd',
-        'elektryczność': 'Prąd',
-        'gaz': 'Gaz',
-        'ogrzewanie': 'Ogrzewanie',
-        'woda': 'Woda i kanalizacja',
-        'internet': 'TV, internet, telefon',
-        'telefon': 'TV, internet, telefon',
-        'telewizja': 'TV, internet, telefon',
-        'tv': 'TV, internet, telefon',
-        
-        // Podkategorie - rozrywka
-        'podróże': 'Podróże i wyjazdy',
-        'wyjazdy': 'Podróże i wyjazdy',
-        'wakacje': 'Podróże i wyjazdy',
-        'urlop': 'Podróże i wyjazdy',
-        'sport': 'Sport i hobby',
-        'siłownia': 'Sport i hobby',
-        'fitness': 'Sport i hobby'
+        'hobby': 'Rozrywka'
     },
+    
+    // Synonimy podkategorii (mapowanie na {category, subcategory})
+    SUBCATEGORY_SYNONYMS: {
+        // Auto i transport
+        'paliwo': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'benzyna': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'diesel': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'tankowanie': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'stacja benzynowa': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'parking': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'autostrada': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'opłaty drogowe': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'serwis': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'mechanik': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'naprawa auta': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'ubezpieczenie auta': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'oc': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'ac': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        
+        // Codzienne wydatki
+        'restauracja': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'restauracje': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'bar': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'kawiarnia': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'na mieście': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'alkohol': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'piwo': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'wino': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'papierosy': { category: 'Codzienne wydatki', subcategory: 'Papierosy' },
+        'zwierzęta': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'pies': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'kot': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        
+        // Płatności
+        'czynsz': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'najem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'wynajem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'prąd': { category: 'Płatności', subcategory: 'Prąd' },
+        'elektryczność': { category: 'Płatności', subcategory: 'Prąd' },
+        'gaz': { category: 'Płatności', subcategory: 'Gaz' },
+        'ogrzewanie': { category: 'Płatności', subcategory: 'Ogrzewanie' },
+        'woda': { category: 'Płatności', subcategory: 'Woda i kanalizacja' },
+        'internet': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'telefon': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'telewizja': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'tv': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'rata': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'raty': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'kredyt': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'podatek': { category: 'Płatności', subcategory: 'Podatki' },
+        'podatki': { category: 'Płatności', subcategory: 'Podatki' },
+        'pit': { category: 'Płatności', subcategory: 'Podatki' },
+        
+        // Rozrywka
+        'podróże': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'wyjazdy': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'wakacje': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'urlop': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'sport': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'siłownia': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'fitness': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'kino': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        'teatr': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        'koncert': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        
+        // Osobiste
+        'ubrania': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'odzież': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'buty': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'lekarz': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'apteka': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'leki': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'fryzjer': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'prezent': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
+        'prezenty': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
+        'książka': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'książki': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'elektronika': { category: 'Osobiste', subcategory: 'Elektronika' },
+        'komputer': { category: 'Osobiste', subcategory: 'Elektronika' },
+        
+        // Oszczędności
+        'giełda': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'akcje': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'etf': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'fundusze': { category: 'Oszczędności i inw.', subcategory: 'Fundusze' },
+        'lokata': { category: 'Oszczędności i inw.', subcategory: 'Lokaty i konto oszcz.' }
+    },
+    
+    // Stary SYNONYMS dla kompatybilności wstecznej (nie używać)
+    SYNONYMS: {},
     
     /**
      * Normalizuje tekst i mapuje na kategorię/podkategorię
+     * @returns {string|{category: string, subcategory: string}|null}
      */
     normalizeCategory(input) {
         if (!input) return null;
         
-        const normalized = input.toLowerCase().trim()
+        const normalized = this._normalizeText(input);
+        
+        // 1. NAJPIERW sprawdź synonimy podkategorii (bardziej specyficzne)
+        for (const [synonym, mapping] of Object.entries(this.SUBCATEGORY_SYNONYMS)) {
+            const synNorm = this._normalizeText(synonym);
+            
+            if (normalized === synNorm || normalized.includes(synNorm)) {
+                return { category: mapping.category, subcategory: mapping.subcategory };
+            }
+        }
+        
+        // 2. Potem sprawdź synonimy kategorii
+        for (const [synonym, category] of Object.entries(this.CATEGORY_SYNONYMS)) {
+            const synNorm = this._normalizeText(synonym);
+            
+            if (normalized === synNorm || normalized.includes(synNorm)) {
+                return category;
+            }
+        }
+        
+        // 3. Sprawdź bezpośrednie dopasowanie do kategorii
+        const categories = BudgetCategories.getAllCategories();
+        for (const cat of categories) {
+            const catNorm = this._normalizeText(cat);
+            
+            if (normalized.includes(catNorm) || catNorm.includes(normalized)) {
+                return cat;
+            }
+        }
+        
+        // 4. Sprawdź bezpośrednie dopasowanie do podkategorii
+        for (const cat of categories) {
+            const subs = BudgetCategories.getSubcategories(cat);
+            for (const sub of subs) {
+                const subNorm = this._normalizeText(sub);
+                
+                if (normalized.includes(subNorm) || subNorm.includes(normalized)) {
+                    return { category: cat, subcategory: sub };
+                }
+            }
+        }
+        
+        return null;
+    },
+    
+    /**
+     * Helper: normalizuje tekst (usuwa polskie znaki, małe litery)
+     */
+    _normalizeText(text) {
+        return text.toLowerCase().trim()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/ł/g, 'l')
             .replace(/ą/g, 'a')
@@ -98,53 +198,6 @@ const BudgetAICompute = {
             .replace(/ź/g, 'z')
             .replace(/ż/g, 'z')
             .replace(/ń/g, 'n');
-        
-        // Sprawdź synonimy
-        for (const [synonym, canonical] of Object.entries(this.SYNONYMS)) {
-            const synNorm = synonym.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/ł/g, 'l')
-                .replace(/ą/g, 'a')
-                .replace(/ę/g, 'e')
-                .replace(/ó/g, 'o')
-                .replace(/ś/g, 's')
-                .replace(/ć/g, 'c')
-                .replace(/ź/g, 'z')
-                .replace(/ż/g, 'z')
-                .replace(/ń/g, 'n');
-            
-            if (normalized === synNorm || normalized.includes(synNorm)) {
-                return canonical;
-            }
-        }
-        
-        // Sprawdź bezpośrednie dopasowanie do kategorii
-        const categories = BudgetCategories.getAllCategories();
-        for (const cat of categories) {
-            const catNorm = cat.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/ł/g, 'l');
-            
-            if (normalized.includes(catNorm) || catNorm.includes(normalized)) {
-                return cat;
-            }
-        }
-        
-        // Sprawdź podkategorie
-        for (const cat of categories) {
-            const subs = BudgetCategories.getSubcategories(cat);
-            for (const sub of subs) {
-                const subNorm = sub.toLowerCase()
-                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                    .replace(/ł/g, 'l');
-                
-                if (normalized.includes(subNorm) || subNorm.includes(normalized)) {
-                    return { category: cat, subcategory: sub };
-                }
-            }
-        }
-        
-        return null;
     },
     
     /**
