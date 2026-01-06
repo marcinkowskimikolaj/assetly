@@ -1,6 +1,14 @@
 /**
- * Assetly - Budget AI Compute
+ * Assetly - Budget AI Compute (v3)
  * Deterministyczne funkcje obliczeniowe dla AI
+ * 
+ * ZMIANY v3:
+ * - topExpenses respektuje filtry kategorii (filterCategory param)
+ * - monthlyBreakdown zwraca notFound gdy brak danych
+ * - Metadane w wynikach (_meta) do weryfikacji spójności
+ * - Obsługa zarówno "value" jak i "amount" w breakdown
+ * - Stabilna iteracja po obiektach (Object.entries zamiast keys+values)
+ * - Eliminacja pustych tokenów w normalizacji
  */
 
 const BudgetAICompute = {
@@ -13,10 +21,12 @@ const BudgetAICompute = {
     CATEGORY_SYNONYMS: {
         'auto': 'Auto i transport',
         'samochód': 'Auto i transport',
+        'samochod': 'Auto i transport',
         'transport': 'Auto i transport',
         'jazda': 'Auto i transport',
         'jedzenie': 'Codzienne wydatki',
         'żywność': 'Codzienne wydatki',
+        'zywnosc': 'Codzienne wydatki',
         'zakupy': 'Codzienne wydatki',
         'codzienne': 'Codzienne wydatki',
         'spożywcze': 'Codzienne wydatki',
@@ -31,11 +41,14 @@ const BudgetAICompute = {
         'osobiste': 'Osobiste',
         'prywatne': 'Osobiste',
         'oszczędności': 'Oszczędności i inw.',
+        'oszczednosci': 'Oszczędności i inw.',
         'inwestycje': 'Oszczędności i inw.',
         'lokaty': 'Oszczędności i inw.',
         'płatności': 'Płatności',
+        'platnosci': 'Płatności',
         'rachunki': 'Płatności',
         'opłaty': 'Płatności',
+        'oplaty': 'Płatności',
         'rozrywka': 'Rozrywka',
         'zabawa': 'Rozrywka',
         'hobby': 'Rozrywka'
@@ -70,19 +83,30 @@ const BudgetAICompute = {
         'wino': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
         'papierosy': { category: 'Codzienne wydatki', subcategory: 'Papierosy' },
         'zwierzęta': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'zwierzeta': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
         'pies': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'psa': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'psu': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'psem': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'piesek': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'pieska': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
         'kot': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'kota': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'kotek': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'pupil': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'zwierzak': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'zwierzaka': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'karma': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'weterynarz': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
         
         // Płatności
         'czynsz': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
         'najem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
         'wynajem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
-        'mieszkanie': { category: 'Płatności', subcategory: null },  // ogólnie mieszkanie = płatności
-        'rachunki': { category: 'Płatności', subcategory: null },
-        'opłaty': { category: 'Płatności', subcategory: null },
-        'media': { category: 'Płatności', subcategory: null },
         'prąd': { category: 'Płatności', subcategory: 'Prąd' },
+        'prad': { category: 'Płatności', subcategory: 'Prąd' },
         'elektryczność': { category: 'Płatności', subcategory: 'Prąd' },
+        'elektrycznosc': { category: 'Płatności', subcategory: 'Prąd' },
         'gaz': { category: 'Płatności', subcategory: 'Gaz' },
         'ogrzewanie': { category: 'Płatności', subcategory: 'Ogrzewanie' },
         'woda': { category: 'Płatności', subcategory: 'Woda i kanalizacja' },
@@ -101,11 +125,13 @@ const BudgetAICompute = {
         
         // Rozrywka
         'podróże': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'podroze': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
         'wyjazdy': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
         'wakacje': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
         'urlop': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
         'sport': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
         'siłownia': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'silownia': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
         'fitness': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
         'kino': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
         'teatr': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
@@ -114,6 +140,7 @@ const BudgetAICompute = {
         // Osobiste
         'ubrania': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
         'odzież': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'odziez': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
         'buty': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
         'lekarz': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
         'apteka': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
@@ -122,20 +149,20 @@ const BudgetAICompute = {
         'prezent': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
         'prezenty': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
         'książka': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'ksiazka': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
         'książki': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'ksiazki': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
         'elektronika': { category: 'Osobiste', subcategory: 'Elektronika' },
         'komputer': { category: 'Osobiste', subcategory: 'Elektronika' },
         
         // Oszczędności
         'giełda': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'gielda': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
         'akcje': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
         'etf': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
         'fundusze': { category: 'Oszczędności i inw.', subcategory: 'Fundusze' },
         'lokata': { category: 'Oszczędności i inw.', subcategory: 'Lokaty i konto oszcz.' }
     },
-    
-    // Stary SYNONYMS dla kompatybilności wstecznej (nie używać)
-    SYNONYMS: {},
     
     /**
      * Normalizuje tekst i mapuje na kategorię/podkategorię
@@ -146,11 +173,16 @@ const BudgetAICompute = {
         
         const normalized = this._normalizeText(input);
         
+        // Pomiń puste lub zbyt krótkie tokeny
+        if (!normalized || normalized.length < 2) return null;
+        
         // 1. NAJPIERW sprawdź synonimy podkategorii (bardziej specyficzne)
         for (const [synonym, mapping] of Object.entries(this.SUBCATEGORY_SYNONYMS)) {
             const synNorm = this._normalizeText(synonym);
             
-            if (normalized === synNorm || normalized.includes(synNorm)) {
+            // Dokładne dopasowanie lub zawieranie (tylko dla dłuższych synonimów)
+            if (normalized === synNorm || 
+                (synNorm.length >= 3 && normalized.includes(synNorm))) {
                 return { category: mapping.category, subcategory: mapping.subcategory };
             }
         }
@@ -159,7 +191,8 @@ const BudgetAICompute = {
         for (const [synonym, category] of Object.entries(this.CATEGORY_SYNONYMS)) {
             const synNorm = this._normalizeText(synonym);
             
-            if (normalized === synNorm || normalized.includes(synNorm)) {
+            if (normalized === synNorm || 
+                (synNorm.length >= 3 && normalized.includes(synNorm))) {
                 return category;
             }
         }
@@ -190,9 +223,11 @@ const BudgetAICompute = {
     },
     
     /**
-     * Helper: normalizuje tekst (usuwa polskie znaki, małe litery)
+     * Helper: normalizuje tekst (usuwa polskie znaki, małe litery, znaki specjalne)
      */
     _normalizeText(text) {
+        if (!text || typeof text !== 'string') return '';
+        
         return text.toLowerCase().trim()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/ł/g, 'l')
@@ -203,7 +238,12 @@ const BudgetAICompute = {
             .replace(/ć/g, 'c')
             .replace(/ź/g, 'z')
             .replace(/ż/g, 'z')
-            .replace(/ń/g, 'n');
+            .replace(/ń/g, 'n')
+            // NOWE: Usuń znaki specjalne które mogą powodować problemy
+            .replace(/[%$€£]/g, '')
+            .replace(/[^\w\s-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
     },
     
     /**
@@ -218,7 +258,8 @@ const BudgetAICompute = {
         const currentMonth = now.getMonth() + 1;
         
         // "ostatni miesiąc" / "poprzedni miesiąc"
-        if (text.includes('ostatni miesiąc') || text.includes('poprzedni miesiąc')) {
+        if (text.includes('ostatni miesiąc') || text.includes('poprzedni miesiąc') || 
+            text.includes('ostatnim miesiącu') || text.includes('poprzednim miesiącu')) {
             const m = currentMonth === 1 ? 12 : currentMonth - 1;
             const y = currentMonth === 1 ? currentYear - 1 : currentYear;
             return { from: `${y}-${String(m).padStart(2, '0')}`, to: `${y}-${String(m).padStart(2, '0')}` };
@@ -239,7 +280,9 @@ const BudgetAICompute = {
         const yearMatch = text.match(/(?:rok\s+)?(\d{4})/);
         if (yearMatch) {
             const year = parseInt(yearMatch[1]);
-            return { from: `${year}-01`, to: `${year}-12` };
+            if (year >= 2000 && year <= 2100) {
+                return { from: `${year}-01`, to: `${year}-12` };
+            }
         }
         
         // "styczeń 2024"
@@ -254,8 +297,10 @@ const BudgetAICompute = {
         }
         
         // "cały czas" / "wszystko" / "od początku"
-        if (text.includes('cały czas') || text.includes('wszystko') || text.includes('od początku') || text.includes('całość')) {
-            return { from: null, to: null }; // null = brak filtra
+        if (text.includes('cały czas') || text.includes('wszystko') || 
+            text.includes('od początku') || text.includes('całość') ||
+            text.includes('calej historii') || text.includes('całej historii')) {
+            return { from: null, to: null };
         }
         
         return null;
@@ -278,13 +323,13 @@ const BudgetAICompute = {
         },
         topExpenses: {
             name: 'topExpenses',
-            description: 'Top N kategorii/podkategorii wydatków',
-            params: ['n', 'level?', 'periodFrom?', 'periodTo?']
+            description: 'Top N kategorii/podkategorii wydatków (z opcjonalnym filtrem kategorii)',
+            params: ['n', 'level?', 'periodFrom?', 'periodTo?', 'filterCategory?']
         },
         monthlyBreakdown: {
             name: 'monthlyBreakdown',
-            description: 'Rozbicie miesięczne dla kategorii',
-            params: ['category?', 'subcategory?']
+            description: 'Rozbicie miesięczne dla kategorii/podkategorii',
+            params: ['category?', 'subcategory?', 'periodFrom?', 'periodTo?']
         },
         compareMonths: {
             name: 'compareMonths',
@@ -364,7 +409,15 @@ const BudgetAICompute = {
                 results.push({
                     operation: op.function,
                     success: true,
-                    data: result
+                    data: result,
+                    // NOWE: Metadane do weryfikacji
+                    _meta: {
+                        requestedCategory: op.params?.category,
+                        requestedSubcategory: op.params?.subcategory,
+                        resultCategory: result?.category,
+                        resultSubcategory: result?.subcategory,
+                        hasData: !result?.notFound && (result?.total > 0 || (result?.breakdown?.length > 0))
+                    }
                 });
             } catch (error) {
                 console.warn('BudgetAICompute: Błąd operacji:', op.function, error);
@@ -391,10 +444,18 @@ const BudgetAICompute = {
                 return this.sumBySubcategory(params.category, params.subcategory, params.periodFrom, params.periodTo, cache);
             
             case 'topExpenses':
-                return this.topExpenses(params.n || 10, params.level || 'category', params.periodFrom, params.periodTo, cache);
+                // NOWE: Przekaż filterCategory
+                return this.topExpenses(
+                    params.n || 10, 
+                    params.level || 'category', 
+                    params.periodFrom, 
+                    params.periodTo, 
+                    cache,
+                    params.filterCategory  // NOWE
+                );
             
             case 'monthlyBreakdown':
-                return this.monthlyBreakdown(params.category, params.subcategory, cache);
+                return this.monthlyBreakdown(params.category, params.subcategory, cache, params.periodFrom, params.periodTo);
             
             case 'compareMonths':
                 return this.compareMonths(params.period1, params.period2, cache);
@@ -444,23 +505,23 @@ const BudgetAICompute = {
             
             // Jeśli nie znaleziono i brak kategorii, szukaj podkategorii we wszystkich kategoriach
             if (!subData && !category) {
-                for (const fullKey of Object.keys(cache.subcategorySums)) {
+                for (const [fullKey, data] of Object.entries(cache.subcategorySums)) {
                     if (fullKey.endsWith(`|${subcategory}`)) {
                         key = fullKey;
-                        subData = cache.subcategorySums[key];
-                        // Wyciągnij kategorię z klucza
+                        subData = data;
                         category = fullKey.split('|')[0];
                         break;
                     }
                 }
             }
             
-            // Jeśli nadal nie znaleziono, spróbuj szukać po częściowym dopasowaniu nazwy
+            // Jeśli nadal nie znaleziono, spróbuj szukać po częściowym dopasowaniu
             if (!subData) {
                 const normalizedSub = this._normalizeText(subcategory);
                 for (const [fullKey, data] of Object.entries(cache.subcategorySums)) {
                     const [cat, sub] = fullKey.split('|');
-                    if (this._normalizeText(sub).includes(normalizedSub) || normalizedSub.includes(this._normalizeText(sub))) {
+                    const normalizedStoredSub = this._normalizeText(sub);
+                    if (normalizedStoredSub.includes(normalizedSub) || normalizedSub.includes(normalizedStoredSub)) {
                         key = fullKey;
                         subData = data;
                         category = cat;
@@ -471,7 +532,14 @@ const BudgetAICompute = {
             }
             
             if (!subData) {
-                return { total: 0, count: 0, category, subcategory, notFound: true };
+                return { 
+                    total: 0, 
+                    count: 0, 
+                    category, 
+                    subcategory, 
+                    notFound: true,
+                    message: `Brak danych dla podkategorii "${subcategory}"`
+                };
             }
             
             if (!periodFrom && !periodTo) {
@@ -484,21 +552,27 @@ const BudgetAICompute = {
                 };
             }
             
-            // Filtruj po okresie
-            Object.entries(subData.byPeriod).forEach(([period, value]) => {
+            // Filtruj po okresie - używamy Object.entries dla stabilnej iteracji
+            for (const [period, value] of Object.entries(subData.byPeriod)) {
                 if (this._periodInRange(period, periodFrom, periodTo)) {
                     total += value;
                     count++;
                     byPeriod[period] = value;
                 }
-            });
+            }
             
         } else if (category) {
             // Suma dla kategorii
             const catData = cache.categorySums[category];
             
             if (!catData) {
-                return { total: 0, count: 0, category, notFound: true };
+                return { 
+                    total: 0, 
+                    count: 0, 
+                    category, 
+                    notFound: true,
+                    message: `Brak danych dla kategorii "${category}"`
+                };
             }
             
             if (!periodFrom && !periodTo) {
@@ -510,26 +584,23 @@ const BudgetAICompute = {
                 };
             }
             
-            Object.entries(catData.byPeriod).forEach(([period, value]) => {
+            for (const [period, value] of Object.entries(catData.byPeriod)) {
                 if (this._periodInRange(period, periodFrom, periodTo)) {
                     total += value;
                     count++;
                     byPeriod[period] = value;
                 }
-            });
+            }
             
         } else {
             // Suma wszystkich wydatków
-            Object.values(cache.monthlyTotals).forEach((monthData, i) => {
-                const periods = Object.keys(cache.monthlyTotals);
-                const period = periods[i];
-                
+            for (const [period, monthData] of Object.entries(cache.monthlyTotals)) {
                 if (this._periodInRange(period, periodFrom, periodTo)) {
                     total += monthData.expenses;
                     count++;
                     byPeriod[period] = monthData.expenses;
                 }
-            });
+            }
         }
         
         return { total, count, category, subcategory, periodFrom, periodTo, byPeriod };
@@ -539,91 +610,215 @@ const BudgetAICompute = {
         return this.sumByCategory(category, subcategory, periodFrom, periodTo, cache);
     },
     
-    topExpenses(n = 10, level = 'category', periodFrom, periodTo, cache) {
+    /**
+     * Top N wydatków z opcjonalnym filtrem kategorii
+     * @param {number} n - Liczba wyników
+     * @param {string} level - 'category' lub 'subcategory'
+     * @param {string} periodFrom - Okres od
+     * @param {string} periodTo - Okres do
+     * @param {object} cache - Cache danych
+     * @param {string} filterCategory - NOWE: Opcjonalny filtr kategorii
+     */
+    topExpenses(n = 10, level = 'category', periodFrom, periodTo, cache, filterCategory = null) {
         const results = [];
         
         if (level === 'subcategory') {
-            Object.entries(cache.subcategorySums).forEach(([key, data]) => {
+            for (const [key, data] of Object.entries(cache.subcategorySums)) {
+                // NOWE: Filtruj po kategorii jeśli podano
+                if (filterCategory && data.kategoria !== filterCategory) {
+                    continue;
+                }
+                
                 let total = data.total;
                 
                 if (periodFrom || periodTo) {
                     total = 0;
-                    Object.entries(data.byPeriod).forEach(([period, value]) => {
+                    for (const [period, value] of Object.entries(data.byPeriod)) {
                         if (this._periodInRange(period, periodFrom, periodTo)) {
                             total += value;
                         }
-                    });
+                    }
                 }
                 
-                results.push({
-                    category: data.kategoria,
-                    subcategory: data.podkategoria,
-                    total
-                });
-            });
+                if (total > 0) {
+                    results.push({
+                        category: data.kategoria,
+                        subcategory: data.podkategoria,
+                        total
+                    });
+                }
+            }
         } else {
-            Object.entries(cache.categorySums).forEach(([category, data]) => {
-                // Pomiń oszczędności
-                if (category === 'Oszczędności i inw.') return;
+            for (const [category, data] of Object.entries(cache.categorySums)) {
+                // Pomiń oszczędności (transfery)
+                if (category === 'Oszczędności i inw.') continue;
+                
+                // NOWE: Filtruj po kategorii jeśli podano
+                if (filterCategory && category !== filterCategory) {
+                    continue;
+                }
                 
                 let total = data.total;
                 
                 if (periodFrom || periodTo) {
                     total = 0;
-                    Object.entries(data.byPeriod).forEach(([period, value]) => {
+                    for (const [period, value] of Object.entries(data.byPeriod)) {
                         if (this._periodInRange(period, periodFrom, periodTo)) {
                             total += value;
                         }
-                    });
+                    }
                 }
                 
-                results.push({ category, total });
-            });
+                if (total > 0) {
+                    results.push({ category, total });
+                }
+            }
         }
         
-        return results
-            .sort((a, b) => b.total - a.total)
-            .slice(0, n);
+        // Sortuj i ogranicz
+        const sorted = results.sort((a, b) => b.total - a.total).slice(0, n);
+        
+        // NOWE: Dodaj metadane
+        return {
+            items: sorted,
+            count: sorted.length,
+            level,
+            filterCategory,
+            periodFrom,
+            periodTo,
+            _meta: {
+                totalItemsBeforeFilter: results.length,
+                filterApplied: !!filterCategory
+            }
+        };
     },
     
-    monthlyBreakdown(category, subcategory, cache) {
+    /**
+     * Rozbicie miesięczne - ULEPSZONE z notFound i metadanymi
+     */
+    monthlyBreakdown(category, subcategory, cache, periodFrom = null, periodTo = null) {
         const breakdown = [];
         
         if (subcategory) {
-            const key = `${category}|${subcategory}`;
-            const subData = cache.subcategorySums[key];
+            // Szukaj klucza podkategorii
+            let key = `${category}|${subcategory}`;
+            let subData = cache.subcategorySums[key];
             
-            if (subData?.byPeriod) {
-                Object.entries(subData.byPeriod)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .forEach(([period, value]) => {
-                        breakdown.push({ period, value });
-                    });
+            // Jeśli nie znaleziono bezpośrednio, szukaj
+            if (!subData) {
+                for (const [fullKey, data] of Object.entries(cache.subcategorySums)) {
+                    const [cat, sub] = fullKey.split('|');
+                    if (sub === subcategory || 
+                        this._normalizeText(sub) === this._normalizeText(subcategory)) {
+                        key = fullKey;
+                        subData = data;
+                        category = cat;
+                        break;
+                    }
+                }
             }
+            
+            if (!subData || !subData.byPeriod) {
+                return {
+                    category,
+                    subcategory,
+                    breakdown: [],
+                    notFound: true,
+                    message: `Brak danych dla podkategorii "${subcategory}"`,
+                    _meta: {
+                        requestedCategory: category,
+                        requestedSubcategory: subcategory,
+                        hasData: false
+                    }
+                };
+            }
+            
+            // Sortuj okresy i buduj breakdown
+            const sortedPeriods = Object.entries(subData.byPeriod)
+                .sort((a, b) => a[0].localeCompare(b[0]));
+            
+            for (const [period, value] of sortedPeriods) {
+                if (this._periodInRange(period, periodFrom, periodTo)) {
+                    breakdown.push({ period, value, amount: value }); // Oba pola dla kompatybilności
+                }
+            }
+            
         } else if (category) {
             const catData = cache.categorySums[category];
             
-            if (catData?.byPeriod) {
-                Object.entries(catData.byPeriod)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .forEach(([period, value]) => {
-                        breakdown.push({ period, value });
-                    });
+            if (!catData || !catData.byPeriod) {
+                return {
+                    category,
+                    subcategory: null,
+                    breakdown: [],
+                    notFound: true,
+                    message: `Brak danych dla kategorii "${category}"`,
+                    _meta: {
+                        requestedCategory: category,
+                        requestedSubcategory: null,
+                        hasData: false
+                    }
+                };
             }
+            
+            const sortedPeriods = Object.entries(catData.byPeriod)
+                .sort((a, b) => a[0].localeCompare(b[0]));
+            
+            for (const [period, value] of sortedPeriods) {
+                if (this._periodInRange(period, periodFrom, periodTo)) {
+                    breakdown.push({ period, value, amount: value });
+                }
+            }
+            
         } else {
-            Object.entries(cache.monthlyTotals)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .forEach(([period, data]) => {
+            // Wszystkie wydatki miesięcznie
+            const sortedPeriods = Object.entries(cache.monthlyTotals)
+                .sort((a, b) => a[0].localeCompare(b[0]));
+            
+            for (const [period, data] of sortedPeriods) {
+                if (this._periodInRange(period, periodFrom, periodTo)) {
                     breakdown.push({
                         period,
                         income: data.income,
                         expenses: data.expenses,
-                        balance: data.balance
+                        balance: data.balance,
+                        value: data.expenses,  // Alias
+                        amount: data.expenses  // Alias
                     });
-                });
+                }
+            }
         }
         
-        return { category, subcategory, breakdown };
+        // NOWE: Oblicz statystyki pomocnicze
+        const values = breakdown.map(b => b.value ?? b.amount ?? b.expenses ?? 0);
+        const sum = values.reduce((a, b) => a + b, 0);
+        const max = values.length > 0 ? Math.max(...values) : 0;
+        const min = values.length > 0 ? Math.min(...values) : 0;
+        const avg = values.length > 0 ? sum / values.length : 0;
+        
+        const maxEntry = breakdown.find(b => (b.value ?? b.amount ?? b.expenses ?? 0) === max);
+        const minEntry = breakdown.find(b => (b.value ?? b.amount ?? b.expenses ?? 0) === min);
+        
+        return { 
+            category, 
+            subcategory, 
+            breakdown,
+            // NOWE: Statystyki
+            stats: {
+                total: sum,
+                average: avg,
+                max: { period: maxEntry?.period, value: max },
+                min: { period: minEntry?.period, value: min },
+                count: breakdown.length
+            },
+            _meta: {
+                requestedCategory: category,
+                requestedSubcategory: subcategory,
+                hasData: breakdown.length > 0,
+                periodFrom,
+                periodTo
+            }
+        };
     },
     
     compareMonths(period1, period2, cache) {
@@ -636,7 +831,8 @@ const BudgetAICompute = {
                 period1: period1,
                 period2: period2,
                 data1Exists: !!data1,
-                data2Exists: !!data2
+                data2Exists: !!data2,
+                notFound: true
             };
         }
         
@@ -676,7 +872,7 @@ const BudgetAICompute = {
             }));
         
         if (monthlyData.length < 2) {
-            return { metric, error: 'Za mało danych do analizy trendu' };
+            return { metric, error: 'Za mało danych do analizy trendu', notFound: true };
         }
         
         const first = monthlyData[0].value;
@@ -747,7 +943,7 @@ const BudgetAICompute = {
         const monthData = cache.monthlyTotals[periodKey];
         
         if (!monthData) {
-            return { error: 'Brak danych dla okresu', period: periodKey };
+            return { error: 'Brak danych dla okresu', period: periodKey, notFound: true };
         }
         
         const income = monthData.income;
@@ -794,13 +990,13 @@ const BudgetAICompute = {
         let totalExpenses = 0;
         let months = 0;
         
-        Object.entries(cache.monthlyTotals).forEach(([period, data]) => {
+        for (const [period, data] of Object.entries(cache.monthlyTotals)) {
             if (this._periodInRange(period, periodFrom, periodTo)) {
                 totalIncome += data.income;
                 totalExpenses += data.expenses;
                 months++;
             }
-        });
+        }
         
         return {
             totalIncome,
@@ -818,7 +1014,7 @@ const BudgetAICompute = {
             const sourceData = cache.incomeSources[source];
             
             if (!sourceData) {
-                return { source, total: 0, notFound: true };
+                return { source, total: 0, notFound: true, message: `Brak danych dla źródła "${source}"` };
             }
             
             return {
@@ -844,13 +1040,13 @@ const BudgetAICompute = {
         const lastMonthData = lastPeriod ? cache.monthlyTotals[lastPeriod] : null;
         
         const totalBalance = this.totalBalance(null, null, cache);
-        const topCats = this.topExpenses(5, 'category', null, null, cache);
+        const topCatsResult = this.topExpenses(5, 'category', null, null, cache);
         
         return {
             lastPeriod,
             lastMonth: lastMonthData,
             allTime: totalBalance,
-            topCategories: topCats,
+            topCategories: topCatsResult.items || topCatsResult,
             trends: cache.trends,
             monthsWithData: Object.keys(cache.monthlyTotals).length
         };
