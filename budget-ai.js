@@ -1,6 +1,13 @@
 /**
- * Assetly - Budget AI (v2)
+ * Assetly - Budget AI (v3)
  * Przebudowany moduł AI z rotacją providerów, cache i inteligentnym routingiem
+ * 
+ * ZMIANY v3:
+ * - Przekazywanie oryginalnego pytania do kapsuły faktów
+ * - Weryfikacja spójności wyników obliczeń z planem
+ * - Warunkowa naprawa planu przy wykryciu niespójności
+ * - Lepsze logowanie dla debugowania
+ * - Walidacja kategorii w wynikach
  */
 
 // ═══════════════════════════════════════════════════════════
@@ -218,7 +225,7 @@ async function renderBudgetAITab() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// WYSYŁANIE WIADOMOŚCI (NOWY FLOW)
+// WYSYŁANIE WIADOMOŚCI (NOWY FLOW v3)
 // ═══════════════════════════════════════════════════════════
 
 async function sendBudgetMessage(customMessage = null) {
@@ -238,7 +245,6 @@ async function sendBudgetMessage(customMessage = null) {
     if (input) input.value = '';
     
     // === CZYSZCZENIE STANU POPRZEDNIEGO ZAPYTANIA ===
-    // Zapobiega "wyciekowi" danych z poprzednich zapytań
     clearPreviousQueryState();
     
     // Dodaj wiadomość użytkownika
@@ -250,49 +256,58 @@ async function sendBudgetMessage(customMessage = null) {
     const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Analizuję...', null, true);
     
     try {
-        // KROK 1: Pobierz cache (nie wymuszamy odświeżenia - cache jest ok)
+        // KROK 1: Pobierz cache
         const cache = await BudgetAICache.getCache();
         
-        // Debug info - zbieramy informacje o procesie
+        // Debug info
         const debugInfo = {
             timestamp: new Date().toISOString(),
             routerSource: null,
             route: null,
+            questionShape: null,
             category: null,
             subcategory: null,
             operations: [],
             computeSuccess: null,
             generatorProvider: null,
-            error: null
+            error: null,
+            planRepaired: false
         };
         
-        // KROK 2: Router - klasyfikacja intencji
+        // KROK 2: Router - klasyfikacja intencji (z walidacją spójności)
         const routing = await BudgetAIRouter.classifyIntent(message, cache);
         
         // Zapisz debug info
         debugInfo.routerSource = routing.source || 'unknown';
         debugInfo.route = routing.route;
+        debugInfo.questionShape = routing.question_shape;
         debugInfo.category = routing.canonical_category;
         debugInfo.subcategory = routing.canonical_subcategory;
         debugInfo.intentSummary = routing.intent_summary;
         debugInfo.operations = (routing.operations || []).map(op => op.function);
+        debugInfo.planRepaired = routing.source === 'llm7_repaired';
         
-        console.log('BudgetAI: Routing:', routing);
+        console.log('BudgetAI: Routing:', {
+            route: routing.route,
+            questionShape: routing.question_shape,
+            category: routing.canonical_category,
+            subcategory: routing.canonical_subcategory,
+            source: routing.source
+        });
         
         // KROK 3: Obsłuż routing
         let response;
         
         if (routing.route === 'clarify') {
-            // Potrzebne doprecyzowanie
             response = {
                 success: true,
-                content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami`,
+                content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami\n- Pytaniami typu "W którym miesiącu wydałem najwięcej na X?"`,
                 provider: 'system'
             };
             debugInfo.generatorProvider = 'system';
         } else if (routing.route === 'general') {
-            // Ogólne pytanie - przekaż do AI z minimalnym kontekstem
-            const capsule = BudgetAIRouter.buildFactsCapsule(routing, [], cache);
+            // Ogólne pytanie
+            const capsule = BudgetAIRouter.buildFactsCapsule(routing, [], cache, message);
             response = await AIProviders.generateResponse(
                 BudgetAIRouter.getGeneratorSystemPrompt(),
                 capsule
@@ -306,17 +321,33 @@ async function sendBudgetMessage(customMessage = null) {
             debugInfo.computeResults = computeResults.map(r => ({
                 operation: r.operation,
                 success: r.success,
+                hasData: r._meta?.hasData,
                 error: r.error || null
             }));
             
-            console.log('BudgetAI: Compute results:', computeResults);
+            console.log('BudgetAI: Compute results:', computeResults.map(r => ({
+                op: r.operation,
+                success: r.success,
+                hasData: r._meta?.hasData
+            })));
             
-            // KROK 5: Zbuduj kapsułę faktów
-            const capsule = BudgetAIRouter.buildFactsCapsule(routing, computeResults, cache);
+            // KROK 4b: Weryfikacja spójności wyników
+            const consistencyIssues = this._verifyResultsConsistency(routing, computeResults);
+            if (consistencyIssues.length > 0) {
+                console.warn('BudgetAI: Result consistency issues:', consistencyIssues);
+                debugInfo.consistencyIssues = consistencyIssues;
+            }
             
-            console.log('BudgetAI: Facts capsule:', capsule);
+            // KROK 5: Zbuduj kapsułę faktów (z oryginalnym pytaniem!)
+            const capsule = BudgetAIRouter.buildFactsCapsule(routing, computeResults, cache, message);
             
-            // KROK 6: Wygeneruj odpowiedź (Gemini lub OpenAI)
+            console.log('BudgetAI: Facts capsule:', {
+                question_shape: capsule.question_shape,
+                hasData: capsule.derived?.hasData,
+                answer: capsule.derived?.answer
+            });
+            
+            // KROK 6: Wygeneruj odpowiedź
             response = await AIProviders.generateResponse(
                 BudgetAIRouter.getGeneratorSystemPrompt(),
                 capsule
@@ -346,6 +377,52 @@ async function sendBudgetMessage(customMessage = null) {
         budgetAiProcessing = false;
         updateChatUIState();
     }
+}
+
+/**
+ * Weryfikuje spójność wyników obliczeń z planem
+ * @returns {Array} Lista wykrytych problemów
+ */
+function _verifyResultsConsistency(routing, computeResults) {
+    const issues = [];
+    
+    for (const result of computeResults) {
+        if (!result.success) continue;
+        
+        const meta = result._meta || {};
+        
+        // Problem 1: Brak danych mimo rozpoznanej kategorii
+        if (routing.canonical_subcategory && !meta.hasData) {
+            issues.push({
+                type: 'NO_DATA_FOR_CATEGORY',
+                message: `Brak danych dla rozpoznanej podkategorii "${routing.canonical_subcategory}"`,
+                operation: result.operation
+            });
+        }
+        
+        // Problem 2: Kategoria w wyniku nie zgadza się z planem
+        if (meta.resultCategory && routing.canonical_category && 
+            meta.resultCategory !== routing.canonical_category) {
+            issues.push({
+                type: 'CATEGORY_MISMATCH',
+                message: `Wynik dotyczy kategorii "${meta.resultCategory}" zamiast "${routing.canonical_category}"`,
+                operation: result.operation
+            });
+        }
+        
+        // Problem 3: monthlyBreakdown z pustym breakdown
+        if (result.operation === 'monthlyBreakdown' && 
+            result.data?.breakdown?.length === 0 && 
+            !result.data?.notFound) {
+            issues.push({
+                type: 'EMPTY_BREAKDOWN',
+                message: 'Pusty breakdown bez flagi notFound',
+                operation: result.operation
+            });
+        }
+    }
+    
+    return issues;
 }
 
 function runBudgetQuickPrompt(promptId) {
@@ -392,7 +469,7 @@ function addBudgetChatMessageToUI(role, content, provider = null, isLoading = fa
     div.id = id;
     div.className = `chat-message ${role}${isLoading ? ' loading' : ''}`;
     
-    // Formatuj treść
+    // Formatuj treść - bezpieczne renderowanie
     const formattedContent = role === 'assistant' && !isLoading
         ? formatBudgetRichResponse(content)
         : escapeHtml(content).replace(/\n/g, '<br>');
@@ -402,7 +479,7 @@ function addBudgetChatMessageToUI(role, content, provider = null, isLoading = fa
         ? `<span class="provider-badge provider-${provider.toLowerCase()}">${getProviderIcon(provider)}</span>`
         : '';
     
-    // Debug panel (tylko dla odpowiedzi asystenta z debugInfo)
+    // Debug panel
     let debugPanel = '';
     if (debugInfo && role === 'assistant' && !isLoading) {
         debugPanel = renderDebugPanel(debugInfo);
@@ -442,6 +519,10 @@ function renderDebugPanel(debugInfo) {
         statusIcon = '⚠️';
         statusText = 'Fallback (bez AI)';
         statusClass = 'warning';
+    } else if (debugInfo.planRepaired) {
+        statusIcon = '🔧';
+        statusText = 'Plan naprawiony';
+        statusClass = 'warning';
     } else if (debugInfo.computeSuccess === false) {
         statusIcon = '⚠️';
         statusText = 'Błąd obliczeń';
@@ -450,6 +531,7 @@ function renderDebugPanel(debugInfo) {
     
     // Router info
     const routerInfo = debugInfo.routerSource === 'llm7' ? '🤖 LLM7' :
+                       debugInfo.routerSource === 'llm7_repaired' ? '🔧 LLM7 (naprawiony)' :
                        debugInfo.routerSource === 'fallback' ? '📋 Regex/Fallback' :
                        debugInfo.routerSource || '?';
     
@@ -467,6 +549,9 @@ function renderDebugPanel(debugInfo) {
     const operationsInfo = debugInfo.operations?.length > 0 ?
         debugInfo.operations.join(', ') : '(brak)';
     
+    // Question shape
+    const shapeInfo = debugInfo.questionShape || '—';
+    
     return `
         <div class="debug-panel">
             <div class="debug-header" onclick="this.parentElement.classList.toggle('expanded')">
@@ -481,6 +566,10 @@ function renderDebugPanel(debugInfo) {
                 <div class="debug-row">
                     <span class="debug-label">Intencja:</span>
                     <span class="debug-value">${debugInfo.route || '?'}</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Typ pytania:</span>
+                    <span class="debug-value">${shapeInfo}</span>
                 </div>
                 <div class="debug-row">
                     <span class="debug-label">Kategoria:</span>
@@ -498,6 +587,12 @@ function renderDebugPanel(debugInfo) {
                 <div class="debug-row">
                     <span class="debug-label">Opis:</span>
                     <span class="debug-value debug-summary">${escapeHtml(debugInfo.intentSummary)}</span>
+                </div>
+                ` : ''}
+                ${debugInfo.consistencyIssues?.length > 0 ? `
+                <div class="debug-row debug-warning">
+                    <span class="debug-label">Uwagi:</span>
+                    <span class="debug-value">${debugInfo.consistencyIssues.map(i => i.type).join(', ')}</span>
                 </div>
                 ` : ''}
                 ${debugInfo.error ? `
@@ -525,13 +620,16 @@ function getProviderIcon(provider) {
     }
 }
 
+/**
+ * Formatuje odpowiedź z bezpiecznym renderowaniem (bez surowego HTML)
+ */
 function formatBudgetRichResponse(text) {
     if (!text) return '';
     
-    // Escape HTML first
+    // Escape HTML first - zapobiega XSS
     let html = escapeHtml(text);
     
-    // Markdown formatting
+    // Markdown formatting (bezpieczne - już escaped)
     html = html
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -577,14 +675,12 @@ function saveBudgetChatHistory() {
 
 function loadBudgetChatHistory() {
     try {
-        // Próbuj nową wersję
         let saved = localStorage.getItem('budget_chat_history_v2');
         
         // Fallback do starej wersji
         if (!saved) {
             saved = localStorage.getItem('budget_chat_history');
             if (saved) {
-                // Migruj do nowej wersji
                 localStorage.setItem('budget_chat_history_v2', saved);
                 localStorage.removeItem('budget_chat_history');
             }
@@ -614,7 +710,6 @@ function clearBudgetChatHistory() {
 // ═══════════════════════════════════════════════════════════
 
 async function checkAndRunProactiveInsights() {
-    // Sprawdź czy już generowaliśmy w tej sesji
     if (sessionStorage.getItem('budget_proactive_insight_shown_v2')) {
         return;
     }
@@ -626,7 +721,6 @@ async function checkAndRunProactiveInsights() {
     const container = document.getElementById('budget-ai')?.querySelector('.ai-container');
     if (!container) return;
     
-    // Placeholder dla insightu
     const insightId = 'proactive-insight-banner';
     if (document.getElementById(insightId)) return;
     
@@ -637,7 +731,6 @@ async function checkAndRunProactiveInsights() {
     container.insertBefore(placeholder, container.firstChild);
     
     try {
-        // Pobierz cache
         const cache = await BudgetAICache.getCache();
         
         if (!cache.availablePeriods || cache.availablePeriods.length === 0) {
@@ -645,7 +738,6 @@ async function checkAndRunProactiveInsights() {
             return;
         }
         
-        // Zbuduj minimalną kapsułę dla insightu
         const capsule = {
             query_intent: 'Wygeneruj jeden krótki insight finansowy na start dnia',
             lastMonth: cache.monthlyTotals[Object.keys(cache.monthlyTotals).sort().pop()],
@@ -661,26 +753,22 @@ Skup się na najważniejszej zmianie lub obserwacji. Nie pytaj o nic, tylko stwi
         
         if (response.success) {
             try {
-                // Wyczyść odpowiedź z markdown code blocks i innych śmieci
                 let cleanContent = response.content.trim();
                 cleanContent = cleanContent.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
                 
-                // Spróbuj wyekstrahować JSON z odpowiedzi
                 const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
                 if (!jsonMatch) {
                     throw new Error('Nie znaleziono JSON w odpowiedzi');
                 }
                 cleanContent = jsonMatch[0];
                 
-                // Napraw częste problemy z JSON
                 cleanContent = cleanContent
-                    .replace(/[\r\n]+/g, ' ')  // Usuń znaki nowej linii
-                    .replace(/,\s*}/g, '}')    // Usuń trailing comma
-                    .replace(/,\s*]/g, ']');   // Usuń trailing comma w tablicach
+                    .replace(/[\r\n]+/g, ' ')
+                    .replace(/,\s*}/g, '}')
+                    .replace(/,\s*]/g, ']');
                 
                 const insight = JSON.parse(cleanContent);
                 
-                // Waliduj strukturę
                 if (insight.type && insight.title && insight.message) {
                     renderProactiveInsight(insight);
                     sessionStorage.setItem('budget_proactive_insight_shown_v2', 'true');
@@ -689,7 +777,6 @@ Skup się na najważniejszej zmianie lub obserwacji. Nie pytaj o nic, tylko stwi
                 }
             } catch (e) {
                 console.warn('Proactive insight: błąd parsowania JSON:', e.message);
-                // Nie pokazuj nic - to nie jest krytyczny błąd
                 placeholder.remove();
             }
         } else {
@@ -728,10 +815,10 @@ function renderProactiveInsight(insight) {
 // ═══════════════════════════════════════════════════════════
 
 (function injectBudgetAIStyles() {
-    if (document.getElementById('budget-ai-v2-styles')) return;
+    if (document.getElementById('budget-ai-v3-styles')) return;
     
     const styles = document.createElement('style');
-    styles.id = 'budget-ai-v2-styles';
+    styles.id = 'budget-ai-v3-styles';
     styles.textContent = `
         .ai-config-card .card-header-ai {
             display: flex;
@@ -749,17 +836,12 @@ function renderProactiveInsight(insight) {
             font-size: 0.75rem;
             padding: 4px 8px;
             border-radius: var(--radius-sm);
-            font-weight: 500;
+            background: var(--bg-hover);
         }
         
         .ai-config-badge.success {
-            background: rgba(34, 197, 94, 0.1);
-            color: #22c55e;
-        }
-        
-        .ai-config-badge.warning {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
         }
         
         .ai-config-badge.error {
@@ -771,38 +853,32 @@ function renderProactiveInsight(insight) {
             padding: 16px;
             background: rgba(245, 158, 11, 0.1);
             border-radius: var(--radius-md);
-            margin-bottom: 16px;
+            margin: 16px;
             text-align: center;
-        }
-        
-        .ai-config-warning p {
-            margin: 0 0 12px 0;
-            color: #f59e0b;
         }
         
         .quick-prompts {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            padding-top: 16px;
+            padding: 16px;
         }
         
         .quick-prompt-btn {
             display: flex;
             align-items: center;
             gap: 6px;
-            padding: 8px 14px;
+            padding: 8px 12px;
             border: 1px solid var(--border);
-            background: var(--bg-hover);
             border-radius: var(--radius-md);
+            background: var(--bg-card);
             cursor: pointer;
+            font-size: 0.8rem;
             transition: all 0.2s;
-            font-family: inherit;
-            font-size: 0.875rem;
         }
         
         .quick-prompt-btn:hover:not(:disabled) {
-            background: var(--bg-card);
+            background: var(--bg-hover);
             border-color: var(--primary);
         }
         
@@ -815,14 +891,10 @@ function renderProactiveInsight(insight) {
             font-size: 1rem;
         }
         
-        .quick-prompt-label {
-            color: var(--text-primary);
-        }
-        
         .chat-card {
             display: flex;
             flex-direction: column;
-            min-height: 400px;
+            min-height: 500px;
         }
         
         .chat-messages {
@@ -837,7 +909,7 @@ function renderProactiveInsight(insight) {
         .chat-welcome {
             text-align: center;
             color: var(--text-secondary);
-            padding: 40px 20px;
+            padding: 32px;
         }
         
         .chat-welcome p {
@@ -846,6 +918,7 @@ function renderProactiveInsight(insight) {
         
         .chat-message {
             display: flex;
+            align-items: flex-start;
             gap: 12px;
             max-width: 85%;
         }
@@ -1091,6 +1164,10 @@ function renderProactiveInsight(insight) {
         .debug-row.debug-error .debug-value {
             color: #ef4444;
         }
+        
+        .debug-row.debug-warning .debug-value {
+            color: #f59e0b;
+        }
     `;
     
     document.head.appendChild(styles);
@@ -1100,7 +1177,6 @@ function renderProactiveInsight(insight) {
 // KOMPATYBILNOŚĆ WSTECZNA
 // ═══════════════════════════════════════════════════════════
 
-// Zachowaj stare funkcje dla kompatybilności
 function showBudgetApiKeyModal() {
     BudgetAISettings.show();
 }
