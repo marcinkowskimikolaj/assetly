@@ -1057,6 +1057,14 @@ ZASADY:
 7. Dla trendów opisz kierunek i dynamikę
 8. Używaj emoji dla czytelności: 📊 📈 📉 💰 ⚠️ ✅
 
+WAŻNE DLA PODSUMOWAŃ MIESIĘCZNYCH:
+- Używaj lastPeriodLabel jako nazwy miesiąca (np. "grudzień 2025")
+- Jeśli isClosedMonth: true, to jest "ostatni zamknięty miesiąc"
+- Jeśli isClosedMonth: false, to jest bieżący miesiąc (w trakcie)
+- Sprawdź _meta.periodStatus: 'closed' = zamknięty, 'current' = bieżący
+- Bilans = lastMonth.income - lastMonth.expenses LUB lastMonth.balance
+- Wykonanie planu = savingsRate (stosunek oszczędności do dochodów)
+
 WAŻNE DLA PYTAŃ O MAKSIMUM/MINIMUM W CZASIE:
 - Jeśli w derived.answer jest gotowa odpowiedź, UŻYJ JEJ
 - Jeśli question_shape to MAX_IN_TIME, odpowiedz o miesiącu z najwyższą wartością
@@ -1071,7 +1079,8 @@ WAŻNE DLA BRAKU DANYCH:
 FORMAT ODPOWIEDZI:
 - Zacznij od bezpośredniej odpowiedzi na pytanie
 - Podaj kluczowe liczby
-- Dodaj kontekst lub wnioski
+- Dodaj krótki kontekst lub wnioski
+- Maksymalnie 3-4 akapity
 
 Odpowiadaj po polsku w naturalnym, przyjaznym tonie.`;
     }
