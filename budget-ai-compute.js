@@ -1,81 +1,365 @@
 /**
  * Assetly - Budget AI Compute
- * Deterministyczne funkcje obliczeniowe dla AI (Uszczelnione)
+ * Deterministyczne funkcje obliczeniowe dla AI
  */
 
 const BudgetAICompute = {
     
     // ═══════════════════════════════════════════════════════════
-    // NORMALIZACJA I PARSOWANIE
+    // SŁOWNIK SYNONIMÓW I NORMALIZACJA
     // ═══════════════════════════════════════════════════════════
     
-    normalizeCategory(input) {
-        // Wrapper na BudgetAISynonyms jeśli dostępny, w przeciwnym razie prosta normalizacja
-        if (typeof BudgetAISynonyms !== 'undefined') {
-             // To jest używane głównie przez Router fallback, ale compute też może potrzebować
-             // weryfikacji. Tutaj zostawiamy prostą logikę lub odwołanie do synonimów.
-             return null; // Compute powinno polegać na 'canonical' z Routera
-        }
-        return null; 
+    // Synonimy kategorii (mapowanie na nazwę kategorii)
+    CATEGORY_SYNONYMS: {
+        'auto': 'Auto i transport',
+        'samochód': 'Auto i transport',
+        'transport': 'Auto i transport',
+        'jazda': 'Auto i transport',
+        'jedzenie': 'Codzienne wydatki',
+        'żywność': 'Codzienne wydatki',
+        'zakupy': 'Codzienne wydatki',
+        'codzienne': 'Codzienne wydatki',
+        'spożywcze': 'Codzienne wydatki',
+        'dom': 'Dom',
+        'mieszkanie': 'Dom',
+        'remont': 'Dom',
+        'dzieci': 'Dzieci',
+        'dziecko': 'Dzieci',
+        'firma': 'Firmowe',
+        'biznes': 'Firmowe',
+        'działalność': 'Firmowe',
+        'osobiste': 'Osobiste',
+        'prywatne': 'Osobiste',
+        'oszczędności': 'Oszczędności i inw.',
+        'inwestycje': 'Oszczędności i inw.',
+        'lokaty': 'Oszczędności i inw.',
+        'płatności': 'Płatności',
+        'rachunki': 'Płatności',
+        'opłaty': 'Płatności',
+        'rozrywka': 'Rozrywka',
+        'zabawa': 'Rozrywka',
+        'hobby': 'Rozrywka'
     },
-
+    
+    // Synonimy podkategorii (mapowanie na {category, subcategory})
+    SUBCATEGORY_SYNONYMS: {
+        // Auto i transport
+        'paliwo': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'benzyna': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'diesel': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'tankowanie': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'stacja benzynowa': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'parking': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'autostrada': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'opłaty drogowe': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'serwis': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'mechanik': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'naprawa auta': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'ubezpieczenie auta': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'oc': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'ac': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        
+        // Codzienne wydatki
+        'restauracja': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'restauracje': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'bar': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'kawiarnia': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'na mieście': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'alkohol': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'piwo': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'wino': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
+        'papierosy': { category: 'Codzienne wydatki', subcategory: 'Papierosy' },
+        'zwierzęta': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'pies': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        'kot': { category: 'Codzienne wydatki', subcategory: 'Zwierzęta' },
+        
+        // Płatności
+        'czynsz': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'najem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'wynajem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'mieszkanie': { category: 'Płatności', subcategory: null },  // ogólnie mieszkanie = płatności
+        'rachunki': { category: 'Płatności', subcategory: null },
+        'opłaty': { category: 'Płatności', subcategory: null },
+        'media': { category: 'Płatności', subcategory: null },
+        'prąd': { category: 'Płatności', subcategory: 'Prąd' },
+        'elektryczność': { category: 'Płatności', subcategory: 'Prąd' },
+        'gaz': { category: 'Płatności', subcategory: 'Gaz' },
+        'ogrzewanie': { category: 'Płatności', subcategory: 'Ogrzewanie' },
+        'woda': { category: 'Płatności', subcategory: 'Woda i kanalizacja' },
+        'internet': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'telefon': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'telewizja': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'tv': { category: 'Płatności', subcategory: 'TV, internet, telefon' },
+        'rata': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'raty': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'kredyt': { category: 'Płatności', subcategory: 'Spłaty rat' },
+        'podatek': { category: 'Płatności', subcategory: 'Podatki' },
+        'podatki': { category: 'Płatności', subcategory: 'Podatki' },
+        'pit': { category: 'Płatności', subcategory: 'Podatki' },
+        'ubezpieczenie': { category: 'Płatności', subcategory: 'Ubezpieczenia' },
+        'polisa': { category: 'Płatności', subcategory: 'Ubezpieczenia' },
+        
+        // Rozrywka
+        'podróże': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'wyjazdy': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'wakacje': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'urlop': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
+        'sport': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'siłownia': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'fitness': { category: 'Rozrywka', subcategory: 'Sport i hobby' },
+        'kino': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        'teatr': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        'koncert': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
+        
+        // Osobiste
+        'ubrania': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'odzież': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'buty': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'lekarz': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'apteka': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'leki': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'fryzjer': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'prezent': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
+        'prezenty': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
+        'książka': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'książki': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
+        'elektronika': { category: 'Osobiste', subcategory: 'Elektronika' },
+        'komputer': { category: 'Osobiste', subcategory: 'Elektronika' },
+        
+        // Oszczędności
+        'giełda': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'akcje': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'etf': { category: 'Oszczędności i inw.', subcategory: 'Giełda' },
+        'fundusze': { category: 'Oszczędności i inw.', subcategory: 'Fundusze' },
+        'lokata': { category: 'Oszczędności i inw.', subcategory: 'Lokaty i konto oszcz.' }
+    },
+    
+    // Stary SYNONYMS dla kompatybilności wstecznej (nie używać)
+    SYNONYMS: {},
+    
+    /**
+     * Normalizuje tekst i mapuje na kategorię/podkategorię
+     * @returns {string|{category: string, subcategory: string}|null}
+     */
+    normalizeCategory(input) {
+        if (!input) return null;
+        
+        const normalized = this._normalizeText(input);
+        
+        // 1. NAJPIERW sprawdź synonimy podkategorii (bardziej specyficzne)
+        for (const [synonym, mapping] of Object.entries(this.SUBCATEGORY_SYNONYMS)) {
+            const synNorm = this._normalizeText(synonym);
+            
+            if (normalized === synNorm || normalized.includes(synNorm)) {
+                return { category: mapping.category, subcategory: mapping.subcategory };
+            }
+        }
+        
+        // 2. Potem sprawdź synonimy kategorii
+        for (const [synonym, category] of Object.entries(this.CATEGORY_SYNONYMS)) {
+            const synNorm = this._normalizeText(synonym);
+            
+            if (normalized === synNorm || normalized.includes(synNorm)) {
+                return category;
+            }
+        }
+        
+        // 3. Sprawdź bezpośrednie dopasowanie do kategorii
+        const categories = BudgetCategories.getAllCategories();
+        for (const cat of categories) {
+            const catNorm = this._normalizeText(cat);
+            
+            if (normalized.includes(catNorm) || catNorm.includes(normalized)) {
+                return cat;
+            }
+        }
+        
+        // 4. Sprawdź bezpośrednie dopasowanie do podkategorii
+        for (const cat of categories) {
+            const subs = BudgetCategories.getSubcategories(cat);
+            for (const sub of subs) {
+                const subNorm = this._normalizeText(sub);
+                
+                if (normalized.includes(subNorm) || subNorm.includes(normalized)) {
+                    return { category: cat, subcategory: sub };
+                }
+            }
+        }
+        
+        return null;
+    },
+    
+    /**
+     * Helper: normalizuje tekst (usuwa polskie znaki, małe litery)
+     */
+    _normalizeText(text) {
+        return text.toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/ł/g, 'l')
+            .replace(/ą/g, 'a')
+            .replace(/ę/g, 'e')
+            .replace(/ó/g, 'o')
+            .replace(/ś/g, 's')
+            .replace(/ć/g, 'c')
+            .replace(/ź/g, 'z')
+            .replace(/ż/g, 'z')
+            .replace(/ń/g, 'n');
+    },
+    
+    /**
+     * Parsuje zakres czasowy z tekstu
+     */
     parsePeriod(input) {
         if (!input) return null;
+        
         const text = input.toLowerCase();
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-
+        
+        // "ostatni miesiąc" / "poprzedni miesiąc"
         if (text.includes('ostatni miesiąc') || text.includes('poprzedni miesiąc')) {
             const m = currentMonth === 1 ? 12 : currentMonth - 1;
             const y = currentMonth === 1 ? currentYear - 1 : currentYear;
-            const s = `${y}-${String(m).padStart(2, '0')}`;
-            return { from: s, to: s };
+            return { from: `${y}-${String(m).padStart(2, '0')}`, to: `${y}-${String(m).padStart(2, '0')}` };
         }
         
-        // Prosty parser YYYY
+        // "ostatnie 3 miesiące"
+        const monthsMatch = text.match(/ostatni?e?\s+(\d+)\s+miesi/);
+        if (monthsMatch) {
+            const months = parseInt(monthsMatch[1]);
+            const fromDate = new Date(currentYear, currentMonth - months - 1, 1);
+            return {
+                from: `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`,
+                to: `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+            };
+        }
+        
+        // "rok 2024" / "w 2024"
         const yearMatch = text.match(/(?:rok\s+)?(\d{4})/);
         if (yearMatch) {
             const year = parseInt(yearMatch[1]);
             return { from: `${year}-01`, to: `${year}-12` };
         }
         
+        // "styczeń 2024"
+        const monthNames = BudgetCategories.MONTH_NAMES.map(n => n.toLowerCase());
+        for (let i = 0; i < monthNames.length; i++) {
+            if (text.includes(monthNames[i])) {
+                const yMatch = text.match(/(\d{4})/);
+                const year = yMatch ? parseInt(yMatch[1]) : currentYear;
+                const month = String(i + 1).padStart(2, '0');
+                return { from: `${year}-${month}`, to: `${year}-${month}` };
+            }
+        }
+        
+        // "cały czas" / "wszystko" / "od początku"
+        if (text.includes('cały czas') || text.includes('wszystko') || text.includes('od początku') || text.includes('całość')) {
+            return { from: null, to: null }; // null = brak filtra
+        }
+        
         return null;
     },
-
+    
     // ═══════════════════════════════════════════════════════════
-    // LISTA FUNKCJI (WHITELIST)
+    // WHITELISTA FUNKCJI DLA ROUTERA
     // ═══════════════════════════════════════════════════════════
-
+    
     AVAILABLE_FUNCTIONS: {
-        sumByCategory: { name: 'sumByCategory', params: ['category', 'subcategory?', 'periodFrom?', 'periodTo?'] },
-        sumBySubcategory: { name: 'sumBySubcategory', params: ['category', 'subcategory', 'periodFrom?', 'periodTo?'] },
-        topExpenses: { name: 'topExpenses', params: ['n', 'category?', 'periodFrom?', 'periodTo?'] }, // Added category
-        monthlyBreakdown: { name: 'monthlyBreakdown', params: ['category?', 'subcategory?', 'periodFrom?', 'periodTo?'] }, // Added periods
-        compareMonths: { name: 'compareMonths', params: ['period1', 'period2'] },
-        trendAnalysis: { name: 'trendAnalysis', params: ['metric', 'months?'] },
-        analyze503020: { name: 'analyze503020', params: ['period?'] },
-        getSummary: { name: 'getSummary', params: ['period?'] },
-        getAnomalies: { name: 'getAnomalies', params: ['threshold?'] },
-        totalBalance: { name: 'totalBalance', params: ['periodFrom?', 'periodTo?'] },
-        incomeBySource: { name: 'incomeBySource', params: ['source?', 'periodFrom?', 'periodTo?'] }
+        sumByCategory: {
+            name: 'sumByCategory',
+            description: 'Suma wydatków dla kategorii/podkategorii w okresie',
+            params: ['category', 'subcategory?', 'periodFrom?', 'periodTo?']
+        },
+        sumBySubcategory: {
+            name: 'sumBySubcategory',
+            description: 'Suma wydatków dla podkategorii',
+            params: ['category', 'subcategory', 'periodFrom?', 'periodTo?']
+        },
+        topExpenses: {
+            name: 'topExpenses',
+            description: 'Top N kategorii/podkategorii wydatków',
+            params: ['n', 'level?', 'periodFrom?', 'periodTo?']
+        },
+        monthlyBreakdown: {
+            name: 'monthlyBreakdown',
+            description: 'Rozbicie miesięczne dla kategorii',
+            params: ['category?', 'subcategory?']
+        },
+        compareMonths: {
+            name: 'compareMonths',
+            description: 'Porównanie dwóch miesięcy',
+            params: ['period1', 'period2']
+        },
+        trendAnalysis: {
+            name: 'trendAnalysis',
+            description: 'Analiza trendu (income/expenses/balance)',
+            params: ['metric', 'months?']
+        },
+        categoryShare: {
+            name: 'categoryShare',
+            description: 'Udział kategorii w całości wydatków',
+            params: ['category', 'periodFrom?', 'periodTo?']
+        },
+        averageExpense: {
+            name: 'averageExpense',
+            description: 'Średni wydatek miesięczny',
+            params: ['category?', 'subcategory?', 'months?']
+        },
+        analyze503020: {
+            name: 'analyze503020',
+            description: 'Analiza metodą 50/30/20',
+            params: ['period?']
+        },
+        getAnomalies: {
+            name: 'getAnomalies',
+            description: 'Wykryte anomalie (odstępstwa od średniej)',
+            params: ['threshold?']
+        },
+        totalBalance: {
+            name: 'totalBalance',
+            description: 'Całkowity bilans (dochody - wydatki)',
+            params: ['periodFrom?', 'periodTo?']
+        },
+        incomeBySource: {
+            name: 'incomeBySource',
+            description: 'Dochody według źródła',
+            params: ['source?', 'periodFrom?', 'periodTo?']
+        },
+        getSummary: {
+            name: 'getSummary',
+            description: 'Ogólne podsumowanie finansów',
+            params: ['period?']
+        }
     },
-
+    
+    /**
+     * Zwraca listę funkcji dla routera LLM7
+     */
     getFunctionList() {
-        return Object.values(this.AVAILABLE_FUNCTIONS);
+        return Object.values(this.AVAILABLE_FUNCTIONS).map(f => ({
+            name: f.name,
+            description: f.description,
+            params: f.params
+        }));
     },
-
+    
     // ═══════════════════════════════════════════════════════════
-    // WYKONANIE (EXECUTION LAYER)
+    // WYKONANIE OPERACJI
     // ═══════════════════════════════════════════════════════════
-
+    
+    /**
+     * Wykonuje listę operacji i zwraca wyniki
+     */
     async executeOperations(operations, cache = null) {
-        if (!cache) cache = await BudgetAICache.getCache();
+        if (!cache) {
+            cache = await BudgetAICache.getCache();
+        }
+        
         const results = [];
-
+        
         for (const op of operations) {
             try {
-                // Walidacja parametrów przed wykonaniem
                 const result = await this._executeOperation(op, cache);
                 results.push({
                     operation: op.function,
@@ -83,7 +367,7 @@ const BudgetAICompute = {
                     data: result
                 });
             } catch (error) {
-                console.warn('BudgetAICompute Error:', op.function, error);
+                console.warn('BudgetAICompute: Błąd operacji:', op.function, error);
                 results.push({
                     operation: op.function,
                     success: false,
@@ -91,299 +375,493 @@ const BudgetAICompute = {
                 });
             }
         }
+        
         return results;
     },
-
+    
     async _executeOperation(op, cache) {
         const fn = op.function;
-        const p = op.params || {};
-
-        // Mapowanie wywołań
-        if (this[fn]) {
-            // Przekazujemy parametry jawnie
-            if (fn === 'sumByCategory') return this.sumByCategory(p.category, p.subcategory, p.periodFrom, p.periodTo, cache);
-            if (fn === 'sumBySubcategory') return this.sumByCategory(p.category, p.subcategory, p.periodFrom, p.periodTo, cache); // Alias
-            if (fn === 'topExpenses') return this.topExpenses(p.n, p.category, p.periodFrom, p.periodTo, cache); // Updated signature
-            if (fn === 'monthlyBreakdown') return this.monthlyBreakdown(p.category, p.subcategory, p.periodFrom, p.periodTo, cache); // Updated signature
-            if (fn === 'compareMonths') return this.compareMonths(p.period1, p.period2, cache);
-            if (fn === 'trendAnalysis') return this.trendAnalysis(p.metric, p.months, cache);
-            if (fn === 'analyze503020') return this.analyze503020(p.period, cache);
-            if (fn === 'getSummary') return this.getSummary(p.period, cache);
-            if (fn === 'getAnomalies') return this.getAnomalies(p.threshold, cache);
-            if (fn === 'totalBalance') return this.totalBalance(p.periodFrom, p.periodTo, cache);
-            if (fn === 'incomeBySource') return this.incomeBySource(p.source, p.periodFrom, p.periodTo, cache);
+        const params = op.params || {};
+        
+        switch (fn) {
+            case 'sumByCategory':
+                return this.sumByCategory(params.category, params.subcategory, params.periodFrom, params.periodTo, cache);
             
-            throw new Error(`Function implementation missing: ${fn}`);
+            case 'sumBySubcategory':
+                return this.sumBySubcategory(params.category, params.subcategory, params.periodFrom, params.periodTo, cache);
+            
+            case 'topExpenses':
+                return this.topExpenses(params.n || 10, params.level || 'category', params.periodFrom, params.periodTo, cache);
+            
+            case 'monthlyBreakdown':
+                return this.monthlyBreakdown(params.category, params.subcategory, cache);
+            
+            case 'compareMonths':
+                return this.compareMonths(params.period1, params.period2, cache);
+            
+            case 'trendAnalysis':
+                return this.trendAnalysis(params.metric || 'expenses', params.months, cache);
+            
+            case 'categoryShare':
+                return this.categoryShare(params.category, params.periodFrom, params.periodTo, cache);
+            
+            case 'averageExpense':
+                return this.averageExpense(params.category, params.subcategory, params.months, cache);
+            
+            case 'analyze503020':
+                return this.analyze503020(params.period, cache);
+            
+            case 'getAnomalies':
+                return this.getAnomalies(params.threshold, cache);
+            
+            case 'totalBalance':
+                return this.totalBalance(params.periodFrom, params.periodTo, cache);
+            
+            case 'incomeBySource':
+                return this.incomeBySource(params.source, params.periodFrom, params.periodTo, cache);
+            
+            case 'getSummary':
+                return this.getSummary(params.period, cache);
+            
+            default:
+                throw new Error(`Nieznana funkcja: ${fn}`);
         }
-        throw new Error(`Unknown function: ${fn}`);
     },
-
+    
     // ═══════════════════════════════════════════════════════════
-    // IMPLEMENTACJE (FIXED)
+    // IMPLEMENTACJE FUNKCJI
     // ═══════════════════════════════════════════════════════════
-
-    // Poprawiona iteracja i obsługa okresów
+    
     sumByCategory(category, subcategory, periodFrom, periodTo, cache) {
         let total = 0;
         let count = 0;
         const byPeriod = {};
-        let matchedKey = null;
-
-        // Scenariusz 1: Konkretna podkategoria
-        if (category && subcategory) {
+        
+        if (subcategory) {
+            // Suma dla podkategorii
+            let key = `${category}|${subcategory}`;
+            let subData = cache.subcategorySums[key];
+            
+            // Jeśli nie znaleziono i brak kategorii, szukaj podkategorii we wszystkich kategoriach
+            if (!subData && !category) {
+                for (const fullKey of Object.keys(cache.subcategorySums)) {
+                    if (fullKey.endsWith(`|${subcategory}`)) {
+                        key = fullKey;
+                        subData = cache.subcategorySums[key];
+                        // Wyciągnij kategorię z klucza
+                        category = fullKey.split('|')[0];
+                        break;
+                    }
+                }
+            }
+            
+            // Jeśli nadal nie znaleziono, spróbuj szukać po częściowym dopasowaniu nazwy
+            if (!subData) {
+                const normalizedSub = this._normalizeText(subcategory);
+                for (const [fullKey, data] of Object.entries(cache.subcategorySums)) {
+                    const [cat, sub] = fullKey.split('|');
+                    if (this._normalizeText(sub).includes(normalizedSub) || normalizedSub.includes(this._normalizeText(sub))) {
+                        key = fullKey;
+                        subData = data;
+                        category = cat;
+                        subcategory = sub;
+                        break;
+                    }
+                }
+            }
+            
+            if (!subData) {
+                return { total: 0, count: 0, category, subcategory, notFound: true };
+            }
+            
+            if (!periodFrom && !periodTo) {
+                return {
+                    total: subData.total,
+                    count: subData.count,
+                    category,
+                    subcategory,
+                    byPeriod: subData.byPeriod
+                };
+            }
+            
+            // Filtruj po okresie
+            Object.entries(subData.byPeriod).forEach(([period, value]) => {
+                if (this._periodInRange(period, periodFrom, periodTo)) {
+                    total += value;
+                    count++;
+                    byPeriod[period] = value;
+                }
+            });
+            
+        } else if (category) {
+            // Suma dla kategorii
+            const catData = cache.categorySums[category];
+            
+            if (!catData) {
+                return { total: 0, count: 0, category, notFound: true };
+            }
+            
+            if (!periodFrom && !periodTo) {
+                return {
+                    total: catData.total,
+                    count: catData.count,
+                    category,
+                    byPeriod: catData.byPeriod
+                };
+            }
+            
+            Object.entries(catData.byPeriod).forEach(([period, value]) => {
+                if (this._periodInRange(period, periodFrom, periodTo)) {
+                    total += value;
+                    count++;
+                    byPeriod[period] = value;
+                }
+            });
+            
+        } else {
+            // Suma wszystkich wydatków
+            Object.values(cache.monthlyTotals).forEach((monthData, i) => {
+                const periods = Object.keys(cache.monthlyTotals);
+                const period = periods[i];
+                
+                if (this._periodInRange(period, periodFrom, periodTo)) {
+                    total += monthData.expenses;
+                    count++;
+                    byPeriod[period] = monthData.expenses;
+                }
+            });
+        }
+        
+        return { total, count, category, subcategory, periodFrom, periodTo, byPeriod };
+    },
+    
+    sumBySubcategory(category, subcategory, periodFrom, periodTo, cache) {
+        return this.sumByCategory(category, subcategory, periodFrom, periodTo, cache);
+    },
+    
+    topExpenses(n = 10, level = 'category', periodFrom, periodTo, cache) {
+        const results = [];
+        
+        if (level === 'subcategory') {
+            Object.entries(cache.subcategorySums).forEach(([key, data]) => {
+                let total = data.total;
+                
+                if (periodFrom || periodTo) {
+                    total = 0;
+                    Object.entries(data.byPeriod).forEach(([period, value]) => {
+                        if (this._periodInRange(period, periodFrom, periodTo)) {
+                            total += value;
+                        }
+                    });
+                }
+                
+                results.push({
+                    category: data.kategoria,
+                    subcategory: data.podkategoria,
+                    total
+                });
+            });
+        } else {
+            Object.entries(cache.categorySums).forEach(([category, data]) => {
+                // Pomiń oszczędności
+                if (category === 'Oszczędności i inw.') return;
+                
+                let total = data.total;
+                
+                if (periodFrom || periodTo) {
+                    total = 0;
+                    Object.entries(data.byPeriod).forEach(([period, value]) => {
+                        if (this._periodInRange(period, periodFrom, periodTo)) {
+                            total += value;
+                        }
+                    });
+                }
+                
+                results.push({ category, total });
+            });
+        }
+        
+        return results
+            .sort((a, b) => b.total - a.total)
+            .slice(0, n);
+    },
+    
+    monthlyBreakdown(category, subcategory, cache) {
+        const breakdown = [];
+        
+        if (subcategory) {
             const key = `${category}|${subcategory}`;
             const subData = cache.subcategorySums[key];
             
-            if (!subData) return { notFound: true, category, subcategory };
-            
-            matchedKey = key;
-            // Iteracja po entries (bezpieczna)
-            Object.entries(subData.byPeriod || {}).forEach(([per, val]) => {
-                if (this._periodInRange(per, periodFrom, periodTo)) {
-                    total += val;
-                    count++;
-                    byPeriod[per] = val;
-                }
-            });
-
-        // Scenariusz 2: Tylko kategoria
+            if (subData?.byPeriod) {
+                Object.entries(subData.byPeriod)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .forEach(([period, value]) => {
+                        breakdown.push({ period, value });
+                    });
+            }
         } else if (category) {
             const catData = cache.categorySums[category];
-            if (!catData) return { notFound: true, category };
             
-            matchedKey = category;
-            Object.entries(catData.byPeriod || {}).forEach(([per, val]) => {
-                if (this._periodInRange(per, periodFrom, periodTo)) {
-                    total += val;
-                    count++;
-                    byPeriod[per] = val;
-                }
-            });
-
-        // Scenariusz 3: Global (suma wszystkiego)
+            if (catData?.byPeriod) {
+                Object.entries(catData.byPeriod)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .forEach(([period, value]) => {
+                        breakdown.push({ period, value });
+                    });
+            }
         } else {
-             Object.entries(cache.monthlyTotals || {}).forEach(([per, data]) => {
-                if (this._periodInRange(per, periodFrom, periodTo)) {
-                    total += data.expenses;
-                    count++;
-                    byPeriod[per] = data.expenses;
-                }
-            });
-        }
-
-        return {
-            total,
-            count, // Ilość miesięcy z danymi
-            category,
-            subcategory,
-            periodFrom,
-            periodTo,
-            rowsMatched: count > 0, // Metadata
-            byPeriod // Opcjonalnie do debugu
-        };
-    },
-
-    // Poprawione topExpenses z filtrowaniem kategorii
-    topExpenses(n = 10, categoryFilter = null, periodFrom, periodTo, cache) {
-        const results = [];
-        
-        // Jeśli podano kategorię, szukamy top podkategorii w tej kategorii
-        // Jeśli nie, szukamy top kategorii globalnie
-        
-        if (categoryFilter) {
-            // Ranking podkategorii w ramach danej kategorii
-            Object.entries(cache.subcategorySums || {}).forEach(([key, data]) => {
-                if (data.kategoria !== categoryFilter) return;
-
-                let sum = 0;
-                let hasData = false;
-                
-                Object.entries(data.byPeriod || {}).forEach(([per, val]) => {
-                    if (this._periodInRange(per, periodFrom, periodTo)) {
-                        sum += val;
-                        hasData = true;
-                    }
+            Object.entries(cache.monthlyTotals)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .forEach(([period, data]) => {
+                    breakdown.push({
+                        period,
+                        income: data.income,
+                        expenses: data.expenses,
+                        balance: data.balance
+                    });
                 });
-
-                if (hasData && sum > 0) {
-                    results.push({ name: data.podkategoria, value: sum, type: 'subcategory' });
-                }
-            });
-
-        } else {
-            // Globalny ranking kategorii (bez podkategorii)
-            Object.entries(cache.categorySums || {}).forEach(([cat, data]) => {
-                if (cat === 'Oszczędności i inw.' || cat === 'Nieistotne') return;
-
-                let sum = 0;
-                let hasData = false;
-
-                Object.entries(data.byPeriod || {}).forEach(([per, val]) => {
-                    if (this._periodInRange(per, periodFrom, periodTo)) {
-                        sum += val;
-                        hasData = true;
-                    }
-                });
-
-                if (hasData && sum > 0) {
-                    results.push({ name: cat, value: sum, type: 'category' });
-                }
-            });
         }
-
-        return results
-            .sort((a, b) => b.value - a.value)
-            .slice(0, n)
-            .map((r, i) => ({ rank: i + 1, ...r }));
+        
+        return { category, subcategory, breakdown };
     },
-
-    // Monthly Breakdown z obsługą zakresów i notFound
-    monthlyBreakdown(category, subcategory, periodFrom, periodTo, cache) {
-        const breakdown = [];
-        let sourceData = null;
-        let matchedContext = '';
-
-        if (category && subcategory) {
-            sourceData = cache.subcategorySums[`${category}|${subcategory}`];
-            matchedContext = `${category} / ${subcategory}`;
-        } else if (category) {
-            sourceData = cache.categorySums[category];
-            matchedContext = category;
-        } else {
-            // Global expenses breakdown
-            sourceData = { byPeriod: {} };
-            Object.entries(cache.monthlyTotals).forEach(([p, d]) => {
-                sourceData.byPeriod[p] = d.expenses;
-            });
-            matchedContext = 'Wszystkie wydatki';
-        }
-
-        if (!sourceData) {
-            return { notFound: true, context: matchedContext };
-        }
-
-        // Iteracja i filtrowanie
-        Object.entries(sourceData.byPeriod || {})
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .forEach(([period, value]) => {
-                if (this._periodInRange(period, periodFrom, periodTo)) {
-                    breakdown.push({ period, value });
-                }
-            });
-
-        if (breakdown.length === 0) {
-            return { notFound: true, context: matchedContext, reason: 'No data in period' };
-        }
-
-        return {
-            context: matchedContext,
-            periodFrom,
-            periodTo,
-            breakdown // [{period: '2024-01', value: 100}, ...]
-        };
-    },
-
-    // Inne funkcje pomocnicze (zachowane logicznie, poprawione iteracje)
+    
     compareMonths(period1, period2, cache) {
-        const d1 = cache.monthlyTotals[period1];
-        const d2 = cache.monthlyTotals[period2];
+        const data1 = cache.monthlyTotals[period1];
+        const data2 = cache.monthlyTotals[period2];
         
-        if (!d1 || !d2) return { error: 'Missing data for comparison', p1: !!d1, p2: !!d2 };
-
+        if (!data1 || !data2) {
+            return {
+                error: 'Brak danych dla jednego lub obu okresów',
+                period1: period1,
+                period2: period2,
+                data1Exists: !!data1,
+                data2Exists: !!data2
+            };
+        }
+        
         return {
-            period1: { period: period1, ...d1 },
-            period2: { period: period2, ...d2 },
+            period1: { ...data1, period: period1 },
+            period2: { ...data2, period: period2 },
             diff: {
-                income: d2.income - d1.income,
-                expenses: d2.expenses - d1.expenses,
-                balance: d2.balance - d1.balance
+                income: data2.income - data1.income,
+                expenses: data2.expenses - data1.expenses,
+                balance: data2.balance - data1.balance,
+                incomePercent: data1.income ? ((data2.income - data1.income) / data1.income * 100) : 0,
+                expensesPercent: data1.expenses ? ((data2.expenses - data1.expenses) / data1.expenses * 100) : 0
             }
         };
     },
-
-    trendAnalysis(metric = 'expenses', months = 6, cache) {
-        // Oblicz trend na żywo z monthlyTotals
-        const data = Object.entries(cache.monthlyTotals || {})
+    
+    trendAnalysis(metric = 'expenses', months, cache) {
+        // Użyj danych z cache
+        const trends = cache.trends;
+        
+        if (trends && trends[metric]) {
+            return {
+                metric,
+                ...trends[metric],
+                description: this._describeTrend(trends[metric])
+            };
+        }
+        
+        // Fallback: oblicz na żywo
+        const monthlyData = Object.entries(cache.monthlyTotals)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-months)
-            .map(([p, d]) => ({
-                period: p,
-                value: metric === 'income' ? d.income : (metric === 'balance' ? d.balance : d.expenses)
+            .slice(-(months || 12))
+            .map(([period, data]) => ({
+                period,
+                value: metric === 'income' ? data.income : 
+                       metric === 'balance' ? data.balance : data.expenses
             }));
-
-        if (data.length < 2) return { error: 'Not enough data for trend' };
-
-        // Prosta regresja lub zmiana first-last
-        const first = data[0].value;
-        const last = data[data.length - 1].value;
-        const diff = last - first;
-        const percent = first !== 0 ? (diff / first) * 100 : 0;
+        
+        if (monthlyData.length < 2) {
+            return { metric, error: 'Za mało danych do analizy trendu' };
+        }
+        
+        const first = monthlyData[0].value;
+        const last = monthlyData[monthlyData.length - 1].value;
+        const change = last - first;
+        const changePercent = first ? (change / first * 100) : 0;
         
         return {
             metric,
-            direction: diff > 0 ? 'up' : (diff < 0 ? 'down' : 'stable'),
-            percentChange: percent,
-            dataPoints: data
-        };
-    },
-
-    analyze503020(period, cache) {
-        // Pobierz ostatni miesiąc jeśli brak period
-        const p = period || Object.keys(cache.monthlyTotals).sort().pop();
-        const d = cache.monthlyTotals[p];
-        
-        if (!d) return { error: 'No data' };
-        
-        const income = d.income;
-        if (income === 0) return { error: 'Zero income' };
-
-        return {
-            period: p,
-            needs: { val: d.fixed, pct: (d.fixed/income)*100, target: 50 },
-            wants: { val: d.variable, pct: (d.variable/income)*100, target: 30 },
-            savings: { val: d.balance, pct: (d.balance/income)*100, target: 20 }
+            direction: change > 0 ? 'up' : change < 0 ? 'down' : 'stable',
+            percentChange: changePercent,
+            firstValue: first,
+            lastValue: last,
+            dataPoints: monthlyData.length
         };
     },
     
-    getSummary(period, cache) {
-         const p = period || Object.keys(cache.monthlyTotals).sort().pop();
-         return {
-             period: p,
-             data: cache.monthlyTotals[p] || null,
-             topCats: this.topExpenses(3, null, p, p, cache)
-         };
+    _describeTrend(trend) {
+        if (!trend) return '';
+        
+        const dir = trend.direction;
+        const pct = Math.abs(trend.percentChange || 0).toFixed(1);
+        
+        if (dir === 'up') return `Trend rosnący (${pct}% wzrost)`;
+        if (dir === 'down') return `Trend malejący (${pct}% spadek)`;
+        return 'Trend stabilny';
+    },
+    
+    categoryShare(category, periodFrom, periodTo, cache) {
+        const catSum = this.sumByCategory(category, null, periodFrom, periodTo, cache);
+        const totalSum = this.sumByCategory(null, null, periodFrom, periodTo, cache);
+        
+        const share = totalSum.total > 0 ? (catSum.total / totalSum.total * 100) : 0;
+        
+        return {
+            category,
+            categoryTotal: catSum.total,
+            allExpensesTotal: totalSum.total,
+            sharePercent: share,
+            periodFrom,
+            periodTo
+        };
+    },
+    
+    averageExpense(category, subcategory, months, cache) {
+        const result = this.sumByCategory(category, subcategory, null, null, cache);
+        
+        const periodCount = Object.keys(result.byPeriod || {}).length || 1;
+        const average = result.total / periodCount;
+        
+        return {
+            category,
+            subcategory,
+            total: result.total,
+            monthsWithData: periodCount,
+            averageMonthly: average
+        };
+    },
+    
+    analyze503020(period, cache) {
+        // Użyj danych z cache lub przelicz
+        if (!period && cache.methodology503020 && Object.keys(cache.methodology503020).length > 0) {
+            return cache.methodology503020;
+        }
+        
+        // Pobierz dane dla okresu
+        const periodKey = period || Object.keys(cache.monthlyTotals).sort().pop();
+        const monthData = cache.monthlyTotals[periodKey];
+        
+        if (!monthData) {
+            return { error: 'Brak danych dla okresu', period: periodKey };
+        }
+        
+        const income = monthData.income;
+        
+        // Uproszczona analiza
+        const needs = monthData.fixed * 0.7 + monthData.variable * 0.4;
+        const wants = monthData.variable * 0.6 + monthData.fixed * 0.1;
+        const savings = monthData.balance;
+        
+        return {
+            period: periodKey,
+            income,
+            needs: {
+                actual: needs,
+                limit: income * 0.5,
+                percent: income > 0 ? (needs / income * 100) : 0,
+                status: needs <= income * 0.5 ? 'ok' : 'over'
+            },
+            wants: {
+                actual: wants,
+                limit: income * 0.3,
+                percent: income > 0 ? (wants / income * 100) : 0,
+                status: wants <= income * 0.3 ? 'ok' : 'over'
+            },
+            savings: {
+                actual: savings,
+                limit: income * 0.2,
+                percent: income > 0 ? (savings / income * 100) : 0,
+                status: savings >= income * 0.2 ? 'ok' : 'under'
+            }
+        };
     },
     
     getAnomalies(threshold = 15, cache) {
-        return cache.anomalies ? cache.anomalies.filter(a => a.percent > threshold) : [];
+        if (cache.anomalies && cache.anomalies.length > 0) {
+            return cache.anomalies.filter(a => a.percent >= threshold);
+        }
+        
+        return [];
     },
-
+    
     totalBalance(periodFrom, periodTo, cache) {
-        let inc = 0, exp = 0;
-        Object.entries(cache.monthlyTotals).forEach(([p, d]) => {
-            if (this._periodInRange(p, periodFrom, periodTo)) {
-                inc += d.income;
-                exp += d.expenses;
+        let totalIncome = 0;
+        let totalExpenses = 0;
+        let months = 0;
+        
+        Object.entries(cache.monthlyTotals).forEach(([period, data]) => {
+            if (this._periodInRange(period, periodFrom, periodTo)) {
+                totalIncome += data.income;
+                totalExpenses += data.expenses;
+                months++;
             }
         });
-        return { income: inc, expenses: exp, balance: inc - exp };
-    },
-
-    incomeBySource(source, periodFrom, periodTo, cache) {
-        // Implementacja uproszczona - korzysta z cache.incomeSources
-        // Wymagałaby filtrowania po okresie wewnątrz struktury incomeSources,
-        // ale w cache.incomeSources zazwyczaj są sumy całkowite.
-        // Jeśli chcemy po okresie, musimy iterować 'allIncome' z budget.js
-        // Ale 'compute' powinno działać na cache.
-        // Zakładamy że cache ma incomeSources zagregowane globalnie.
         
-        if (source && cache.incomeSources[source]) {
-            return { source, total: cache.incomeSources[source].total };
-        }
-        return Object.entries(cache.incomeSources).map(([k, v]) => ({ source: k, total: v.total }));
+        return {
+            totalIncome,
+            totalExpenses,
+            balance: totalIncome - totalExpenses,
+            savingsRate: totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome * 100) : 0,
+            monthsAnalyzed: months,
+            periodFrom,
+            periodTo
+        };
     },
-
+    
+    incomeBySource(source, periodFrom, periodTo, cache) {
+        if (source) {
+            const sourceData = cache.incomeSources[source];
+            
+            if (!sourceData) {
+                return { source, total: 0, notFound: true };
+            }
+            
+            return {
+                source,
+                total: sourceData.total,
+                count: sourceData.count,
+                byPracodawca: sourceData.byPracodawca
+            };
+        }
+        
+        // Wszystkie źródła
+        return Object.entries(cache.incomeSources).map(([source, data]) => ({
+            source,
+            total: data.total,
+            count: data.count
+        })).sort((a, b) => b.total - a.total);
+    },
+    
+    getSummary(period, cache) {
+        const periods = cache.availablePeriods || [];
+        const lastPeriod = period || (periods.length > 0 ? `${periods[0].rok}-${String(periods[0].miesiac).padStart(2, '0')}` : null);
+        
+        const lastMonthData = lastPeriod ? cache.monthlyTotals[lastPeriod] : null;
+        
+        const totalBalance = this.totalBalance(null, null, cache);
+        const topCats = this.topExpenses(5, 'category', null, null, cache);
+        
+        return {
+            lastPeriod,
+            lastMonth: lastMonthData,
+            allTime: totalBalance,
+            topCategories: topCats,
+            trends: cache.trends,
+            monthsWithData: Object.keys(cache.monthlyTotals).length
+        };
+    },
+    
+    // ═══════════════════════════════════════════════════════════
+    // HELPERY
+    // ═══════════════════════════════════════════════════════════
+    
     _periodInRange(period, from, to) {
+        if (!from && !to) return true;
         if (from && period < from) return false;
         if (to && period > to) return false;
         return true;
