@@ -13,10 +13,11 @@ const AIProviders = {
         LLM7: {
             name: 'LLM7',
             endpoint: 'https://api.llm7.io/v1/chat/completions',
-            model: 'llm7-default',
+            model: 'llm7-chat', // sprawdzony działający model
             role: 'router', // używany do klasyfikacji
             timeout: 15000,
-            maxTokens: 500
+            maxTokens: 1500,
+            requiresKey: false // LLM7 działa z kluczem lub 'unused'
         },
         GEMINI: {
             name: 'Gemini',
@@ -139,7 +140,9 @@ const AIProviders = {
     
     async testConnection(provider) {
         const key = this._apiKeys[provider];
-        if (!key) {
+        
+        // LLM7 może działać bez klucza
+        if (!key && provider !== 'LLM7') {
             return { success: false, error: 'Brak klucza API' };
         }
         
@@ -182,13 +185,16 @@ const AIProviders = {
     },
     
     async _testLLM7(key) {
+        // LLM7 może działać bez klucza - używamy "unused" jeśli brak
+        const apiKey = key || 'unused';
+        
         const response = await this._fetchWithTimeout(
             this.PROVIDERS.LLM7.endpoint,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${key}`
+                    'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
                     model: this.PROVIDERS.LLM7.model,
@@ -254,17 +260,11 @@ const AIProviders = {
     
     /**
      * Wywołanie LLM7 do klasyfikacji/routingu
+     * LLM7 działa bez klucza API dla niskiego wolumenu (używa "unused")
      */
     async callRouter(systemPrompt, userMessage) {
-        const key = this._apiKeys.LLM7;
-        
-        if (!key) {
-            return {
-                success: false,
-                error: 'Brak klucza LLM7 - użyj fallback routingu',
-                fallbackNeeded: true
-            };
-        }
+        // LLM7 może działać bez klucza - używamy "unused" jeśli brak
+        const key = this._apiKeys.LLM7 || 'unused';
         
         try {
             const response = await this._fetchWithTimeout(
@@ -282,8 +282,7 @@ const AIProviders = {
                             { role: 'user', content: userMessage }
                         ],
                         temperature: 0.1,
-                        max_tokens: this.PROVIDERS.LLM7.maxTokens,
-                        response_format: { type: 'json_object' }
+                        max_tokens: this.PROVIDERS.LLM7.maxTokens
                     })
                 },
                 this.PROVIDERS.LLM7.timeout
@@ -484,7 +483,8 @@ const AIProviders = {
     getProviderStatus() {
         return {
             LLM7: {
-                configured: !!this._apiKeys.LLM7,
+                configured: true, // LLM7 działa bez klucza (free tier)
+                hasCustomKey: !!this._apiKeys.LLM7,
                 ...this._providerStatus.LLM7
             },
             GEMINI: {
@@ -504,8 +504,8 @@ const AIProviders = {
     },
     
     getConfigurationStatus() {
-        const hasRouter = !!this._apiKeys.LLM7;
         const hasGenerator = !!(this._apiKeys.GEMINI || this._apiKeys.OPENAI);
+        const hasLLM7Key = !!this._apiKeys.LLM7;
         
         if (!hasGenerator) {
             return {
@@ -515,11 +515,12 @@ const AIProviders = {
             };
         }
         
-        if (!hasRouter) {
+        // LLM7 działa bez klucza, więc nie jest to błąd
+        if (!hasLLM7Key) {
             return {
                 ready: true,
-                message: 'AI działa. Dodaj klucz LLM7 dla lepszego routingu zapytań.',
-                level: 'warning'
+                message: 'AI działa. LLM7 używa darmowego limitu (40 req/min).',
+                level: 'success'
             };
         }
         
