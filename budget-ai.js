@@ -861,24 +861,25 @@ function renderProactiveInsight(insight) {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            padding: 16px;
+            padding-top: 16px;
         }
         
         .quick-prompt-btn {
             display: flex;
             align-items: center;
             gap: 6px;
-            padding: 8px 12px;
+            padding: 8px 14px;
             border: 1px solid var(--border);
+            background: var(--bg-hover);
             border-radius: var(--radius-md);
-            background: var(--bg-card);
             cursor: pointer;
-            font-size: 0.8rem;
             transition: all 0.2s;
+            font-family: inherit;
+            font-size: 0.875rem;
         }
         
         .quick-prompt-btn:hover:not(:disabled) {
-            background: var(--bg-hover);
+            background: var(--bg-card);
             border-color: var(--primary);
         }
         
@@ -889,6 +890,10 @@ function renderProactiveInsight(insight) {
         
         .quick-prompt-icon {
             font-size: 1rem;
+        }
+        
+        .quick-prompt-label {
+            color: var(--text-primary);
         }
         
         .chat-card {
