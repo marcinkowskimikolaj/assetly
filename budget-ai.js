@@ -500,15 +500,35 @@ Skup się na najważniejszej zmianie lub obserwacji. Nie pytaj o nic, tylko stwi
         
         if (response.success) {
             try {
-                // Wyczyść odpowiedź z markdown code blocks
+                // Wyczyść odpowiedź z markdown code blocks i innych śmieci
                 let cleanContent = response.content.trim();
-                cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                cleanContent = cleanContent.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+                
+                // Spróbuj wyekstrahować JSON z odpowiedzi
+                const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error('Nie znaleziono JSON w odpowiedzi');
+                }
+                cleanContent = jsonMatch[0];
+                
+                // Napraw częste problemy z JSON
+                cleanContent = cleanContent
+                    .replace(/[\r\n]+/g, ' ')  // Usuń znaki nowej linii
+                    .replace(/,\s*}/g, '}')    // Usuń trailing comma
+                    .replace(/,\s*]/g, ']');   // Usuń trailing comma w tablicach
                 
                 const insight = JSON.parse(cleanContent);
-                renderProactiveInsight(insight);
-                sessionStorage.setItem('budget_proactive_insight_shown_v2', 'true');
+                
+                // Waliduj strukturę
+                if (insight.type && insight.title && insight.message) {
+                    renderProactiveInsight(insight);
+                    sessionStorage.setItem('budget_proactive_insight_shown_v2', 'true');
+                } else {
+                    throw new Error('Niepełna struktura insight');
+                }
             } catch (e) {
-                console.warn('Proactive insight: błąd parsowania JSON:', e);
+                console.warn('Proactive insight: błąd parsowania JSON:', e.message);
+                // Nie pokazuj nic - to nie jest krytyczny błąd
                 placeholder.remove();
             }
         } else {
