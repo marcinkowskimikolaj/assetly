@@ -20,7 +20,8 @@ const BudgetAISynonyms = {
             synonyms: [
                 'paliwo', 'benzyna', 'benz', 'diesel', 'tankowanie', 'tankuję', 
                 'tankowałem', 'stacja', 'stacja benzynowa', 'orlen', 'bp', 'shell',
-                'circle k', 'amic', 'lotos', 'fuel', 'gas', 'petrol'
+                'circle k', 'amic', 'lotos', 'fuel', 'gas', 'petrol', 'lpg',
+                'cng', 'ładowanie auta', 'ładowarka ev'
             ]
         },
         'Parking i opłaty': {
@@ -28,16 +29,18 @@ const BudgetAISynonyms = {
             synonyms: [
                 'parking', 'parkowanie', 'parkomat', 'strefa płatna', 'abonament parkingowy',
                 'opłata za parking', 'garaż', 'miejsce parkingowe', 'autostrada', 'myto',
-                'viaTOLL', 'e-toll', 'a4', 'a2', 'opłata drogowa', 'winiety'
+                'viatoll', 'e-toll', 'a4', 'a2', 'opłata drogowa', 'winiety', 'mandat',
+                'odholowanie', 'strefa'
             ]
         },
         'Przejazdy': {
             category: 'Auto i transport',
             synonyms: [
                 'przejazd', 'przejazdy', 'uber', 'bolt', 'taxi', 'taksówka', 'taksa',
-                'freeNow', 'itaxi', 'komunikacja', 'autobus', 'tramwaj', 'metro',
+                'freenow', 'itaxi', 'komunikacja', 'autobus', 'tramwaj', 'metro',
                 'bilet', 'bilety', 'mpk', 'ztm', 'kolej', 'pociąg', 'pkp', 'intercity',
-                'flixbus', 'polskibus', 'transport publiczny'
+                'flixbus', 'polskibus', 'transport publiczny', 'hulajnoga', 'lime',
+                'tier', 'blinkee', 'rower miejski', 'veturilo'
             ]
         },
         'Serwis i części': {
@@ -46,21 +49,22 @@ const BudgetAISynonyms = {
                 'serwis', 'mechanik', 'warsztat', 'naprawa auta', 'naprawa samochodu',
                 'części', 'części samochodowe', 'olej', 'wymiana oleju', 'opony',
                 'wymiana opon', 'przegląd', 'przegląd techniczny', 'klimatyzacja',
-                'hamulce', 'filtr', 'akumulator', 'auto detailing', 'myjnia'
+                'hamulce', 'filtr', 'akumulator', 'auto detailing', 'myjnia',
+                'wulkanizacja', 'geometria', 'rozrząd', 'sprzęgło'
             ]
         },
         'Ubezpieczenie auta': {
             category: 'Auto i transport',
             synonyms: [
-                'ubezpieczenie auta', 'ubezpieczenie samochodu', 'oc', 'ac', 'oc/ac',
-                'polisa samochodowa', 'ubezpieczenie pojazdu', 'assistance', 'nww'
+                'ubezpieczenie auta', 'oc', 'ac', 'oc/ac', 'polisa samochodowa',
+                'ubezpieczenie samochodu', 'assistance', 'nww', 'autocasco'
             ]
         },
         'Auto i transport - inne': {
             category: 'Auto i transport',
             synonyms: [
-                'auto inne', 'transport inne', 'wypożyczenie auta', 'car sharing',
-                'panek', 'traficar', 'cityBee', 'wynajem samochodu'
+                'rejestracja', 'przerejestrowanie', 'tablice', 'dowód rejestracyjny',
+                'badanie techniczne', 'stk'
             ]
         },
         
@@ -70,56 +74,64 @@ const BudgetAISynonyms = {
         'Żywność i chemia domowa': {
             category: 'Codzienne wydatki',
             synonyms: [
-                'żywność', 'jedzenie', 'żarcie', 'zakupy spożywcze', 'spożywka',
-                'zakupy', 'biedronka', 'lidl', 'auchan', 'carrefour', 'tesco',
-                'żabka', 'stokrotka', 'netto', 'dino', 'kaufland', 'selgros',
-                'makro', 'chemia', 'chemia domowa', 'środki czystości', 'proszek',
-                'płyn do naczyń', 'artykuły spożywcze', 'groceries', 'market',
-                'sklep', 'warzywa', 'owoce', 'mięso', 'nabiał', 'pieczywo'
+                'żywność', 'jedzenie', 'zakupy', 'spożywcze', 'zakupy spożywcze',
+                'biedronka', 'lidl', 'auchan', 'carrefour', 'kaufland', 'netto',
+                'żabka', 'lewiatan', 'dino', 'stokrotka', 'freshmarket', 'piotr i paweł',
+                'intermarche', 'makro', 'selgros', 'market', 'supermarket', 'hipermarket',
+                'warzywa', 'owoce', 'mięso', 'pieczywo', 'nabiał', 'mleko',
+                'chemia', 'chemia domowa', 'proszek', 'płyn', 'środki czystości',
+                'rossmann chemia', 'dm', 'artykuły spożywcze', 'grocery'
             ]
         },
         'Jedzenie poza domem': {
             category: 'Codzienne wydatki',
             synonyms: [
-                'jedzenie poza domem', 'restauracja', 'restauracje', 'knajpa', 'knajpy',
-                'bar', 'pub', 'kawiarnia', 'cafe', 'kawa', 'lunch', 'obiad w mieście',
-                'kolacja', 'fast food', 'mcdonald', 'kfc', 'burger king', 'pizza',
-                'pizzeria', 'sushi', 'kebab', 'food court', 'jedzenie na mieście',
-                'wyjście na jedzenie', 'delivery', 'pyszne.pl', 'glovo', 'wolt',
-                'uber eats', 'dostawa jedzenia', 'takeaway', 'na wynos'
+                'jedzenie poza domem', 'restauracja', 'restauracje', 'obiad', 'obiady',
+                'lunch', 'kolacja', 'śniadanie', 'kawa', 'kawiarnia', 'cafe',
+                'starbucks', 'costa', 'mcdonald', 'mcdonalds', 'kfc', 'burger king',
+                'pizza hut', 'dominos', 'telepizza', 'sushi', 'kebab',
+                'delivery', 'dowóz', 'pyszne.pl', 'pyszne', 'glovo', 'wolt', 'uber eats',
+                'bolt food', 'food', 'catering', 'bar', 'bistro', 'fast food',
+                'knajpa', 'knajpka', 'gastro', 'gastronomi'
             ]
         },
         'Alkohol': {
             category: 'Codzienne wydatki',
             synonyms: [
-                'alkohol', 'alko', 'piwo', 'piwko', 'piwa', 'wino', 'wódka', 'wóda',
-                'whisky', 'whiskey', 'rum', 'gin', 'tequila', 'szampan', 'prosecco',
-                'drink', 'drinki', 'koktajl', 'shot', 'browary', 'trunek', 'trunki',
-                'monopolowy', 'sklep monopolowy', 'liquor'
+                'alkohol', 'alko', 'piwo', 'wino', 'wódka', 'whisky', 'whiskey',
+                'rum', 'gin', 'tequila', 'likier', 'szampan', 'prosecco',
+                'browar', 'monopolowy', 'sklep monopolowy', 'drinki', 'drink'
             ]
         },
         'Papierosy': {
             category: 'Codzienne wydatki',
             synonyms: [
-                'papierosy', 'fajki', 'szlugi', 'marlboro', 'camel', 'lucky strike',
-                'l&m', 'tytoń', 'e-papieros', 'vape', 'iqos', 'heets', 'glo',
-                'nikotyna', 'liquid', 'wkłady'
+                'papierosy', 'fajki', 'szlugi', 'tytoń', 'e-papieros', 'vape',
+                'iqos', 'heets', 'glo', 'marlboro', 'camel', 'lucky strike',
+                'nikotyna', 'palenie'
             ]
         },
         'Zwierzęta': {
             category: 'Codzienne wydatki',
             synonyms: [
-                'zwierzęta', 'zwierzak', 'zwierzaki', 'pies', 'piesek', 'kot', 'kotek',
-                'karma', 'karma dla psa', 'karma dla kota', 'weterynarz', 'weterynarza',
-                'szczepienie', 'akcesoria dla zwierząt', 'smycz', 'obroża', 'kuweta',
-                'żwirek', 'zabawki dla psa', 'gryzak', 'pet shop', 'zooplus'
+                'zwierzęta', 'zwierzę', 'zwierzak', 'zwierzaka', 'zwierzaki',
+                'pies', 'psa', 'psu', 'psem', 'psie', 'piesek', 'pieska', 'psiaka',
+                'kot', 'kota', 'kotem', 'kocie', 'kotek', 'kotka', 'kociak',
+                'pupil', 'pupila', 'pupilem', 'pupile',
+                'karma', 'karmy', 'karmę', 'żarcie dla psa', 'żarcie dla kota',
+                'weterynarz', 'weterynarza', 'weterynarii', 'wet', 'klinika weterynaryjna',
+                'szczepienie psa', 'szczepienie kota', 'odrobaczanie', 'pchły', 'kleszcze',
+                'smycz', 'obroża', 'transporter', 'legowisko', 'kuweta', 'żwirek',
+                'zabawki dla psa', 'zabawki dla kota', 'przysmaki', 'gryzaki',
+                'royal canin', 'whiskas', 'pedigree', 'friskies', 'felix', 'purina',
+                'zooplus', 'maxi zoo', 'kakadu', 'pet', 'pets',
+                'groomer', 'grooming', 'strzyżenie psa', 'psi fryzjer', 'trymowanie',
+                'nachos', 'burek', 'reksio', 'mruczek', 'filemon'
             ]
         },
         'Codzienne wydatki - inne': {
             category: 'Codzienne wydatki',
-            synonyms: [
-                'codzienne inne', 'drobne wydatki', 'drobiazgi', 'różne'
-            ]
+            synonyms: []
         },
         
         // ─────────────────────────────────────────────────────────
@@ -128,39 +140,44 @@ const BudgetAISynonyms = {
         'Akcesoria i wyposażenie': {
             category: 'Dom',
             synonyms: [
-                'akcesoria domowe', 'wyposażenie', 'meble', 'mebel', 'ikea', 'jysk',
-                'black red white', 'agata meble', 'dekoracje', 'firany', 'zasłony',
-                'dywan', 'poduszki', 'pościel', 'ręczniki', 'naczynia', 'garnki',
-                'sztućce', 'talerze', 'lamp', 'lampa', 'oświetlenie'
+                'wyposażenie', 'akcesoria', 'meble', 'ikea', 'jysk', 'agata meble',
+                'black red white', 'brw', 'komoda', 'szafa', 'łóżko', 'sofa',
+                'fotel', 'stół', 'krzesła', 'biurko', 'regał', 'półka',
+                'pościel', 'ręczniki', 'zasłony', 'firany', 'dywan', 'wykładzina',
+                'kuchenne', 'garnki', 'patelnie', 'sztućce', 'talerze', 'szklanki',
+                'dekoracje', 'obrazy', 'ramki', 'świeczki', 'wazony'
             ]
         },
         'Remont i ogród': {
             category: 'Dom',
             synonyms: [
-                'remont', 'remonty', 'renowacja', 'malowanie', 'farba', 'tapeta',
-                'podłoga', 'płytki', 'łazienka', 'kuchnia remont', 'ogród', 'ogródek',
-                'rośliny', 'kwiaty', 'doniczki', 'narzędzia ogrodowe', 'kosiarka',
-                'leroy merlin', 'castorama', 'obi', 'bricomarche', 'majsterkowanie'
+                'remont', 'remonty', 'budowa', 'wykończenie', 'materiały budowlane',
+                'leroy merlin', 'castorama', 'obi', 'bricomarche', 'bricoman',
+                'farba', 'malowanie', 'tapeta', 'płytki', 'panele', 'podłoga',
+                'hydraulik', 'elektryk', 'instalacja', 'ogród', 'ogródek',
+                'rośliny', 'kwiaty', 'drzewa', 'trawnik', 'kosiarka', 'narzędzia ogrodowe',
+                'meble ogrodowe', 'grill', 'basen', 'altana', 'taras'
             ]
         },
         'Ubezpieczenie domu': {
             category: 'Dom',
             synonyms: [
                 'ubezpieczenie domu', 'ubezpieczenie mieszkania', 'polisa mieszkaniowa',
-                'ubezpieczenie nieruchomości', 'polisa domowa'
+                'ubezpieczenie nieruchomości', 'ubezpieczenie od ognia', 'ubezpieczenie od kradzieży'
             ]
         },
         'Usługi domowe': {
             category: 'Dom',
             synonyms: [
-                'usługi domowe', 'sprzątanie', 'sprzątaczka', 'pani do sprzątania',
-                'pranie', 'pralnia', 'pralnia chemiczna', 'prasowanie', 'złota rączka',
-                'hydraulik', 'elektryk', 'serwis agd', 'naprawa pralki', 'kominarz'
+                'usługi domowe', 'sprzątanie', 'sprzątaczka', 'firma sprzątająca',
+                'pranie', 'pralnia', 'prasowanie', 'okna', 'mycie okien',
+                'ogrodnik', 'koszenie trawy', 'odśnieżanie', 'wywóz śmieci',
+                'dezynsekcja', 'deratyzacja', 'kominarz', 'serwis agd'
             ]
         },
         'Dom - inne': {
             category: 'Dom',
-            synonyms: ['dom inne', 'mieszkanie inne']
+            synonyms: []
         },
         
         // ─────────────────────────────────────────────────────────
@@ -169,37 +186,39 @@ const BudgetAISynonyms = {
         'Art. dziecięce i zabawki': {
             category: 'Dzieci',
             synonyms: [
-                'zabawki', 'zabawka', 'klocki', 'lego', 'lalka', 'maskotka',
-                'artykuły dziecięce', 'pieluchy', 'pampersy', 'smoczek', 'butelka',
-                'wózek', 'fotelik', 'nosidełko', 'ubranka dziecięce', 'śpioszki',
-                'smyk', 'toys r us', 'empik dziecięcy'
+                'artykuły dziecięce', 'zabawki', 'zabawka', 'lego', 'klocki',
+                'lalka', 'lalki', 'misie', 'pluszaki', 'gry', 'puzzle',
+                'smyk', 'toys r us', 'empik dziecięcy', 'pieluchy', 'pampersy',
+                'wózek', 'fotelik', 'łóżeczko', 'przewijak', 'nosidełko',
+                'butelka', 'smoczek', 'śliniaki', 'ubranka dziecięce'
             ]
         },
         'Przedszkole i opiekunka': {
             category: 'Dzieci',
             synonyms: [
-                'przedszkole', 'żłobek', 'opiekunka', 'niania', 'babysitter',
-                'opieka nad dzieckiem', 'czesne przedszkole', 'wyprawka przedszkolna'
+                'przedszkole', 'przedszkolne', 'żłobek', 'opiekunka', 'niania',
+                'babysitter', 'opieka nad dzieckiem', 'czesne przedszkole'
             ]
         },
         'Szkoła i wyprawka': {
             category: 'Dzieci',
             synonyms: [
-                'szkoła', 'wyprawka', 'wyprawka szkolna', 'podręczniki', 'zeszyty',
-                'tornister', 'plecak szkolny', 'przybory szkolne', 'świetlica',
-                'obiady szkolne', 'wycieczka szkolna', 'składka klasowa'
+                'szkoła', 'szkolne', 'wyprawka', 'plecak', 'tornister', 'piórnik',
+                'zeszyty', 'książki szkolne', 'podręczniki', 'przybory szkolne',
+                'mundurki', 'czesne', 'składki szkolne', 'wycieczka szkolna'
             ]
         },
         'Zajęcia dodatkowe': {
             category: 'Dzieci',
             synonyms: [
-                'zajęcia dodatkowe', 'korepetycje', 'angielski dla dzieci', 'basen dzieci',
-                'taniec', 'piłka nożna', 'sport dzieci', 'muzyka', 'plastyka'
+                'zajęcia dodatkowe', 'korepetycje', 'kurs', 'lekcje', 'basen dzieci',
+                'angielski dzieci', 'piłka nożna', 'taniec', 'balet', 'judo',
+                'karate', 'gimnastyka', 'muzyka', 'pianino', 'gitara'
             ]
         },
         'Dzieci - inne': {
             category: 'Dzieci',
-            synonyms: ['dzieci inne', 'wydatki na dzieci']
+            synonyms: []
         },
         
         // ─────────────────────────────────────────────────────────
@@ -208,20 +227,20 @@ const BudgetAISynonyms = {
         'Przelew na rach. firmowy': {
             category: 'Firmowe',
             synonyms: [
-                'przelew na firmę', 'transfer firmowy', 'zasilenie konta firmowego',
-                'przelew firmowy', 'konto firmowe'
+                'przelew firmowy', 'konto firmowe', 'rachunek firmowy',
+                'transfer na firmę', 'działalność gospodarcza'
             ]
         },
         'Zakupy firmowe': {
             category: 'Firmowe',
             synonyms: [
-                'zakupy firmowe', 'wydatki firmowe', 'sprzęt firmowy', 'biuro',
-                'materiały biurowe', 'laptop służbowy', 'telefon służbowy'
+                'zakupy firmowe', 'faktura', 'wydatki firmowe', 'koszty firmowe',
+                'sprzęt firmowy', 'materiały biurowe', 'artykuły biurowe'
             ]
         },
         'Firmowe - inne': {
             category: 'Firmowe',
-            synonyms: ['firmowe inne', 'firma inne']
+            synonyms: []
         },
         
         // ─────────────────────────────────────────────────────────
@@ -230,64 +249,73 @@ const BudgetAISynonyms = {
         'Edukacja': {
             category: 'Osobiste',
             synonyms: [
-                'edukacja', 'kurs', 'kursy', 'szkolenie', 'szkolenia', 'studia',
-                'czesne', 'książki', 'ebook', 'udemy', 'coursera', 'nauka',
-                'certyfikat', 'egzamin', 'konferencja', 'webinar'
+                'edukacja', 'kurs', 'kursy', 'szkolenie', 'szkolenia', 'nauka',
+                'studia', 'czesne', 'uczelnia', 'uniwersytet', 'akademia',
+                'książki', 'książka', 'ebook', 'audiobook', 'udemy', 'coursera',
+                'linkedin learning', 'certyfikat', 'egzamin', 'kwalifikacje'
             ]
         },
         'Elektronika': {
             category: 'Osobiste',
             synonyms: [
-                'elektronika', 'komputer', 'laptop', 'telefon', 'smartfon', 'iphone',
-                'samsung', 'tablet', 'ipad', 'słuchawki', 'airpods', 'głośnik',
-                'telewizor', 'tv', 'monitor', 'klawiatura', 'mysz', 'ładowarka',
-                'powerbank', 'kabel', 'pendrive', 'dysk', 'ssd', 'rtv agd',
-                'media expert', 'media markt', 'x-kom', 'morele', 'komputronik'
+                'elektronika', 'telefon', 'smartfon', 'iphone', 'samsung', 'xiaomi',
+                'laptop', 'komputer', 'pc', 'tablet', 'ipad', 'słuchawki',
+                'airpods', 'telewizor', 'tv', 'konsola', 'playstation', 'ps5', 'xbox',
+                'nintendo', 'switch', 'aparat', 'kamera', 'gopro', 'dron',
+                'media expert', 'rtv euro agd', 'media markt', 'x-kom', 'morele',
+                'komputronik', 'allegro', 'amazon', 'agd', 'pralka', 'lodówka',
+                'zmywarka', 'odkurzacz', 'mikser', 'robot kuchenny'
             ]
         },
         'Multimedia, książki i prasa': {
             category: 'Osobiste',
             synonyms: [
-                'multimedia', 'książki', 'książka', 'ebook', 'audiobook', 'empik',
-                'prasa', 'gazeta', 'czasopismo', 'subskrypcja', 'netflix', 'spotify',
-                'hbo', 'disney+', 'amazon prime', 'audible', 'legimi', 'storytel',
-                'youtube premium', 'apple music', 'tidal', 'gry', 'steam', 'playstation',
-                'xbox', 'nintendo', 'game pass'
+                'multimedia', 'netflix', 'hbo', 'hbo max', 'disney', 'disney+',
+                'spotify', 'tidal', 'apple music', 'youtube premium', 'amazon prime',
+                'subskrypcja', 'vod', 'streaming', 'canal+', 'player', 'polsat box',
+                'prasa', 'gazeta', 'czasopismo', 'magazyn', 'prenumerata',
+                'kino domowe', 'gry komputerowe', 'steam', 'playstation plus', 'xbox game pass'
             ]
         },
         'Odzież i obuwie': {
             category: 'Osobiste',
             synonyms: [
-                'odzież', 'ubrania', 'ubranie', 'ciuchy', 'ciuch', 'koszula', 'spodnie',
-                'sukienka', 'kurtka', 'płaszcz', 'sweter', 'bluza', 't-shirt',
-                'obuwie', 'buty', 'but', 'adidasy', 'trampki', 'szpilki', 'sandały',
-                'h&m', 'zara', 'reserved', 'ccc', 'deichmann', 'zalando', 'aboutyou',
-                'bielizna', 'skarpety', 'rajstopy'
+                'odzież', 'obuwie', 'ubrania', 'ubranie', 'ciuchy', 'buty', 'but',
+                'kurtka', 'płaszcz', 'spodnie', 'jeansy', 'sukienka', 'koszula',
+                'bluzka', 'sweter', 'bluza', 'tshirt', 'bielizna', 'skarpetki',
+                'h&m', 'zara', 'reserved', 'house', 'cropp', 'sinsay', 'mohito',
+                'ccc', 'deichmann', 'nike', 'adidas', 'puma', 'new balance',
+                'zalando', 'answear', 'modivo', 'eobuwie', 'aboutyou',
+                'krawiec', 'szewc', 'przeróbki', 'pranie chemiczne'
             ]
         },
         'Prezenty i wsparcie': {
             category: 'Osobiste',
             synonyms: [
-                'prezent', 'prezenty', 'upominek', 'upominki', 'gift', 'podarunek',
-                'urodziny prezent', 'imieniny', 'gwiazdka', 'mikołaj', 'komunia',
-                'ślub prezent', 'wesele', 'chrzest', 'wsparcie', 'pomoc finansowa',
-                'darowizna', 'zbiórka', 'crowdfunding', 'siepomaga', 'zrzutka'
+                'prezenty', 'prezent', 'podarunek', 'upominek', 'gift',
+                'urodziny', 'urodzinowy', 'imieniny', 'rocznica', 'świąteczne',
+                'mikołaj', 'gwiazdka', 'komunia', 'chrzest', 'ślub', 'wesele',
+                'wsparcie', 'darowizna', 'darowizny', 'pomoc', 'zbiórka',
+                'siepomaga', 'zrzutka', 'charity', 'charytatywne'
             ]
         },
         'Zdrowie i uroda': {
             category: 'Osobiste',
             synonyms: [
-                'zdrowie', 'leki', 'apteka', 'lekarstwa', 'witaminy', 'suplementy',
-                'lekarz', 'wizyta lekarska', 'dentysta', 'stomatolog', 'okulista',
-                'okulary', 'soczewki', 'badania', 'usg', 'rezonans', 'rehabilitacja',
-                'fizjoterapia', 'masaż', 'uroda', 'kosmetyki', 'krem', 'szampon',
-                'perfumy', 'makijaż', 'fryzjer', 'strzyżenie', 'manicure', 'pedicure',
-                'spa', 'rossmann', 'hebe', 'sephora', 'douglas'
+                'zdrowie', 'uroda', 'apteka', 'leki', 'lekarstwa', 'tabletki',
+                'suplementy', 'witaminy', 'lekarz', 'wizyta lekarska', 'dentysta',
+                'stomatolog', 'okulista', 'okulary', 'soczewki', 'ortopeda',
+                'fizjoterapia', 'rehabilitacja', 'masaż', 'badania', 'laboratorium',
+                'szpital', 'klinika', 'prywatna opieka', 'medicover', 'luxmed', 'enel-med',
+                'rossmann', 'hebe', 'sephora', 'douglas', 'kosmetyki', 'makijaż',
+                'krem', 'szampon', 'perfumy', 'fryzjer', 'fryzjera', 'strzyżenie',
+                'farbowanie', 'salon', 'salon kosmetyczny', 'manicure', 'pedicure',
+                'depilacja', 'spa', 'zabieg', 'zabiegi', 'kosmetyczka'
             ]
         },
         'Osobiste - inne': {
             category: 'Osobiste',
-            synonyms: ['osobiste inne', 'wydatki osobiste']
+            synonyms: []
         },
         
         // ─────────────────────────────────────────────────────────
@@ -296,118 +324,124 @@ const BudgetAISynonyms = {
         'Fundusze': {
             category: 'Oszczędności i inw.',
             synonyms: [
-                'fundusz', 'fundusze', 'tfi', 'fundusz inwestycyjny', 'etf',
-                'fundusz obligacji', 'fundusz akcji', 'inpzu', 'finax'
+                'fundusze', 'fundusz', 'tfi', 'fundusz inwestycyjny', 'etf',
+                'fundusz akcji', 'fundusz obligacji', 'fundusz mieszany'
             ]
         },
         'Giełda': {
             category: 'Oszczędności i inw.',
             synonyms: [
-                'giełda', 'akcje', 'gpw', 'obligacje', 'obligacja', 'makler',
-                'broker', 'xtb', 'degiro', 'bossa', 'mbank broker', 'trading',
-                'inwestowanie', 'dywidenda'
+                'giełda', 'gpw', 'akcje', 'obligacje', 'inwestycje', 'trading',
+                'makler', 'broker', 'xtb', 'bossa', 'mbank maklerski', 'degiro',
+                'revolut trading', 'etoro', 'dywidendy', 'zyski kapitałowe'
             ]
         },
         'Lokaty i konto oszcz.': {
             category: 'Oszczędności i inw.',
             synonyms: [
                 'lokata', 'lokaty', 'konto oszczędnościowe', 'oszczędności',
-                'odkładanie', 'odłożyłem', 'oszczędzanie'
+                'depozyt', 'oprocentowanie', 'odsetki', 'kapitalizacja'
             ]
         },
         'Regularne oszczędzanie': {
             category: 'Oszczędności i inw.',
             synonyms: [
-                'regularne oszczędzanie', 'systematyczne oszczędzanie', 'zlecenie stałe',
-                'ike', 'ikze', 'ppk', 'emerytura', 'konto emerytalne'
+                'regularne oszczędzanie', 'oszczędzanie', 'odkładanie', 'cushion',
+                'fundusz awaryjny', 'emergency fund', 'poduszka finansowa',
+                'ike', 'ikze', 'ppk', 'emerytura', 'iii filar'
             ]
         },
         'Oszczędności i inw. - inne': {
             category: 'Oszczędności i inw.',
-            synonyms: ['inwestycje inne', 'oszczędności inne']
+            synonyms: ['kryptowaluty', 'bitcoin', 'crypto', 'nft']
         },
         
         // ─────────────────────────────────────────────────────────
-        // PŁATNOŚCI
+        // PŁATNOŚCI (RACHUNKI)
         // ─────────────────────────────────────────────────────────
         'Czynsz i wynajem': {
             category: 'Płatności',
             synonyms: [
-                'czynsz', 'najem', 'wynajem', 'mieszkanie', 'wynajmuję', 'rent',
-                'opłata za mieszkanie', 'czynsz administracyjny', 'fundusz remontowy',
-                'wspólnota', 'spółdzielnia'
+                'czynsz', 'wynajem', 'najem', 'mieszkanie', 'opłata za mieszkanie',
+                'wynajmujący', 'właściciel', 'administracja', 'wspólnota',
+                'fundusz remontowy', 'zaliczka', 'rent'
             ]
         },
         'Gaz': {
             category: 'Płatności',
             synonyms: [
-                'gaz', 'gaz ziemny', 'pgnig', 'rachunek za gaz', 'faktura za gaz'
+                'gaz', 'gazowy', 'pgnig', 'psp', 'gaz ziemny', 'rachunek za gaz',
+                'prognoza gaz', 'rozliczenie gaz'
             ]
         },
         'Ogrzewanie': {
             category: 'Płatności',
             synonyms: [
-                'ogrzewanie', 'ciepło', 'c.o.', 'centralne ogrzewanie', 'mpec',
-                'ciepłownia', 'rachunki za ogrzewanie', 'opał', 'pellet', 'węgiel'
+                'ogrzewanie', 'ciepło', 'ciepła woda', 'mpec', 'veolia',
+                'c.o.', 'centralne ogrzewanie', 'kaloryfer', 'piec', 'węgiel',
+                'pellet', 'drewno opałowe', 'kominek'
             ]
         },
         'Opłaty i odsetki': {
             category: 'Płatności',
             synonyms: [
-                'opłaty bankowe', 'prowizja', 'odsetki', 'opłata za kartę',
-                'opłata za konto', 'opłata za przelew', 'odsetki od kredytu'
+                'opłaty', 'odsetki', 'prowizja', 'prowizje', 'opłata bankowa',
+                'karta', 'karta kredytowa', 'opłata za kartę', 'konto bankowe',
+                'koszty bankowe', 'przelewy', 'opłata za przelew'
             ]
         },
         'Podatki': {
             category: 'Płatności',
             synonyms: [
-                'podatek', 'podatki', 'pit', 'vat', 'cit', 'urząd skarbowy',
-                'podatek od nieruchomości', 'podatek dochodowy', 'dopłata podatku'
+                'podatki', 'podatek', 'pit', 'vat', 'cit', 'urząd skarbowy',
+                'fiskus', 'rozliczenie roczne', 'zwrot podatku', 'dopłata podatku',
+                'podatek od nieruchomości', 'podatek od samochodu'
             ]
         },
         'Prąd': {
             category: 'Płatności',
             synonyms: [
-                'prąd', 'elektryczność', 'energia', 'energia elektryczna', 'tauron',
-                'pge', 'enea', 'energa', 'innogy', 'rachunek za prąd', 'faktura za prąd'
+                'prąd', 'energia', 'elektryczność', 'tauron', 'pge', 'enea', 'energa',
+                'rachunek za prąd', 'licznik', 'kilowatogodziny', 'kwh',
+                'prognoza prąd', 'rozliczenie prąd'
             ]
         },
         'Spłaty rat': {
             category: 'Płatności',
             synonyms: [
-                'rata', 'raty', 'kredyt', 'pożyczka', 'spłata kredytu', 'spłata raty',
-                'hipoteka', 'kredyt hipoteczny', 'kredyt gotówkowy', 'raty 0%',
-                'leasing', 'rata leasingu'
+                'rata', 'raty', 'spłata', 'kredyt', 'pożyczka', 'hipoteka',
+                'kredyt hipoteczny', 'kredyt gotówkowy', 'kredyt samochodowy',
+                'leasing', 'rata leasingowa', 'raty 0%', 'rrso'
             ]
         },
         'TV, internet, telefon': {
             category: 'Płatności',
             synonyms: [
-                'internet', 'tv', 'telewizja', 'telefon', 'abonament', 'abonament telefoniczny',
-                'play', 'orange', 'plus', 't-mobile', 'upc', 'vectra', 'netia',
-                'multimedia', 'światłowód', 'router', 'kablówka', 'cyfrowy polsat',
-                'canal+', 'nc+', 'polsat box'
+                'tv', 'telewizja', 'internet', 'telefon', 'abonament', 'play',
+                'orange', 't-mobile', 'plus', 'vectra', 'upc', 'multimedia',
+                'netia', 'inea', 'światłowód', 'kablówka', 'nc+', 'polsat box go',
+                'sim', 'roaming', 'pakiet', 'numer telefonu', 'komórka'
             ]
         },
         'Ubezpieczenia': {
             category: 'Płatności',
             synonyms: [
-                'ubezpieczenie', 'ubezpieczenia', 'polisa', 'ubezpieczenie na życie',
-                'ubezpieczenie zdrowotne', 'nfz', 'pzu', 'warta', 'allianz', 'axa',
-                'generali', 'uniqa', 'prywatna opieka medyczna', 'medicover', 'luxmed',
-                'enel-med', 'pakiet medyczny'
+                'ubezpieczenie', 'ubezpieczenia', 'polisa', 'pzu', 'warta', 'allianz',
+                'generali', 'aviva', 'axa', 'compensa', 'ergo hestia',
+                'ubezpieczenie na życie', 'ubezpieczenie zdrowotne', 'nfz',
+                'prywatne ubezpieczenie', 'grupowe ubezpieczenie', 'składka'
             ]
         },
         'Woda i kanalizacja': {
             category: 'Płatności',
             synonyms: [
-                'woda', 'kanalizacja', 'wodociągi', 'mpwik', 'rachunek za wodę',
-                'ścieki', 'wodkan'
+                'woda', 'kanalizacja', 'wodociągi', 'ścieki', 'mpwik', 'aquanet',
+                'rachunek za wodę', 'zużycie wody', 'licznik wody'
             ]
         },
         'Płatności - inne': {
             category: 'Płatności',
-            synonyms: ['płatności inne', 'rachunki inne', 'opłaty inne']
+            synonyms: ['wywóz śmieci', 'odpady', 'segregacja']
         },
         
         // ─────────────────────────────────────────────────────────
@@ -416,33 +450,46 @@ const BudgetAISynonyms = {
         'Podróże i wyjazdy': {
             category: 'Rozrywka',
             synonyms: [
-                'podróż', 'podróże', 'wyjazd', 'wyjazdy', 'wakacje', 'urlop',
-                'lot', 'samolot', 'bilet lotniczy', 'ryanair', 'wizzair', 'lot polish',
-                'hotel', 'hostel', 'airbnb', 'booking', 'nocleg', 'zwiedzanie',
-                'wycieczka', 'all inclusive', 'last minute', 'tui', 'itaka', 'rainbow'
+                'podróże', 'podróż', 'wyjazd', 'wyjazdy', 'wakacje', 'urlop',
+                'wycieczka', 'wycieczki', 'lot', 'loty', 'samolot', 'ryanair',
+                'wizzair', 'lufthansa', 'lot polski', 'lotnisko', 'bilet lotniczy',
+                'hotel', 'hotele', 'nocleg', 'noclegi', 'booking', 'airbnb',
+                'trivago', 'hostel', 'apartament', 'kemping', 'camping',
+                'itaka', 'rainbow', 'tui', 'coral travel', 'biuro podróży',
+                'all inclusive', 'last minute', 'paszport', 'wiza', 'travel'
             ]
         },
         'Sport i hobby': {
             category: 'Rozrywka',
             synonyms: [
-                'sport', 'hobby', 'siłownia', 'fitness', 'gym', 'karnet', 'multisport',
-                'basen', 'joga', 'crossfit', 'rower', 'bieganie', 'piłka nożna',
-                'tenis', 'squash', 'narty', 'snowboard', 'wspinaczka', 'martial arts',
-                'sztuki walki', 'sprzęt sportowy', 'decathlon', 'intersport'
+                'sport', 'hobby', 'siłownia', 'gym', 'fitness', 'crossfit',
+                'multisport', 'medicover sport', 'fitprofit', 'ok system',
+                'basen', 'pływalnia', 'aquapark', 'tenis', 'squash', 'padel',
+                'rower', 'bieganie', 'jogging', 'maraton', 'półmaraton',
+                'narty', 'snowboard', 'skipass', 'wypożyczalnia', 'kajak',
+                'wspinaczka', 'ścianka', 'decathlon', 'go sport', 'intersport',
+                'sprzęt sportowy', 'odzież sportowa', 'buty sportowe',
+                'fotografia', 'malarstwo', 'szycie', 'robótki', 'gry planszowe',
+                'modelarstwo', 'kolekcjonowanie', 'wędkarstwo', 'golf'
             ]
         },
         'Wyjścia i wydarzenia': {
             category: 'Rozrywka',
             synonyms: [
-                'wyjście', 'wyjścia', 'kino', 'teatr', 'koncert', 'festiwal',
-                'wydarzenie', 'bilet', 'bilety', 'spektakl', 'opera', 'muzeum',
-                'galeria', 'wystawa', 'escape room', 'park rozrywki', 'luna park',
-                'impreza', 'event', 'eventim', 'ebilet', 'ticketmaster', 'going'
+                'wyjście', 'wyjścia', 'wydarzenie', 'wydarzenia', 'event',
+                'kino', 'bilet do kina', 'cinema city', 'multikino', 'helios',
+                'teatr', 'opera', 'filharmonia', 'koncert', 'koncerty', 'festiwal',
+                'mecz', 'stadion', 'bilet na mecz', 'muzeum', 'galeria', 'wystawa',
+                'zoo', 'park rozrywki', 'energylandia', 'escape room',
+                'kręgle', 'bowling', 'bilard', 'klub', 'dyskoteka', 'impreza',
+                'pub', 'bar', 'piwiarnia', 'spotkanie', 'grill', 'przyjęcie'
             ]
         },
         'Rozrywka - inne': {
             category: 'Rozrywka',
-            synonyms: ['rozrywka inne', 'zabawa inne']
+            synonyms: [
+                'hazard', 'lotto', 'totalizator', 'kasyno', 'zakłady'
+            ]
         }
     },
     
@@ -451,17 +498,15 @@ const BudgetAISynonyms = {
     // ═══════════════════════════════════════════════════════════
     
     CATEGORY_SYNONYMS: {
-        'Auto i transport': ['auto', 'samochód', 'transport', 'motoryzacja', 'jazda'],
-        'Codzienne wydatki': ['codzienne', 'bieżące', 'życie', 'podstawowe'],
-        'Dom': ['dom', 'mieszkanie', 'house', 'gospodarstwo'],
-        'Dzieci': ['dzieci', 'dziecko', 'potomstwo', 'syn', 'córka'],
-        'Firmowe': ['firma', 'firmowe', 'biznes', 'działalność', 'praca'],
-        'Osobiste': ['osobiste', 'prywatne', 'własne', 'moje'],
-        'Oszczędności i inw.': ['oszczędności', 'inwestycje', 'odkładanie', 'inwestowanie'],
-        'Płatności': ['płatności', 'rachunki', 'opłaty', 'bills', 'stałe'],
-        'Rozrywka': ['rozrywka', 'zabawa', 'fun', 'leisure', 'relax'],
-        'Nieistotne': ['nieistotne', 'nieważne', 'drobne'],
-        'Nieskategoryzowane': ['nieskategoryzowane', 'inne', 'pozostałe', 'różne']
+        'Auto i transport': ['auto', 'samochód', 'samochod', 'transport', 'jazda', 'mobilność'],
+        'Codzienne wydatki': ['codzienne', 'zakupy', 'bieżące', 'spożywcze'],
+        'Dom': ['dom', 'mieszkanie', 'mieszkania', 'domowe', 'nieruchomość'],
+        'Dzieci': ['dzieci', 'dziecko', 'dziecięce', 'potomstwo'],
+        'Firmowe': ['firmowe', 'firma', 'biznes', 'działalność'],
+        'Osobiste': ['osobiste', 'prywatne', 'indywidualne'],
+        'Oszczędności i inw.': ['oszczędności', 'inwestycje', 'lokaty', 'giełda', 'odkładanie'],
+        'Płatności': ['płatności', 'rachunki', 'opłaty', 'bills', 'media', 'stałe'],
+        'Rozrywka': ['rozrywka', 'rekreacja', 'wypoczynek', 'fun', 'relaks', 'zabawa']
     },
     
     // ═══════════════════════════════════════════════════════════
@@ -470,29 +515,31 @@ const BudgetAISynonyms = {
     
     TIME_KEYWORDS: {
         'ostatni miesiąc': { type: 'relative', value: -1, unit: 'month' },
+        'ostatnie miesiące': { type: 'relative', value: -3, unit: 'month' },
         'poprzedni miesiąc': { type: 'relative', value: -1, unit: 'month' },
-        'w tym miesiącu': { type: 'current', unit: 'month' },
-        'bieżący miesiąc': { type: 'current', unit: 'month' },
-        'ostatnie 3 miesiące': { type: 'relative', value: -3, unit: 'month' },
-        'ostatni kwartał': { type: 'relative', value: -3, unit: 'month' },
-        'ostatnie pół roku': { type: 'relative', value: -6, unit: 'month' },
-        'ostatnie 6 miesięcy': { type: 'relative', value: -6, unit: 'month' },
-        'ostatni rok': { type: 'relative', value: -12, unit: 'month' },
+        'ten miesiąc': { type: 'relative', value: 0, unit: 'month' },
+        'bieżący miesiąc': { type: 'relative', value: 0, unit: 'month' },
         'w tym roku': { type: 'currentYear' },
-        'rok temu': { type: 'relative', value: -1, unit: 'year' },
+        'ten rok': { type: 'currentYear' },
+        'bieżący rok': { type: 'currentYear' },
         'zeszły rok': { type: 'previousYear' },
-        'styczeń': { type: 'month', value: 1 },
-        'luty': { type: 'month', value: 2 },
-        'marzec': { type: 'month', value: 3 },
-        'kwiecień': { type: 'month', value: 4 },
-        'maj': { type: 'month', value: 5 },
-        'czerwiec': { type: 'month', value: 6 },
-        'lipiec': { type: 'month', value: 7 },
-        'sierpień': { type: 'month', value: 8 },
-        'wrzesień': { type: 'month', value: 9 },
-        'październik': { type: 'month', value: 10 },
-        'listopad': { type: 'month', value: 11 },
-        'grudzień': { type: 'month', value: 12 }
+        'poprzedni rok': { type: 'previousYear' },
+        'ubiegły rok': { type: 'previousYear' },
+        '2025': { type: 'specificYear', year: 2025 },
+        '2024': { type: 'specificYear', year: 2024 },
+        '2023': { type: 'specificYear', year: 2023 },
+        'styczeń': { type: 'month', month: 1 },
+        'luty': { type: 'month', month: 2 },
+        'marzec': { type: 'month', month: 3 },
+        'kwiecień': { type: 'month', month: 4 },
+        'maj': { type: 'month', month: 5 },
+        'czerwiec': { type: 'month', month: 6 },
+        'lipiec': { type: 'month', month: 7 },
+        'sierpień': { type: 'month', month: 8 },
+        'wrzesień': { type: 'month', month: 9 },
+        'październik': { type: 'month', month: 10 },
+        'listopad': { type: 'month', month: 11 },
+        'grudzień': { type: 'month', month: 12 }
     },
     
     // ═══════════════════════════════════════════════════════════
@@ -500,68 +547,56 @@ const BudgetAISynonyms = {
     // ═══════════════════════════════════════════════════════════
     
     INTENT_KEYWORDS: {
-        sum: ['ile', 'suma', 'łącznie', 'razem', 'całkowity', 'total', 'wydałem', 'wydałam', 'kosztowało'],
-        trend: ['trend', 'tendencja', 'rośnie', 'maleje', 'zmienia się', 'kierunek'],
-        compare: ['porównaj', 'porównanie', 'vs', 'versus', 'różnica', 'zestawienie'],
-        top: ['top', 'ranking', 'najwięcej', 'największe', 'najwyższe', 'główne'],
-        monthly: ['miesięcznie', 'miesiące', 'miesiąc po miesiącu', 'w poszczególnych miesiącach', 'jak się zmieniało'],
-        average: ['średnia', 'średnio', 'przeciętnie', 'typically'],
-        share: ['udział', 'procent', 'część', 'odsetek'],
-        anomaly: ['anomalia', 'odstępstwo', 'nietypowe', 'dziwne', 'wysokie']
+        'sum': ['suma', 'ile', 'wydałem', 'wydałam', 'wydatki', 'koszt', 'koszty', 'łącznie', 'razem', 'total', 'w sumie'],
+        'trend': ['trend', 'trendy', 'jak się zmienia', 'zmieniało', 'rośnie', 'maleje', 'tendencja'],
+        'compare': ['porównaj', 'porównanie', 'vs', 'versus', 'różnica', 'więcej', 'mniej'],
+        'top': ['top', 'ranking', 'największe', 'najwyższe', 'najwięcej', 'główne'],
+        'monthly': ['miesięcznie', 'miesięczne', 'miesiącach', 'miesiące', 'każdy miesiąc', 'co miesiąc', 'w poszczególnych', 'którym miesiącu'],
+        'average': ['średnia', 'średnio', 'przeciętnie', 'przeciętna'],
+        'share': ['udział', 'procent', 'procentowo', '%', 'struktura', 'rozkład'],
+        'anomaly': ['anomalia', 'nietypowe', 'odstępstwo', 'dziwne', 'nienormalne']
     },
     
     // ═══════════════════════════════════════════════════════════
-    // GŁÓWNA FUNKCJA RESOLVERA
+    // GŁÓWNA METODA ROZPOZNAWANIA
     // ═══════════════════════════════════════════════════════════
     
-    /**
-     * Analizuje zapytanie i zwraca rozpoznane synonimy
-     * @param {string} query - zapytanie użytkownika
-     * @returns {Object} - rozpoznane elementy
-     */
     resolve(query) {
         const normalizedQuery = this._normalizeQuery(query);
-        const tokens = this._tokenize(normalizedQuery);
-        
         const result = {
             originalQuery: query,
             normalizedQuery: normalizedQuery,
-            
-            // Rozpoznane kategorie/podkategorie
-            categories: [],
             subcategories: [],
-            
-            // Rozpoznany czas
+            categories: [],
             timeContext: null,
-            
-            // Rozpoznana intencja
             intents: [],
-            
-            // Pełne mapowanie do przekazania LLM7
-            synonymMap: {}
+            synonymsMap: {}
         };
         
-        // 1. Szukaj podkategorii (najważniejsze!)
-        result.subcategories = this._findSubcategories(normalizedQuery, tokens);
+        // 1. Szukaj podkategorii
+        result.subcategories = this._findSubcategories(normalizedQuery);
         
-        // 2. Szukaj kategorii
-        result.categories = this._findCategories(normalizedQuery, tokens);
+        // 2. Szukaj kategorii głównych (jeśli nie znaleziono podkategorii)
+        if (result.subcategories.length === 0) {
+            result.categories = this._findCategories(normalizedQuery);
+        }
         
         // 3. Szukaj kontekstu czasowego
         result.timeContext = this._findTimeContext(normalizedQuery);
         
         // 4. Szukaj intencji
-        result.intents = this._findIntents(normalizedQuery, tokens);
+        result.intents = this._findIntents(normalizedQuery);
         
-        // 5. Buduj mapę synonimów
-        result.synonymMap = this._buildSynonymMap(result);
+        // 5. Buduj mapę synonimów dla promptu
+        result.subcategories.forEach(sub => {
+            result.synonymsMap[sub.originalTerm] = {
+                officialName: sub.officialName,
+                category: sub.category
+            };
+        });
         
         return result;
     },
-    
-    // ═══════════════════════════════════════════════════════════
-    // METODY POMOCNICZE
-    // ═══════════════════════════════════════════════════════════
     
     _normalizeQuery(query) {
         return query
@@ -569,74 +604,61 @@ const BudgetAISynonyms = {
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '') // usuń akcenty
             .replace(/ł/g, 'l')
-            .replace(/ą/g, 'a')
-            .replace(/ę/g, 'e')
-            .replace(/ó/g, 'o')
-            .replace(/ś/g, 's')
-            .replace(/ć/g, 'c')
-            .replace(/ń/g, 'n')
-            .replace(/ż|ź/g, 'z')
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
             .trim();
     },
     
-    _tokenize(query) {
-        // Rozdziel na słowa i frazy
-        return query
-            .split(/[\s,;.!?]+/)
-            .filter(t => t.length > 1);
-    },
-    
-    _findSubcategories(query, tokens) {
+    _findSubcategories(query) {
         const found = [];
+        const words = query.split(' ');
         
-        for (const [subcatName, subcatData] of Object.entries(this.SUBCATEGORY_SYNONYMS)) {
-            for (const synonym of subcatData.synonyms) {
+        for (const [subcatName, data] of Object.entries(this.SUBCATEGORY_SYNONYMS)) {
+            for (const synonym of data.synonyms) {
                 const normalizedSynonym = this._normalizeQuery(synonym);
                 
                 // Sprawdź czy synonim występuje w zapytaniu
                 if (query.includes(normalizedSynonym)) {
-                    // Sprawdź czy to nie jest część dłuższego słowa
-                    const regex = new RegExp(`\\b${this._escapeRegex(normalizedSynonym)}\\b`, 'i');
-                    if (regex.test(query) || normalizedSynonym.length >= 4) {
+                    // Oblicz confidence na podstawie długości dopasowania
+                    let confidence = normalizedSynonym.length / query.length;
+                    
+                    // Bonus za dokładne dopasowanie słowa
+                    if (words.includes(normalizedSynonym) || 
+                        words.some(w => w.startsWith(normalizedSynonym) && normalizedSynonym.length >= 3)) {
+                        confidence += 0.3;
+                    }
+                    
+                    // Sprawdź czy już nie mamy tej podkategorii
+                    const existing = found.find(f => f.officialName === subcatName);
+                    if (!existing || existing.confidence < confidence) {
+                        if (existing) {
+                            found.splice(found.indexOf(existing), 1);
+                        }
                         found.push({
                             originalTerm: synonym,
                             officialName: subcatName,
-                            category: subcatData.category,
-                            confidence: this._calculateConfidence(synonym, query)
+                            category: data.category,
+                            confidence: Math.min(confidence, 1)
                         });
-                        break; // Jedna podkategoria = jeden match
                     }
                 }
             }
         }
         
-        // Sortuj po confidence, usuń duplikaty
-        const unique = [];
-        const seen = new Set();
-        
-        found.sort((a, b) => b.confidence - a.confidence);
-        for (const item of found) {
-            if (!seen.has(item.officialName)) {
-                seen.add(item.officialName);
-                unique.push(item);
-            }
-        }
-        
-        return unique;
+        // Sortuj po confidence
+        return found.sort((a, b) => b.confidence - a.confidence);
     },
     
-    _findCategories(query, tokens) {
+    _findCategories(query) {
         const found = [];
         
         for (const [catName, synonyms] of Object.entries(this.CATEGORY_SYNONYMS)) {
             for (const synonym of synonyms) {
                 const normalizedSynonym = this._normalizeQuery(synonym);
-                
                 if (query.includes(normalizedSynonym)) {
                     found.push({
                         originalTerm: synonym,
-                        officialName: catName,
-                        confidence: this._calculateConfidence(synonym, query)
+                        officialName: catName
                     });
                     break;
                 }
@@ -647,29 +669,16 @@ const BudgetAISynonyms = {
     },
     
     _findTimeContext(query) {
-        for (const [phrase, config] of Object.entries(this.TIME_KEYWORDS)) {
-            const normalizedPhrase = this._normalizeQuery(phrase);
-            if (query.includes(normalizedPhrase)) {
-                return {
-                    originalPhrase: phrase,
-                    ...config
-                };
+        for (const [keyword, context] of Object.entries(this.TIME_KEYWORDS)) {
+            const normalizedKeyword = this._normalizeQuery(keyword);
+            if (query.includes(normalizedKeyword)) {
+                return { ...context, originalTerm: keyword };
             }
         }
-        
-        // Szukaj wzorca "w 2024", "w roku 2023" itp.
-        const yearMatch = query.match(/(?:w\s+)?(?:roku?\s+)?(\d{4})/);
-        if (yearMatch) {
-            return {
-                type: 'specificYear',
-                year: parseInt(yearMatch[1])
-            };
-        }
-        
         return null;
     },
     
-    _findIntents(query, tokens) {
+    _findIntents(query) {
         const found = [];
         
         for (const [intent, keywords] of Object.entries(this.INTENT_KEYWORDS)) {
@@ -682,98 +691,49 @@ const BudgetAISynonyms = {
             }
         }
         
-        // Domyślna intencja jeśli nie znaleziono
-        if (found.length === 0) {
-            found.push('sum'); // domyślnie pytają o sumę
-        }
-        
-        return [...new Set(found)];
-    },
-    
-    _buildSynonymMap(result) {
-        const map = {};
-        
-        // Mapuj podkategorie
-        for (const subcat of result.subcategories) {
-            map[subcat.originalTerm] = {
-                type: 'subcategory',
-                officialName: subcat.officialName,
-                category: subcat.category,
-                confidence: subcat.confidence
-            };
-        }
-        
-        // Mapuj kategorie
-        for (const cat of result.categories) {
-            map[cat.originalTerm] = {
-                type: 'category',
-                officialName: cat.officialName,
-                confidence: cat.confidence
-            };
-        }
-        
-        return map;
-    },
-    
-    _calculateConfidence(synonym, query) {
-        // Dłuższe dopasowanie = wyższa pewność
-        const lengthScore = Math.min(synonym.length / 10, 1);
-        
-        // Exact word match = wyższa pewność
-        const regex = new RegExp(`\\b${this._escapeRegex(this._normalizeQuery(synonym))}\\b`, 'i');
-        const exactMatch = regex.test(query) ? 0.3 : 0;
-        
-        return Math.min(0.5 + lengthScore * 0.3 + exactMatch, 1);
-    },
-    
-    _escapeRegex(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return found;
     },
     
     // ═══════════════════════════════════════════════════════════
     // FORMATOWANIE DLA LLM7
     // ═══════════════════════════════════════════════════════════
     
-    /**
-     * Formatuje wynik resolvera jako tekst dla LLM7
-     */
     formatForLLM(resolved) {
         if (resolved.subcategories.length === 0 && resolved.categories.length === 0) {
-            return null; // Nic nie rozpoznano
+            return null;
         }
         
-        let text = 'ROZPOZNANE SYNONIMY W ZAPYTANIU:\n';
+        let text = '';
         
         if (resolved.subcategories.length > 0) {
-            text += '\nPODKATEGORIE:\n';
-            for (const sub of resolved.subcategories) {
-                text += `• "${sub.originalTerm}" → podkategoria "${sub.officialName}" (kategoria: ${sub.category})\n`;
-            }
+            text += 'PODKATEGORIE:\n';
+            resolved.subcategories.forEach(sub => {
+                text += `• "${sub.originalTerm}" → oficjalna podkategoria: "${sub.officialName}" (kategoria: "${sub.category}")\n`;
+            });
         }
         
         if (resolved.categories.length > 0) {
-            text += '\nKATEGORIE:\n';
-            for (const cat of resolved.categories) {
-                text += `• "${cat.originalTerm}" → kategoria "${cat.officialName}"\n`;
+            text += 'KATEGORIE:\n';
+            resolved.categories.forEach(cat => {
+                text += `• "${cat.originalTerm}" → oficjalna kategoria: "${cat.officialName}"\n`;
+            });
+        }
+        
+        if (resolved.intents.length > 0) {
+            text += `\nROZPOZNANA INTENCJA: ${resolved.intents.join(', ')}\n`;
+            const suggestedFunc = this.suggestFunction(resolved.intents);
+            if (suggestedFunc) {
+                text += `SUGEROWANA FUNKCJA: ${suggestedFunc}\n`;
             }
         }
         
         if (resolved.timeContext) {
-            text += `\nOKRES: ${JSON.stringify(resolved.timeContext)}\n`;
+            text += `\nROZPOZNANY OKRES: ${JSON.stringify(resolved.timeContext)}\n`;
         }
-        
-        if (resolved.intents.length > 0) {
-            text += `\nINTENCJE: ${resolved.intents.join(', ')}\n`;
-        }
-        
-        text += '\nUŻYWAJ POWYŻSZYCH OFICJALNYCH NAZW W ODPOWIEDZI JSON!\n';
         
         return text;
     },
     
-    /**
-     * Zwraca sugerowaną funkcję na podstawie intencji
-     */
     suggestFunction(intents) {
         if (intents.includes('monthly')) return 'monthlyBreakdown';
         if (intents.includes('trend')) return 'trendAnalysis';
@@ -782,11 +742,12 @@ const BudgetAISynonyms = {
         if (intents.includes('average')) return 'averageExpense';
         if (intents.includes('share')) return 'categoryShare';
         if (intents.includes('anomaly')) return 'getAnomalies';
-        return 'sumBySubcategory'; // domyślnie
+        if (intents.includes('sum')) return 'sumBySubcategory';
+        return null;
     }
 };
 
-// Export dla modułów
+// Export dla Node.js (jeśli potrzebne)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = BudgetAISynonyms;
 }
