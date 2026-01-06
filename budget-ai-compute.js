@@ -77,6 +77,10 @@ const BudgetAICompute = {
         'czynsz': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
         'najem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
         'wynajem': { category: 'Płatności', subcategory: 'Czynsz i wynajem' },
+        'mieszkanie': { category: 'Płatności', subcategory: null },  // ogólnie mieszkanie = płatności
+        'rachunki': { category: 'Płatności', subcategory: null },
+        'opłaty': { category: 'Płatności', subcategory: null },
+        'media': { category: 'Płatności', subcategory: null },
         'prąd': { category: 'Płatności', subcategory: 'Prąd' },
         'elektryczność': { category: 'Płatności', subcategory: 'Prąd' },
         'gaz': { category: 'Płatności', subcategory: 'Gaz' },
@@ -92,6 +96,8 @@ const BudgetAICompute = {
         'podatek': { category: 'Płatności', subcategory: 'Podatki' },
         'podatki': { category: 'Płatności', subcategory: 'Podatki' },
         'pit': { category: 'Płatności', subcategory: 'Podatki' },
+        'ubezpieczenie': { category: 'Płatności', subcategory: 'Ubezpieczenia' },
+        'polisa': { category: 'Płatności', subcategory: 'Ubezpieczenia' },
         
         // Rozrywka
         'podróże': { category: 'Rozrywka', subcategory: 'Podróże i wyjazdy' },
@@ -433,8 +439,36 @@ const BudgetAICompute = {
         
         if (subcategory) {
             // Suma dla podkategorii
-            const key = `${category}|${subcategory}`;
-            const subData = cache.subcategorySums[key];
+            let key = `${category}|${subcategory}`;
+            let subData = cache.subcategorySums[key];
+            
+            // Jeśli nie znaleziono i brak kategorii, szukaj podkategorii we wszystkich kategoriach
+            if (!subData && !category) {
+                for (const fullKey of Object.keys(cache.subcategorySums)) {
+                    if (fullKey.endsWith(`|${subcategory}`)) {
+                        key = fullKey;
+                        subData = cache.subcategorySums[key];
+                        // Wyciągnij kategorię z klucza
+                        category = fullKey.split('|')[0];
+                        break;
+                    }
+                }
+            }
+            
+            // Jeśli nadal nie znaleziono, spróbuj szukać po częściowym dopasowaniu nazwy
+            if (!subData) {
+                const normalizedSub = this._normalizeText(subcategory);
+                for (const [fullKey, data] of Object.entries(cache.subcategorySums)) {
+                    const [cat, sub] = fullKey.split('|');
+                    if (this._normalizeText(sub).includes(normalizedSub) || normalizedSub.includes(this._normalizeText(sub))) {
+                        key = fullKey;
+                        subData = data;
+                        category = cat;
+                        subcategory = sub;
+                        break;
+                    }
+                }
+            }
             
             if (!subData) {
                 return { total: 0, count: 0, category, subcategory, notFound: true };
