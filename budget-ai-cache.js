@@ -125,8 +125,15 @@ const BudgetAICache = {
     
     /**
      * Pobiera dane z cache (z pamięci lub arkusza)
+     * @param {boolean} forceRefresh - jeśli true, wyczyści cache i przeliczy na nowo
      */
-    async getCache() {
+    async getCache(forceRefresh = false) {
+        // Jeśli wymuszamy odświeżenie, wyczyść pamięć
+        if (forceRefresh) {
+            console.log('BudgetAICache: Force refresh - czyszczenie pamięci');
+            this._memoryCache = null;
+        }
+        
         // Najpierw sprawdź pamięć
         if (this._memoryCache) {
             return this._memoryCache;
