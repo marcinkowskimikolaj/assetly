@@ -21,19 +21,19 @@ const AIProviders = {
         },
         GEMINI: {
             name: 'Gemini',
-            endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-            model: 'gemini-2.5-flash',
+            endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+            model: 'gemini-2.0-flash',
             role: 'generator', // główny generator odpowiedzi
-            timeout: 30000,
-            maxTokens: 2000
+            timeout: 45000,
+            maxTokens: 4096
         },
         OPENAI: {
             name: 'OpenAI',
             endpoint: 'https://api.openai.com/v1/chat/completions',
             model: 'gpt-4o-mini',
             role: 'fallback', // backup
-            timeout: 30000,
-            maxTokens: 2000
+            timeout: 45000,
+            maxTokens: 4096
         }
     },
     
@@ -384,15 +384,22 @@ const AIProviders = {
             
             const data = await response.json();
             const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = data.candidates?.[0]?.finishReason;
             
             if (!content) {
                 throw new Error('Pusta odpowiedź Gemini');
             }
             
+            // Sprawdź czy odpowiedź nie została ucięta
+            if (finishReason === 'MAX_TOKENS') {
+                console.warn('AIProviders: Gemini response was truncated (MAX_TOKENS)');
+            }
+            
             return {
                 success: true,
                 content: content,
-                provider: 'GEMINI'
+                provider: 'GEMINI',
+                truncated: finishReason === 'MAX_TOKENS'
             };
             
         } catch (error) {
