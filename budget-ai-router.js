@@ -55,8 +55,19 @@ const BudgetAIRouter = {
     },
     
     async _classifyWithLLM7(userQuery, cache) {
-        // Buduj prompt dla LLM7
-        const systemPrompt = this._buildRouterSystemPrompt(cache);
+        // NOWE: Rozpoznaj synonimy PRZED wysłaniem do LLM7
+        let resolvedSynonyms = null;
+        if (typeof BudgetAISynonyms !== 'undefined') {
+            resolvedSynonyms = BudgetAISynonyms.resolve(userQuery);
+            console.log('BudgetAIRouter: Resolved synonyms:', {
+                subcategories: resolvedSynonyms.subcategories,
+                intents: resolvedSynonyms.intents,
+                timeContext: resolvedSynonyms.timeContext
+            });
+        }
+        
+        // Buduj prompt dla LLM7 z rozpoznanymi synonimami
+        const systemPrompt = this._buildRouterSystemPrompt(cache, resolvedSynonyms);
         
         const result = await AIProviders.callRouter(systemPrompt, userQuery);
         
@@ -105,14 +116,59 @@ const BudgetAIRouter = {
         }
     },
     
-    _buildRouterSystemPrompt(cache) {
+    _buildRouterSystemPrompt(cache, resolvedSynonyms = null) {
         const functions = BudgetAICompute.getFunctionList();
         const categories = cache.categoryList || BudgetCategories.getAllCategories();
         const subcategories = cache.subcategoryList || {};
         const periods = cache.availablePeriods || [];
         
-        return `Jesteś routerem zapytań budżetowych. Analizujesz pytanie użytkownika i zwracasz JSON z instrukcjami.
+        // NOWE: Sekcja z rozpoznanymi synonimami (na początku promptu!)
+        let synonymsSection = '';
+        if (resolvedSynonyms && (resolvedSynonyms.subcategories.length > 0 || resolvedSynonyms.categories.length > 0)) {
+            synonymsSection = `
+═══════════════════════════════════════════════════════════════════════
+ROZPOZNANE SYNONIMY W ZAPYTANIU (UŻYWAJ TYCH NAZW!):
+═══════════════════════════════════════════════════════════════════════
 
+`;
+            if (resolvedSynonyms.subcategories.length > 0) {
+                synonymsSection += 'PODKATEGORIE:\n';
+                resolvedSynonyms.subcategories.forEach(sub => {
+                    synonymsSection += `• "${sub.originalTerm}" → oficjalna podkategoria: "${sub.officialName}" (kategoria: "${sub.category}")\n`;
+                });
+            }
+            
+            if (resolvedSynonyms.categories.length > 0) {
+                synonymsSection += 'KATEGORIE:\n';
+                resolvedSynonyms.categories.forEach(cat => {
+                    synonymsSection += `• "${cat.originalTerm}" → oficjalna kategoria: "${cat.officialName}"\n`;
+                });
+            }
+            
+            if (resolvedSynonyms.intents.length > 0) {
+                const suggestedFunc = typeof BudgetAISynonyms !== 'undefined' 
+                    ? BudgetAISynonyms.suggestFunction(resolvedSynonyms.intents) 
+                    : null;
+                synonymsSection += `\nROZPOZNANA INTENCJA: ${resolvedSynonyms.intents.join(', ')}\n`;
+                if (suggestedFunc) {
+                    synonymsSection += `SUGEROWANA FUNKCJA: ${suggestedFunc}\n`;
+                }
+            }
+            
+            if (resolvedSynonyms.timeContext) {
+                synonymsSection += `\nROZPOZNANY OKRES: ${JSON.stringify(resolvedSynonyms.timeContext)}\n`;
+            }
+            
+            synonymsSection += `
+═══════════════════════════════════════════════════════════════════════
+WAŻNE: Użyj DOKŁADNIE powyższych oficjalnych nazw w odpowiedzi JSON!
+═══════════════════════════════════════════════════════════════════════
+
+`;
+        }
+        
+        return `Jesteś routerem zapytań budżetowych. Analizujesz pytanie użytkownika i zwracasz JSON z instrukcjami.
+${synonymsSection}
 DOSTĘPNE FUNKCJE OBLICZENIOWE:
 ${JSON.stringify(functions, null, 2)}
 
@@ -295,8 +351,26 @@ FORMAT ODPOWIEDZI:
     _fallbackRouting(userQuery, cache) {
         const query = userQuery.toLowerCase();
         
-        // Wykryj WSZYSTKIE kategorie/podkategorie w zapytaniu
-        const detectedCategories = this._detectAllCategories(userQuery);
+        // NOWE: Użyj BudgetAISynonyms jeśli dostępny
+        let resolvedSynonyms = null;
+        if (typeof BudgetAISynonyms !== 'undefined') {
+            resolvedSynonyms = BudgetAISynonyms.resolve(userQuery);
+            console.log('BudgetAIRouter Fallback: Resolved synonyms:', resolvedSynonyms.subcategories);
+        }
+        
+        // Wykryj WSZYSTKIE kategorie/podkategorie - preferuj resolved synonyms
+        let detectedCategories = [];
+        
+        if (resolvedSynonyms && resolvedSynonyms.subcategories.length > 0) {
+            // Użyj rozpoznanych synonimów - są dokładniejsze
+            detectedCategories = resolvedSynonyms.subcategories.map(s => ({
+                category: s.category,
+                subcategory: s.officialName
+            }));
+        } else {
+            // Fallback do starej metody
+            detectedCategories = this._detectAllCategories(userQuery);
+        }
         
         // Jeśli wykryto wiele kategorii, użyj pierwszej jako głównej
         let category = null;
@@ -661,7 +735,8 @@ ZASADY:
 FORMAT ODPOWIEDZI:
 - Zacznij od bezpośredniej odpowiedzi na pytanie
 - Podaj kluczowe liczby
-- Dodaj kontekst lub wnioski
+- Dodaj krótki kontekst lub wnioski
+- Maksymalnie 3-4 akapity
 
 Odpowiadaj po polsku w naturalnym, przyjaznym tonie.`;
     }
