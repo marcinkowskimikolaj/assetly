@@ -1035,21 +1035,114 @@ const BudgetAICompute = {
     
     getSummary(period, cache) {
         const periods = cache.availablePeriods || [];
-        const lastPeriod = period || (periods.length > 0 ? `${periods[0].rok}-${String(periods[0].miesiac).padStart(2, '0')}` : null);
+        
+        // Jeśli nie podano okresu, znajdź ostatni ZAMKNIĘTY miesiąc
+        let lastPeriod = period;
+        if (!lastPeriod && periods.length > 0) {
+            lastPeriod = this._getLastClosedPeriod(periods);
+        }
         
         const lastMonthData = lastPeriod ? cache.monthlyTotals[lastPeriod] : null;
+        
+        // Znajdź poprzedni miesiąc do porównania
+        const previousPeriod = lastPeriod ? this._getPreviousPeriod(lastPeriod, periods) : null;
+        const previousMonthData = previousPeriod ? cache.monthlyTotals[previousPeriod] : null;
         
         const totalBalance = this.totalBalance(null, null, cache);
         const topCatsResult = this.topExpenses(5, 'category', null, null, cache);
         
         return {
             lastPeriod,
+            lastPeriodLabel: lastPeriod ? this._formatPeriodLabel(lastPeriod) : null,
+            isClosedMonth: lastPeriod ? this._isPeriodClosed(lastPeriod) : false,
             lastMonth: lastMonthData,
+            previousPeriod,
+            previousMonth: previousMonthData,
             allTime: totalBalance,
             topCategories: topCatsResult.items || topCatsResult,
             trends: cache.trends,
-            monthsWithData: Object.keys(cache.monthlyTotals).length
+            monthsWithData: Object.keys(cache.monthlyTotals).length,
+            _meta: {
+                currentMonth: this._getCurrentPeriod(),
+                availableMonths: periods.length,
+                selectedPeriod: lastPeriod,
+                periodStatus: lastPeriod ? (this._isPeriodClosed(lastPeriod) ? 'closed' : 'current') : 'none'
+            }
         };
+    },
+    
+    /**
+     * Zwraca ostatni ZAMKNIĘTY okres (nie bieżący miesiąc)
+     */
+    _getLastClosedPeriod(availablePeriods) {
+        const currentPeriod = this._getCurrentPeriod();
+        
+        // Posortuj okresy malejąco (najnowsze pierwsze)
+        const sortedPeriods = availablePeriods
+            .map(p => `${p.rok}-${String(p.miesiac).padStart(2, '0')}`)
+            .sort((a, b) => b.localeCompare(a));
+        
+        // Znajdź pierwszy okres który jest PRZED bieżącym miesiącem
+        for (const period of sortedPeriods) {
+            if (period < currentPeriod) {
+                return period;
+            }
+        }
+        
+        // Jeśli wszystkie okresy są bieżące lub przyszłe, zwróć najnowszy dostępny
+        // (może się zdarzyć gdy dane są tylko z bieżącego miesiąca)
+        return sortedPeriods.length > 0 ? sortedPeriods[0] : null;
+    },
+    
+    /**
+     * Zwraca bieżący okres w formacie YYYY-MM
+     */
+    _getCurrentPeriod() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    },
+    
+    /**
+     * Sprawdza czy okres jest zamknięty (zakończony)
+     */
+    _isPeriodClosed(period) {
+        return period < this._getCurrentPeriod();
+    },
+    
+    /**
+     * Zwraca poprzedni okres względem podanego
+     */
+    _getPreviousPeriod(period, availablePeriods) {
+        const sortedPeriods = availablePeriods
+            .map(p => `${p.rok}-${String(p.miesiac).padStart(2, '0')}`)
+            .sort((a, b) => b.localeCompare(a));
+        
+        const currentIndex = sortedPeriods.indexOf(period);
+        if (currentIndex >= 0 && currentIndex < sortedPeriods.length - 1) {
+            return sortedPeriods[currentIndex + 1];
+        }
+        return null;
+    },
+    
+    /**
+     * Formatuje okres na czytelną nazwę
+     */
+    _formatPeriodLabel(period) {
+        if (!period) return null;
+        
+        const monthNames = [
+            'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
+            'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'
+        ];
+        
+        const [year, month] = period.split('-');
+        const monthIndex = parseInt(month, 10) - 1;
+        
+        if (monthIndex >= 0 && monthIndex < 12) {
+            return `${monthNames[monthIndex]} ${year}`;
+        }
+        
+        return period;
     },
     
     // ═══════════════════════════════════════════════════════════
