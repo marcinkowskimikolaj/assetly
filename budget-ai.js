@@ -1,44 +1,42 @@
 /**
- * Assetly - Budget AI Assistant
- * Integracja OpenAI dla modułu budżetu
+ * Assetly - Budget AI (v2)
+ * Przebudowany moduł AI z rotacją providerów, cache i inteligentnym routingiem
  */
 
 // ═══════════════════════════════════════════════════════════
 // KONFIGURACJA
 // ═══════════════════════════════════════════════════════════
 
-const BUDGET_AI_MODEL = 'gpt-4o-mini';
-
 const BUDGET_QUICK_PROMPTS = [
     {
         id: 'summary',
-        label: 'Podsumowanie miesiąca',
+        label: 'Podsumowanie',
         icon: '📊',
         prompt: 'Podsumuj moje finanse z ostatniego zamkniętego miesiąca. Podaj: bilans, wykonanie planu, 3 najważniejsze obserwacje.'
+    },
+    {
+        id: 'top',
+        label: 'Top wydatki',
+        icon: '📈',
+        prompt: 'Pokaż top 10 kategorii wydatków w całej historii. Które pochłaniają najwięcej pieniędzy?'
     },
     {
         id: 'savings',
         label: 'Gdzie oszczędzić',
         icon: '💰',
-        prompt: 'Zidentyfikuj 3 kategorie gdzie wydaję więcej niż średnia historyczna. Dla każdej podaj konkretną kwotę potencjalnej oszczędności i jak to wpłynie na moje cele.'
-    },
-    {
-        id: 'projection',
-        label: 'Projekcja',
-        icon: '🔮',
-        prompt: 'Na podstawie trendów, jaki będzie mój bilans za następny miesiąc? Uwzględnij sezonowość i plan inwestycji.'
+        prompt: 'Zidentyfikuj 3 kategorie gdzie wydaję więcej niż średnia historyczna. Dla każdej podaj konkretną kwotę potencjalnej oszczędności.'
     },
     {
         id: 'trends',
-        label: 'Analiza trendów',
-        icon: '📈',
+        label: 'Trendy',
+        icon: '📉',
         prompt: 'Jak zmieniały się moje wydatki i dochody przez ostatnie 6 miesięcy? Czy widzisz niepokojące trendy?'
     },
     {
         id: 'compare',
-        label: 'Porównanie r/r',
+        label: 'Porównanie m/m',
         icon: '📅',
-        prompt: 'Porównaj moje finanse z ostatniego miesiąca z tym samym miesiącem rok temu. Co się zmieniło?'
+        prompt: 'Porównaj moje finanse z ostatniego miesiąca z poprzednim miesiącem. Co się zmieniło?'
     },
     {
         id: '503020',
@@ -53,370 +51,234 @@ const BUDGET_QUICK_PROMPTS = [
 // ═══════════════════════════════════════════════════════════
 
 let budgetChatHistory = [];
-let budgetAiApiKey = null;
+let budgetAiInitialized = false;
+let budgetAiProcessing = false;
+let lastUsedProvider = null;
+
+// ═══════════════════════════════════════════════════════════
+// INICJALIZACJA
+// ═══════════════════════════════════════════════════════════
+
+async function initBudgetAI() {
+    if (budgetAiInitialized) return;
+    
+    try {
+        // Załaduj klucze API
+        await AIProviders.loadApiKeys();
+        
+        // Aktualizuj AI cache jeśli potrzeba
+        await BudgetAICache.updateIfNeeded();
+        
+        // Załaduj historię czatu
+        loadBudgetChatHistory();
+        
+        budgetAiInitialized = true;
+        
+    } catch (error) {
+        console.error('BudgetAI: Błąd inicjalizacji:', error);
+    }
+}
 
 // ═══════════════════════════════════════════════════════════
 // RENDEROWANIE TAB AI
 // ═══════════════════════════════════════════════════════════
 
-function renderBudgetAITab() {
+async function renderBudgetAITab() {
     const container = document.getElementById('budget-ai');
     if (!container) return;
     
+    // Inicjalizuj jeśli jeszcze nie
+    await initBudgetAI();
+    
+    // Sprawdź konfigurację
+    const config = AIProviders.getConfigurationStatus();
+    
     container.innerHTML = `
         <div class="ai-container">
-            <!-- Sekcja szybkich analiz -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">🤖 Asystent budżetowy</h3>
-                    <button class="btn btn-ghost btn-sm" onclick="showBudgetApiKeyModal()" title="Ustawienia API">
-                        ⚙️
-                    </button>
+            <!-- Status i ustawienia -->
+            <div class="card ai-config-card">
+                <div class="card-header card-header-ai">
+                    <div class="ai-header-left">
+                        <h3 class="card-title">🤖 Asystent budżetowy</h3>
+                        <span class="ai-config-badge ${config.level}">${config.ready ? '✓ Gotowy' : '⚠️ Konfiguracja wymagana'}</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="clearBudgetChatHistory()" title="Wyczyść historię">
+                            🗑️
+                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="BudgetAISettings.show()" title="Ustawienia AI">
+                            ⚙️
+                        </button>
+                    </div>
                 </div>
                 
-                <div class="quick-prompts">
-                    ${BUDGET_QUICK_PROMPTS.map(p => `
-                        <button class="quick-prompt-btn" onclick="runBudgetQuickPrompt('${p.id}')">
-                            <span class="quick-prompt-icon">${p.icon}</span>
-                            <span class="quick-prompt-label">${p.label}</span>
+                ${!config.ready ? `
+                    <div class="ai-config-warning">
+                        <p>${config.message}</p>
+                        <button class="btn btn-primary btn-sm" onclick="BudgetAISettings.show()">
+                            ⚙️ Skonfiguruj AI
                         </button>
-                    `).join('')}
-                </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Szybkie prompty -->
+                ${config.ready ? `
+                    <div class="quick-prompts">
+                        ${BUDGET_QUICK_PROMPTS.map(p => `
+                            <button class="quick-prompt-btn" onclick="runBudgetQuickPrompt('${p.id}')" ${budgetAiProcessing ? 'disabled' : ''}>
+                                <span class="quick-prompt-icon">${p.icon}</span>
+                                <span class="quick-prompt-label">${p.label}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                ` : ''}
             </div>
             
             <!-- Chat -->
             <div class="card chat-card">
                 <div id="budgetChatMessages" class="chat-messages">
-                    <div class="chat-welcome">
-                        <p>👋 Cześć! Jestem Twoim asystentem budżetowym.</p>
-                        <p>Mogę pomóc Ci przeanalizować wydatki, znaleźć oszczędności, porównać trendy i odpowiedzieć na pytania o Twój budżet.</p>
-                        <p>Wybierz jedną z szybkich analiz powyżej lub zadaj własne pytanie.</p>
-                    </div>
+                    ${budgetChatHistory.length === 0 ? `
+                        <div class="chat-welcome">
+                            <p>👋 Cześć! Jestem Twoim asystentem budżetowym.</p>
+                            <p>Mogę pomóc Ci przeanalizować wydatki, znaleźć oszczędności, porównać trendy i odpowiedzieć na pytania o Twój budżet.</p>
+                            ${config.ready ? `
+                                <p>Wybierz jedną z szybkich analiz powyżej lub zadaj własne pytanie.</p>
+                            ` : `
+                                <p>⚠️ Najpierw skonfiguruj klucze API w ustawieniach.</p>
+                            `}
+                        </div>
+                    ` : ''}
                 </div>
                 
                 <div class="chat-input-container">
-                    <input type="text" id="budgetChatInput" class="chat-input" 
-                        placeholder="Zadaj pytanie o swój budżet..."
-                        onkeypress="if(event.key==='Enter') sendBudgetMessage()">
-                    <button class="btn btn-primary" onclick="sendBudgetMessage()">
-                        Wyślij
+                    <input type="text" 
+                           id="budgetChatInput" 
+                           class="chat-input" 
+                           placeholder="${config.ready ? 'Zadaj pytanie o swój budżet...' : 'Najpierw skonfiguruj AI w ustawieniach...'}"
+                           ${!config.ready || budgetAiProcessing ? 'disabled' : ''}
+                           onkeypress="if(event.key==='Enter' && !event.shiftKey) sendBudgetMessage()">
+                    <button class="btn btn-primary" 
+                            onclick="sendBudgetMessage()" 
+                            ${!config.ready || budgetAiProcessing ? 'disabled' : ''}>
+                        ${budgetAiProcessing ? '⏳' : 'Wyślij'}
                     </button>
                 </div>
             </div>
         </div>
     `;
     
-    // Sprawdź czy mamy klucz API
-    checkBudgetApiKey();
-}
-
-// ═══════════════════════════════════════════════════════════
-// PRZYGOTOWANIE DANYCH DLA AI
-// ═══════════════════════════════════════════════════════════
-
-function prepareBudgetDataForAI() {
-    const availableMonths = getAvailableMonthsFromData();
-    if (availableMonths.length === 0) {
-        return { error: 'Brak danych budżetowych' };
+    // Odtwórz historię czatu w UI
+    if (budgetChatHistory.length > 0) {
+        const messagesContainer = document.getElementById('budgetChatMessages');
+        if (messagesContainer) {
+            messagesContainer.innerHTML = '';
+            budgetChatHistory.forEach(msg => {
+                if (msg.role === 'user' || msg.role === 'assistant') {
+                    addBudgetChatMessageToUI(msg.role, msg.content, msg.provider);
+                }
+            });
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
     }
     
-    // Ostatni zamknięty miesiąc
-    const lastMonth = availableMonths[0];
-    const currentMonthData = getMonthlyData(lastMonth.rok, lastMonth.miesiac);
-    
-    // Poprzedni miesiąc
-    const prevMonthIdx = lastMonth.miesiac === 1 ? 12 : lastMonth.miesiac - 1;
-    const prevYearIdx = lastMonth.miesiac === 1 ? lastMonth.rok - 1 : lastMonth.rok;
-    const previousMonthData = getMonthlyData(prevYearIdx, prevMonthIdx);
-    
-    // Ten sam miesiąc rok temu
-    const sameMonthLastYear = getMonthlyData(lastMonth.rok - 1, lastMonth.miesiac);
-    
-    // Ostatnie 12 miesięcy
-    const last12Months = getLast12MonthsData();
-    const stats = BudgetMetrics.calculatePeriodStats(last12Months);
-    const categoryAverages = BudgetMetrics.aggregateByCategory(last12Months);
-    
-    // Trendy
-    const incomeTrend = BudgetMetrics.calculateTrend(last12Months, 'income');
-    const expensesTrend = BudgetMetrics.calculateTrend(last12Months, 'expenses');
-    const balanceTrend = BudgetMetrics.calculateTrend(last12Months, 'balance');
-    
-    // Anomalie
-    const anomalies = BudgetMetrics.findAnomalies(currentMonthData, categoryAverages);
-    
-    // Sezonowość
-    const seasonality = BudgetMetrics.calculateSeasonality(last12Months);
-    
-    // 50/30/20
-    const analysis503020 = BudgetMetrics.analyze503020(currentMonthData);
-    
-    // Historia wynagrodzeń
-    const employers = [...new Set(allIncome.filter(i => i.pracodawca).map(i => i.pracodawca))];
-    const salaryHistories = employers.map(emp => ({
-        pracodawca: emp,
-        ...BudgetMetrics.getSalaryHistory(allIncome, emp)
-    }));
-    
-    // Plan inwestycji
-    const investmentPlan = getInvestmentPlanFromCalculator();
-    
-    // Wydatki stałe
-    const recurringMonthly = allRecurring
-        .filter(r => r.czestotliwosc === 'monthly' && r.aktywny)
-        .reduce((sum, r) => sum + r.kwotaTypowa, 0);
-    
-    return {
-        // Metadane
-        dataRange: {
-            from: availableMonths[availableMonths.length - 1],
-            to: availableMonths[0],
-            monthsCount: availableMonths.length
-        },
-        
-        // Ostatni miesiąc
-        currentMonth: {
-            period: BudgetCategories.formatPeriod(lastMonth.rok, lastMonth.miesiac),
-            rok: lastMonth.rok,
-            miesiac: lastMonth.miesiac,
-            income: currentMonthData.income.total,
-            expenses: currentMonthData.expenses.total,
-            fixed: currentMonthData.expenses.fixed,
-            variable: currentMonthData.expenses.variable,
-            transfers: currentMonthData.expenses.transfers,
-            balance: currentMonthData.balance,
-            savingsRate: currentMonthData.savingsRate,
-            topCategories: BudgetMetrics.getTopCategories(currentMonthData, 5).map(c => ({
-                kategoria: c.kategoria,
-                kwota: c.kwota,
-                procent: c.procent
-            })),
-            incomeBySource: Object.entries(currentMonthData.income.bySource).map(([src, data]) => ({
-                zrodlo: src,
-                kwota: data.total
-            }))
-        },
-        
-        // Porównania
-        comparisons: {
-            vsPreviousMonth: previousMonthData ? {
-                income: currentMonthData.income.total - previousMonthData.income.total,
-                expenses: currentMonthData.expenses.total - previousMonthData.expenses.total,
-                balance: currentMonthData.balance - previousMonthData.balance
-            } : null,
-            vsLastYear: sameMonthLastYear.income.total > 0 ? {
-                income: currentMonthData.income.total - sameMonthLastYear.income.total,
-                expenses: currentMonthData.expenses.total - sameMonthLastYear.expenses.total,
-                balance: currentMonthData.balance - sameMonthLastYear.balance
-            } : null
-        },
-        
-        // Średnie i statystyki
-        averages: {
-            income: stats.average.income,
-            expenses: stats.average.expenses,
-            fixed: stats.average.fixed,
-            variable: stats.average.variable,
-            balance: stats.average.balance,
-            savingsRate: stats.savingsRate
-        },
-        
-        // Trendy
-        trends: {
-            income: {
-                direction: incomeTrend.direction,
-                percentChange: incomeTrend.percentChange
-            },
-            expenses: {
-                direction: expensesTrend.direction,
-                percentChange: expensesTrend.percentChange
-            },
-            balance: {
-                direction: balanceTrend.direction,
-                percentChange: balanceTrend.percentChange
-            }
-        },
-        
-        // Anomalie
-        anomalies: anomalies.slice(0, 5).map(a => ({
-            kategoria: a.kategoria,
-            current: a.current,
-            average: a.average,
-            percentAbove: a.percent
-        })),
-        
-        // Analiza 50/30/20
-        methodology503020: {
-            needs: {
-                actual: analysis503020.needs.actual,
-                limit: analysis503020.needs.limit,
-                percent: analysis503020.needs.percent,
-                status: analysis503020.needs.status
-            },
-            wants: {
-                actual: analysis503020.wants.actual,
-                limit: analysis503020.wants.limit,
-                percent: analysis503020.wants.percent,
-                status: analysis503020.wants.status
-            },
-            savings: {
-                actual: analysis503020.savings.actual,
-                limit: analysis503020.savings.limit,
-                percent: analysis503020.savings.percent,
-                status: analysis503020.savings.status
-            }
-        },
-        
-        // Kategorie - średnie historyczne
-        categoryAverages: Object.entries(categoryAverages)
-            .sort((a, b) => b[1].average - a[1].average)
-            .slice(0, 10)
-            .map(([cat, data]) => ({
-                kategoria: cat,
-                average: data.average,
-                total: data.total
-            })),
-        
-        // Historia wynagrodzeń
-        salaryHistory: salaryHistories.length > 0 ? salaryHistories.map(sh => ({
-            pracodawca: sh.pracodawca,
-            currentSalary: sh.currentSalary,
-            totalGrowth: sh.totalGrowth,
-            employmentMonths: sh.employmentMonths,
-            lastRaise: sh.raises.length > 0 ? sh.raises[sh.raises.length - 1] : null
-        })) : null,
-        
-        // Plan inwestycji
-        investmentPlan: investmentPlan > 0 ? {
-            monthlyTarget: investmentPlan,
-            canAfford: currentMonthData.balance >= investmentPlan,
-            surplus: currentMonthData.balance - investmentPlan
-        } : null,
-        
-        // Wydatki stałe
-        recurringExpenses: {
-            monthlyTotal: recurringMonthly,
-            percentOfIncome: currentMonthData.income.total > 0 
-                ? (recurringMonthly / currentMonthData.income.total * 100) 
-                : 0
-        }
-    };
+    // Proaktywne Insight (raz na sesję)
+    if (config.ready) {
+        checkAndRunProactiveInsights();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
-// SYSTEM PROMPT
-// ═══════════════════════════════════════════════════════════
-
-function getBudgetSystemPrompt() {
-    return `Jesteś ekspertem od budżetów osobistych i planowania finansowego. Pomagasz użytkownikowi zarządzać wydatkami i optymalizować oszczędności.
-
-KONTEKST:
-- Użytkownik wprowadza dane RETROSPEKTYWNIE (koniec miesiąca), nie na bieżąco
-- Skupiaj się na AGREGATACH i TRENDACH, nie pojedynczych transakcjach
-- Wszystkie kwoty są w PLN
-
-ZASADY ODPOWIEDZI:
-1. Używaj DOKŁADNYCH liczb z dostarczonych danych - nigdy nie zgaduj
-2. Zawsze porównuj z: poprzednim miesiącem, średnią historyczną, tym samym miesiącem rok temu
-3. Identyfikuj ANOMALIE (odchylenia >15% od średniej)
-4. Dawaj KONKRETNE, LICZBOWE rekomendacje
-5. Bądź zwięzły - max 3-4 akapity
-
-KLUCZOWE ROZRÓŻNIENIA:
-- WYDATKI STAŁE: czynsz, abonamenty - trudne do ograniczenia
-- WYDATKI ZMIENNE: jedzenie, rozrywka - potencjał optymalizacji
-- TRANSFERY: przesunięcia środków (np. na firmę) - to NIE są wydatki konsumpcyjne
-
-METODYKI:
-- 50/30/20: potrzeby (50%) / zachcianki (30%) / oszczędności (20%)
-- Stopa oszczędności = (Dochody - Wydatki) / Dochody
-- Bufor awaryjny = 6 miesięcy wydatków
-
-FORMAT:
-- Kwoty: formatuj z "zł" (np. "1 234 zł")
-- Procenty: jedno miejsce po przecinku
-- Używaj emoji dla czytelności (📈📉💰⚠️✅)
-- Pisz po polsku
-
-Odpowiadaj na podstawie dostarczonych danych. Jeśli czegoś nie ma w danych, powiedz wprost.`;
-}
-
-// ═══════════════════════════════════════════════════════════
-// KOMUNIKACJA Z API
+// WYSYŁANIE WIADOMOŚCI (NOWY FLOW)
 // ═══════════════════════════════════════════════════════════
 
 async function sendBudgetMessage(customMessage = null) {
     const input = document.getElementById('budgetChatInput');
-    const message = customMessage || input.value.trim();
+    const message = customMessage || input?.value.trim();
     
     if (!message) return;
-    if (!input) return;
+    if (budgetAiProcessing) return;
     
-    input.value = '';
-    
-    // Sprawdź klucz API
-    if (!budgetAiApiKey) {
-        addBudgetChatMessage('assistant', '⚠️ Brak klucza API. Kliknij ⚙️ aby skonfigurować.');
+    // Sprawdź konfigurację
+    if (!AIProviders.isReady()) {
+        addBudgetChatMessage('assistant', '⚠️ Brak skonfigurowanych providerów AI. Kliknij ⚙️ aby skonfigurować.');
         return;
     }
+    
+    // Wyczyść input
+    if (input) input.value = '';
     
     // Dodaj wiadomość użytkownika
     addBudgetChatMessage('user', message);
     
-    // Przygotuj dane
-    const budgetData = prepareBudgetDataForAI();
-    if (budgetData.error) {
-        addBudgetChatMessage('assistant', `⚠️ ${budgetData.error}`);
-        return;
-    }
-    
     // Pokaż loading
-    const loadingId = addBudgetChatMessage('assistant', '⏳ Analizuję...');
+    budgetAiProcessing = true;
+    updateChatUIState();
+    const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Analizuję...', null, true);
     
     try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${budgetAiApiKey}`
-            },
-            body: JSON.stringify({
-                model: BUDGET_AI_MODEL,
-                messages: [
-                    { role: 'system', content: getBudgetSystemPrompt() },
-                    { role: 'system', content: `DANE BUDŻETOWE UŻYTKOWNIKA:\n${JSON.stringify(budgetData, null, 2)}` },
-                    ...budgetChatHistory,
-                    { role: 'user', content: message }
-                ],
-                temperature: 0.7,
-                max_tokens: 1000
-            })
-        });
+        // KROK 1: Pobierz cache
+        const cache = await BudgetAICache.getCache();
         
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+        // KROK 2: Router - klasyfikacja intencji
+        const routing = await BudgetAIRouter.classifyIntent(message, cache);
+        
+        console.log('BudgetAI: Routing:', routing);
+        
+        // KROK 3: Obsłuż routing
+        let response;
+        
+        if (routing.route === 'clarify') {
+            // Potrzebne doprecyzowanie
+            response = {
+                success: true,
+                content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami`,
+                provider: 'system'
+            };
+        } else if (routing.route === 'general') {
+            // Ogólne pytanie - przekaż do AI z minimalnym kontekstem
+            const capsule = BudgetAIRouter.buildFactsCapsule(routing, [], cache);
+            response = await AIProviders.generateResponse(
+                BudgetAIRouter.getGeneratorSystemPrompt(),
+                capsule
+            );
+        } else {
+            // KROK 4: Wykonaj obliczenia
+            const computeResults = await BudgetAICompute.executeOperations(routing.operations, cache);
+            
+            console.log('BudgetAI: Compute results:', computeResults);
+            
+            // KROK 5: Zbuduj kapsułę faktów
+            const capsule = BudgetAIRouter.buildFactsCapsule(routing, computeResults, cache);
+            
+            console.log('BudgetAI: Facts capsule:', capsule);
+            
+            // KROK 6: Wygeneruj odpowiedź (Gemini lub OpenAI)
+            response = await AIProviders.generateResponse(
+                BudgetAIRouter.getGeneratorSystemPrompt(),
+                capsule
+            );
         }
         
-        const data = await response.json();
-        const assistantMessage = data.choices[0].message.content;
+        // Usuń loading
+        removeBudgetChatMessageFromUI(loadingId);
         
-        // Zapisz do historii
-        budgetChatHistory.push({ role: 'user', content: message });
-        budgetChatHistory.push({ role: 'assistant', content: assistantMessage });
-        
-        // Ogranicz historię do ostatnich 10 wiadomości
-        if (budgetChatHistory.length > 20) {
-            budgetChatHistory = budgetChatHistory.slice(-20);
+        if (response.success) {
+            lastUsedProvider = response.provider;
+            addBudgetChatMessage('assistant', response.content, response.provider);
+            
+            // Zapisz do historii
+            saveBudgetChatHistory();
+        } else {
+            addBudgetChatMessage('assistant', `❌ Błąd: ${response.error}`, 'error');
         }
-        
-        // Usuń loading i dodaj odpowiedź
-        removeBudgetChatMessage(loadingId);
-        addBudgetChatMessage('assistant', assistantMessage);
         
     } catch (error) {
-        console.error('Błąd API:', error);
-        removeBudgetChatMessage(loadingId);
-        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`);
+        console.error('BudgetAI: Błąd:', error);
+        removeBudgetChatMessageFromUI(loadingId);
+        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`, 'error');
+    } finally {
+        budgetAiProcessing = false;
+        updateChatUIState();
     }
 }
 
@@ -428,12 +290,30 @@ function runBudgetQuickPrompt(promptId) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// UI CHAT
+// UI CZATU
 // ═══════════════════════════════════════════════════════════
 
 let budgetMessageCounter = 0;
 
-function addBudgetChatMessage(role, content) {
+function addBudgetChatMessage(role, content, provider = null) {
+    // Dodaj do historii
+    budgetChatHistory.push({ 
+        role, 
+        content, 
+        provider,
+        timestamp: new Date().toISOString() 
+    });
+    
+    // Ogranicz historię
+    if (budgetChatHistory.length > 50) {
+        budgetChatHistory = budgetChatHistory.slice(-50);
+    }
+    
+    // Dodaj do UI
+    return addBudgetChatMessageToUI(role, content, provider);
+}
+
+function addBudgetChatMessageToUI(role, content, provider = null, isLoading = false) {
     const container = document.getElementById('budgetChatMessages');
     if (!container) return null;
     
@@ -444,14 +324,24 @@ function addBudgetChatMessage(role, content) {
     const id = `budget-msg-${++budgetMessageCounter}`;
     const div = document.createElement('div');
     div.id = id;
-    div.className = `chat-message ${role}`;
+    div.className = `chat-message ${role}${isLoading ? ' loading' : ''}`;
     
-    // Formatuj markdown
-    const formattedContent = formatBudgetMarkdown(content);
+    // Formatuj treść
+    const formattedContent = role === 'assistant' && !isLoading
+        ? formatBudgetRichResponse(content)
+        : escapeHtml(content).replace(/\n/g, '<br>');
+    
+    // Badge providera
+    const providerBadge = provider && !isLoading && role === 'assistant' && provider !== 'system' && provider !== 'error'
+        ? `<span class="provider-badge provider-${provider.toLowerCase()}">${getProviderIcon(provider)}</span>`
+        : '';
     
     div.innerHTML = `
         <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
-        <div class="message-content">${formattedContent}</div>
+        <div class="message-content">
+            ${formattedContent}
+            ${providerBadge}
+        </div>
     `;
     
     container.appendChild(div);
@@ -460,103 +350,291 @@ function addBudgetChatMessage(role, content) {
     return id;
 }
 
-function removeBudgetChatMessage(id) {
+function removeBudgetChatMessageFromUI(id) {
     const msg = document.getElementById(id);
     if (msg) msg.remove();
 }
 
-function formatBudgetMarkdown(text) {
-    return text
+function getProviderIcon(provider) {
+    switch (provider) {
+        case 'GEMINI': return '✨';
+        case 'OPENAI': return '🤖';
+        case 'LLM7': return '🔀';
+        default: return '';
+    }
+}
+
+function formatBudgetRichResponse(text) {
+    if (!text) return '';
+    
+    // Escape HTML first
+    let html = escapeHtml(text);
+    
+    // Markdown formatting
+    html = html
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/\n/g, '<br>')
-        .replace(/`(.*?)`/g, '<code>$1</code>');
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+    
+    // Emoji highlights dla liczb
+    html = html.replace(/(\d[\d\s]*(?:,\d{2})?\s*(?:zł|PLN))/g, '<span class="amount-highlight">$1</span>');
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+function updateChatUIState() {
+    const input = document.getElementById('budgetChatInput');
+    const sendBtn = document.querySelector('.chat-input-container .btn-primary');
+    const quickBtns = document.querySelectorAll('.quick-prompt-btn');
+    
+    if (input) input.disabled = budgetAiProcessing;
+    if (sendBtn) {
+        sendBtn.disabled = budgetAiProcessing;
+        sendBtn.textContent = budgetAiProcessing ? '⏳' : 'Wyślij';
+    }
+    quickBtns.forEach(btn => btn.disabled = budgetAiProcessing);
 }
 
 // ═══════════════════════════════════════════════════════════
-// API KEY MANAGEMENT
+// HISTORIA I PERSISTENCE
 // ═══════════════════════════════════════════════════════════
 
-async function checkBudgetApiKey() {
+function saveBudgetChatHistory() {
     try {
-        // Najpierw sprawdź localStorage
-        const localKey = localStorage.getItem('openai_api_key');
-        if (localKey) {
-            budgetAiApiKey = localKey;
+        localStorage.setItem('budget_chat_history_v2', JSON.stringify(budgetChatHistory));
+    } catch (e) {
+        console.warn('Nie udało się zapisać historii czatu:', e);
+    }
+}
+
+function loadBudgetChatHistory() {
+    try {
+        // Próbuj nową wersję
+        let saved = localStorage.getItem('budget_chat_history_v2');
+        
+        // Fallback do starej wersji
+        if (!saved) {
+            saved = localStorage.getItem('budget_chat_history');
+            if (saved) {
+                // Migruj do nowej wersji
+                localStorage.setItem('budget_chat_history_v2', saved);
+                localStorage.removeItem('budget_chat_history');
+            }
+        }
+        
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                budgetChatHistory = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Błąd odczytu historii czatu:', e);
+        budgetChatHistory = [];
+    }
+}
+
+function clearBudgetChatHistory() {
+    budgetChatHistory = [];
+    localStorage.removeItem('budget_chat_history_v2');
+    localStorage.removeItem('budget_chat_history');
+    renderBudgetAITab();
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROACTIVE INSIGHTS
+// ═══════════════════════════════════════════════════════════
+
+async function checkAndRunProactiveInsights() {
+    // Sprawdź czy już generowaliśmy w tej sesji
+    if (sessionStorage.getItem('budget_proactive_insight_shown_v2')) {
+        return;
+    }
+    
+    if (!AIProviders.isReady()) {
+        return;
+    }
+    
+    const container = document.getElementById('budget-ai')?.querySelector('.ai-container');
+    if (!container) return;
+    
+    // Placeholder dla insightu
+    const insightId = 'proactive-insight-banner';
+    if (document.getElementById(insightId)) return;
+    
+    const placeholder = document.createElement('div');
+    placeholder.id = insightId;
+    placeholder.className = 'proactive-insight';
+    placeholder.style.display = 'none';
+    container.insertBefore(placeholder, container.firstChild);
+    
+    try {
+        // Pobierz cache
+        const cache = await BudgetAICache.getCache();
+        
+        if (!cache.availablePeriods || cache.availablePeriods.length === 0) {
+            placeholder.remove();
             return;
         }
         
-        // Potem sprawdź ustawienia w arkuszu
-        const settings = await BudgetSheets.getSettings();
-        if (settings.openai_api_key) {
-            budgetAiApiKey = settings.openai_api_key;
-            localStorage.setItem('openai_api_key', budgetAiApiKey);
+        // Zbuduj minimalną kapsułę dla insightu
+        const capsule = {
+            query_intent: 'Wygeneruj jeden krótki insight finansowy na start dnia',
+            lastMonth: cache.monthlyTotals[Object.keys(cache.monthlyTotals).sort().pop()],
+            trends: cache.trends,
+            topAnomalies: (cache.anomalies || []).slice(0, 2)
+        };
+        
+        const systemPrompt = `Wygeneruj jeden, krótki (max 2 zdania) "Financial Insight" dla użytkownika na start dnia.
+Odpowiedz TYLKO poprawnym JSON: { "type": "info|warning|success", "title": "...", "message": "..." }
+Skup się na najważniejszej zmianie lub obserwacji. Nie pytaj o nic, tylko stwierdzaj fakt.`;
+        
+        const response = await AIProviders.generateResponse(systemPrompt, capsule, { maxTokens: 200 });
+        
+        if (response.success) {
+            try {
+                // Wyczyść odpowiedź z markdown code blocks
+                let cleanContent = response.content.trim();
+                cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                
+                const insight = JSON.parse(cleanContent);
+                renderProactiveInsight(insight);
+                sessionStorage.setItem('budget_proactive_insight_shown_v2', 'true');
+            } catch (e) {
+                console.warn('Proactive insight: błąd parsowania JSON:', e);
+                placeholder.remove();
+            }
+        } else {
+            placeholder.remove();
         }
-    } catch (error) {
-        console.warn('Nie można pobrać klucza API:', error);
+    } catch (e) {
+        console.warn('Proactive insight failed:', e);
+        placeholder.remove();
     }
 }
 
-function showBudgetApiKeyModal() {
-    // Użyj istniejącego modalu z analytics lub stwórz prosty prompt
-    const currentKey = budgetAiApiKey ? '********' + budgetAiApiKey.slice(-4) : '';
-    const newKey = prompt(`Podaj klucz API OpenAI:\n\nAktualny: ${currentKey || '(brak)'}\n\nMożesz go uzyskać na platform.openai.com`);
+function renderProactiveInsight(insight) {
+    const banner = document.getElementById('proactive-insight-banner');
+    if (!banner) return;
     
-    if (newKey && newKey.startsWith('sk-')) {
-        budgetAiApiKey = newKey;
-        localStorage.setItem('openai_api_key', newKey);
-        showToast('Zapisano klucz API', 'success');
-    } else if (newKey) {
-        showToast('Nieprawidłowy format klucza API', 'error');
-    }
+    const icon = insight.type === 'warning' ? '⚠️' : insight.type === 'success' ? '📈' : '💡';
+    
+    banner.innerHTML = `
+        <div class="insight-icon-container">
+            ${icon}
+        </div>
+        <div class="insight-content">
+            <h4 class="insight-title">${escapeHtml(insight.title)}</h4>
+            <p class="insight-body">${escapeHtml(insight.message)}</p>
+        </div>
+        <button class="insight-close" onclick="this.parentElement.remove()">
+            ✕
+        </button>
+    `;
+    
+    banner.style.display = 'flex';
 }
 
 // ═══════════════════════════════════════════════════════════
-// DODATKOWE STYLE DLA CHAT
+// DODATKOWE STYLE DLA NOWEGO UI
 // ═══════════════════════════════════════════════════════════
 
-// Dodaj style jeśli nie istnieją
-if (!document.getElementById('budgetAiStyles')) {
+(function injectBudgetAIStyles() {
+    if (document.getElementById('budget-ai-v2-styles')) return;
+    
     const styles = document.createElement('style');
-    styles.id = 'budgetAiStyles';
+    styles.id = 'budget-ai-v2-styles';
     styles.textContent = `
-        .ai-container {
+        .ai-config-card .card-header-ai {
             display: flex;
-            flex-direction: column;
-            gap: 20px;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ai-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .ai-config-badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+        }
+        
+        .ai-config-badge.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+        
+        .ai-config-badge.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+        
+        .ai-config-badge.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        
+        .ai-config-warning {
+            padding: 16px;
+            background: rgba(245, 158, 11, 0.1);
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .ai-config-warning p {
+            margin: 0 0 12px 0;
+            color: #f59e0b;
         }
         
         .quick-prompts {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 16px;
         }
         
         .quick-prompt-btn {
             display: flex;
-            flex-direction: column;
             align-items: center;
-            gap: 8px;
-            padding: 16px;
-            background: var(--bg-hover);
+            gap: 6px;
+            padding: 8px 14px;
             border: 1px solid var(--border);
+            background: var(--bg-hover);
             border-radius: var(--radius-md);
             cursor: pointer;
             transition: all 0.2s;
+            font-family: inherit;
+            font-size: 0.875rem;
         }
         
-        .quick-prompt-btn:hover {
+        .quick-prompt-btn:hover:not(:disabled) {
             background: var(--bg-card);
             border-color: var(--primary);
         }
         
+        .quick-prompt-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         .quick-prompt-icon {
-            font-size: 1.5rem;
+            font-size: 1rem;
         }
         
         .quick-prompt-label {
-            font-size: 0.875rem;
-            text-align: center;
             color: var(--text-primary);
         }
         
@@ -569,7 +647,7 @@ if (!document.getElementById('budgetAiStyles')) {
         .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 16px;
@@ -596,6 +674,14 @@ if (!document.getElementById('budgetAiStyles')) {
             flex-direction: row-reverse;
         }
         
+        .chat-message.assistant {
+            align-self: flex-start;
+        }
+        
+        .chat-message.loading .message-content {
+            opacity: 0.7;
+        }
+        
         .message-avatar {
             width: 32px;
             height: 32px;
@@ -605,6 +691,7 @@ if (!document.getElementById('budgetAiStyles')) {
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            font-size: 1rem;
         }
         
         .message-content {
@@ -612,6 +699,7 @@ if (!document.getElementById('budgetAiStyles')) {
             border-radius: var(--radius-md);
             background: var(--bg-hover);
             line-height: 1.5;
+            position: relative;
         }
         
         .chat-message.user .message-content {
@@ -619,14 +707,41 @@ if (!document.getElementById('budgetAiStyles')) {
             color: white;
         }
         
-        .chat-message.assistant .message-content {
+        .message-content code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.875em;
+        }
+        
+        .amount-highlight {
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .chat-message.user .amount-highlight {
+            color: inherit;
+            text-decoration: underline;
+        }
+        
+        .provider-badge {
+            position: absolute;
+            bottom: -6px;
+            right: -6px;
+            font-size: 0.75rem;
             background: var(--bg-card);
             border: 1px solid var(--border);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .chat-input-container {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             padding: 16px;
             border-top: 1px solid var(--border);
         }
@@ -639,12 +754,77 @@ if (!document.getElementById('budgetAiStyles')) {
             background: var(--bg-hover);
             color: var(--text-primary);
             font-size: 0.875rem;
+            font-family: inherit;
         }
         
         .chat-input:focus {
             outline: none;
             border-color: var(--primary);
         }
+        
+        .chat-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .proactive-insight {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+        }
+        
+        .insight-icon-container {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        
+        .insight-content {
+            flex: 1;
+        }
+        
+        .insight-title {
+            margin: 0 0 4px 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .insight-body {
+            margin: 0;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .insight-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1rem;
+            padding: 4px;
+        }
+        
+        .insight-close:hover {
+            color: var(--text-primary);
+        }
     `;
+    
     document.head.appendChild(styles);
+})();
+
+// ═══════════════════════════════════════════════════════════
+// KOMPATYBILNOŚĆ WSTECZNA
+// ═══════════════════════════════════════════════════════════
+
+// Zachowaj stare funkcje dla kompatybilności
+function showBudgetApiKeyModal() {
+    BudgetAISettings.show();
+}
+
+async function checkBudgetApiKey() {
+    await AIProviders.loadApiKeys();
 }
