@@ -55,8 +55,19 @@ const BudgetAIRouter = {
     },
     
     async _classifyWithLLM7(userQuery, cache) {
-        // Buduj prompt dla LLM7
-        const systemPrompt = this._buildRouterSystemPrompt(cache);
+        // 1. NAJPIERW: Rozpoznaj synonimy przed wysłaniem do LLM7
+        let resolvedSynonyms = null;
+        if (typeof BudgetAISynonyms !== 'undefined') {
+            resolvedSynonyms = BudgetAISynonyms.resolve(userQuery);
+            console.log('BudgetAIRouter: Resolved synonyms:', {
+                subcategories: resolvedSynonyms.subcategories.map(s => `${s.originalTerm} → ${s.officialName}`),
+                intents: resolvedSynonyms.intents,
+                timeContext: resolvedSynonyms.timeContext
+            });
+        }
+        
+        // 2. Buduj prompt dla LLM7 z rozpoznanymi synonimami
+        const systemPrompt = this._buildRouterSystemPrompt(cache, resolvedSynonyms);
         
         const result = await AIProviders.callRouter(systemPrompt, userQuery);
         
@@ -105,14 +116,54 @@ const BudgetAIRouter = {
         }
     },
     
-    _buildRouterSystemPrompt(cache) {
+    _buildRouterSystemPrompt(cache, resolvedSynonyms = null) {
         const functions = BudgetAICompute.getFunctionList();
         const categories = cache.categoryList || BudgetCategories.getAllCategories();
         const subcategories = cache.subcategoryList || {};
         const periods = cache.availablePeriods || [];
         
-        return `Jesteś routerem zapytań budżetowych. Analizujesz pytanie użytkownika i zwracasz JSON z instrukcjami.
+        // KLUCZOWE: Sekcja z rozpoznanymi synonimami
+        let synonymSection = '';
+        if (resolvedSynonyms && (resolvedSynonyms.subcategories.length > 0 || resolvedSynonyms.categories.length > 0)) {
+            synonymSection = `
+═══════════════════════════════════════════════════════════════════════
+ROZPOZNANE SYNONIMY W ZAPYTANIU (UŻYWAJ TYCH NAZW!):
+═══════════════════════════════════════════════════════════════════════
+`;
+            if (resolvedSynonyms.subcategories.length > 0) {
+                synonymSection += '\nPODKATEGORIE:\n';
+                for (const sub of resolvedSynonyms.subcategories) {
+                    synonymSection += `• "${sub.originalTerm}" → oficjalna podkategoria: "${sub.officialName}" (kategoria: "${sub.category}")\n`;
+                }
+            }
+            
+            if (resolvedSynonyms.categories.length > 0) {
+                synonymSection += '\nKATEGORIE:\n';
+                for (const cat of resolvedSynonyms.categories) {
+                    synonymSection += `• "${cat.originalTerm}" → oficjalna kategoria: "${cat.officialName}"\n`;
+                }
+            }
+            
+            if (resolvedSynonyms.intents.length > 0) {
+                synonymSection += `\nROZPOZNANA INTENCJA: ${resolvedSynonyms.intents.join(', ')}\n`;
+                const suggestedFunc = BudgetAISynonyms.suggestFunction(resolvedSynonyms.intents);
+                synonymSection += `SUGEROWANA FUNKCJA: ${suggestedFunc}\n`;
+            }
+            
+            if (resolvedSynonyms.timeContext) {
+                synonymSection += `\nROZPOZNANY OKRES: ${JSON.stringify(resolvedSynonyms.timeContext)}\n`;
+            }
+            
+            synonymSection += `
+═══════════════════════════════════════════════════════════════════════
+WAŻNE: Użyj DOKŁADNIE powyższych oficjalnych nazw w odpowiedzi JSON!
+═══════════════════════════════════════════════════════════════════════
 
+`;
+        }
+        
+        return `Jesteś routerem zapytań budżetowych. Analizujesz pytanie użytkownika i zwracasz JSON z instrukcjami.
+${synonymSection}
 DOSTĘPNE FUNKCJE OBLICZENIOWE:
 ${JSON.stringify(functions, null, 2)}
 
@@ -130,7 +181,7 @@ WAŻNE ZASADY:
 2. Mapuj polskie synonimy na oficjalne nazwy kategorii i podkategorii:
    - "paliwo", "benzyna", "tankowanie" → kategoria "Auto i transport", podkategoria "Paliwo"
    - "jedzenie poza domem", "restauracje" → kategoria "Codzienne wydatki", podkategoria "Jedzenie poza domem"
-   - "czynsz", "najem" → kategoria "Płatności", podkategoria "Czynsz i wynajem"
+   - "czynsz", "najem", "mieszkanie" → kategoria "Płatności", podkategoria "Czynsz i wynajem"
    - "prezent", "prezenty" → kategoria "Osobiste", podkategoria "Prezenty i wsparcie"
    - "ubrania", "odzież", "buty" → kategoria "Osobiste", podkategoria "Odzież i obuwie"
    - "zdrowie", "leki", "lekarz" → kategoria "Osobiste", podkategoria "Zdrowie i uroda"
@@ -138,12 +189,29 @@ WAŻNE ZASADY:
    - "sport", "siłownia", "hobby" → kategoria "Rozrywka", podkategoria "Sport i hobby"
    - "alkohol", "piwo", "wino" → kategoria "Codzienne wydatki", podkategoria "Alkohol"
    - "prąd", "elektryczność" → kategoria "Płatności", podkategoria "Prąd"
-   - "internet", "telefon" → kategoria "Płatności", podkategoria "TV, internet, telefon"
+   - "internet", "telefon", "tv" → kategoria "Płatności", podkategoria "TV, internet, telefon"
    - "raty", "kredyt" → kategoria "Płatności", podkategoria "Spłaty rat"
 3. Jeśli użytkownik nie podał okresu, użyj null (całość historii)
 4. Jeśli pytanie jest niejasne, ustaw route: "clarify"
 5. Dla ogólnych pytań o finanse ustaw route: "general"
 6. ZAWSZE używaj dokładnych nazw podkategorii z listy DOSTĘPNE PODKATEGORIE
+
+KIEDY UŻYWAĆ KTÓREJ FUNKCJI:
+- "w poszczególnych miesiącach", "jak się zmieniało", "miesięcznie", "miesiąc po miesiącu" → monthlyBreakdown
+- "ile wydałem", "suma", "łącznie", "całkowity koszt" → sumByCategory lub sumBySubcategory
+- "top", "ranking", "najwięcej" → topExpenses
+- "porównaj", "vs", "różnica między miesiącami" → compareMonths
+- "trend", "rośnie/maleje" → trendAnalysis
+
+WIELE PODKATEGORII W JEDNYM PYTANIU:
+Gdy użytkownik wymienia wiele rzeczy (np. "czynsz, prąd oraz internet"), generuj OSOBNĄ operację dla każdej podkategorii:
+{
+  "operations": [
+    { "function": "monthlyBreakdown", "params": { "category": "Płatności", "subcategory": "Czynsz i wynajem" }},
+    { "function": "monthlyBreakdown", "params": { "category": "Płatności", "subcategory": "Prąd" }},
+    { "function": "monthlyBreakdown", "params": { "category": "Płatności", "subcategory": "TV, internet, telefon" }}
+  ]
+}
 
 FORMAT ODPOWIEDZI:
 {
@@ -278,8 +346,26 @@ FORMAT ODPOWIEDZI:
     _fallbackRouting(userQuery, cache) {
         const query = userQuery.toLowerCase();
         
-        // Wykryj WSZYSTKIE kategorie/podkategorie w zapytaniu
-        const detectedCategories = this._detectAllCategories(userQuery);
+        // NAJPIERW: Użyj BudgetAISynonyms jeśli dostępny
+        let resolvedSynonyms = null;
+        if (typeof BudgetAISynonyms !== 'undefined') {
+            resolvedSynonyms = BudgetAISynonyms.resolve(userQuery);
+            console.log('BudgetAIRouter Fallback: Using resolved synonyms:', resolvedSynonyms.subcategories);
+        }
+        
+        // Wykryj WSZYSTKIE kategorie/podkategorie - preferuj resolved synonyms
+        let detectedCategories = [];
+        
+        if (resolvedSynonyms && resolvedSynonyms.subcategories.length > 0) {
+            // Użyj rozpoznanych synonimów - są dokładniejsze
+            detectedCategories = resolvedSynonyms.subcategories.map(s => ({
+                category: s.category,
+                subcategory: s.officialName
+            }));
+        } else {
+            // Fallback do starej metody
+            detectedCategories = this._detectAllCategories(userQuery);
+        }
         
         // Jeśli wykryto wiele kategorii, użyj pierwszej jako głównej
         let category = null;
@@ -290,23 +376,131 @@ FORMAT ODPOWIEDZI:
             subcategory = detectedCategories[0].subcategory;
         }
         
-        // Wykryj okres
-        const periodMatch = BudgetAICompute.parsePeriod(userQuery);
-        const periodFrom = periodMatch?.from || null;
-        const periodTo = periodMatch?.to || null;
+        // Wykryj okres - preferuj resolver
+        let periodFrom = null;
+        let periodTo = null;
         
-        // Wykryj intencję na podstawie słów kluczowych
+        if (resolvedSynonyms?.timeContext) {
+            // Użyj czasu z resolvera
+            const tc = resolvedSynonyms.timeContext;
+            const now = new Date();
+            
+            if (tc.type === 'relative') {
+                const targetDate = new Date(now);
+                if (tc.unit === 'month') {
+                    targetDate.setMonth(targetDate.getMonth() + tc.value);
+                } else if (tc.unit === 'year') {
+                    targetDate.setFullYear(targetDate.getFullYear() + tc.value);
+                }
+                periodFrom = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                periodTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            } else if (tc.type === 'currentYear') {
+                periodFrom = `${now.getFullYear()}-01`;
+                periodTo = `${now.getFullYear()}-12`;
+            } else if (tc.type === 'previousYear') {
+                periodFrom = `${now.getFullYear() - 1}-01`;
+                periodTo = `${now.getFullYear() - 1}-12`;
+            } else if (tc.type === 'specificYear' && tc.year) {
+                periodFrom = `${tc.year}-01`;
+                periodTo = `${tc.year}-12`;
+            }
+        } else {
+            // Fallback do starej metody
+            const periodMatch = BudgetAICompute.parsePeriod(userQuery);
+            periodFrom = periodMatch?.from || null;
+            periodTo = periodMatch?.to || null;
+        }
+        
+        // Wykryj intencję - preferuj resolver
         let route = 'general';
         let operations = [];
         let intentSummary = 'Ogólne pytanie o finanse';
         
+        // Użyj intencji z resolvera jeśli dostępna
+        const resolvedIntents = resolvedSynonyms?.intents || [];
+        
         // Jeśli wykryto wiele kategorii - generuj operacje dla każdej
         const hasMultipleCategories = detectedCategories.length > 1;
+        
+        // NOWE: Użyj sugerowanej funkcji z resolvera
+        if (resolvedIntents.length > 0 && category) {
+            const suggestedFunc = typeof BudgetAISynonyms !== 'undefined' 
+                ? BudgetAISynonyms.suggestFunction(resolvedIntents)
+                : 'sumBySubcategory';
+            
+            if (resolvedIntents.includes('monthly')) {
+                route = 'compute_trend';
+                if (hasMultipleCategories) {
+                    intentSummary = `Wydatki miesięczne dla: ${detectedCategories.map(c => c.subcategory || c.category).join(', ')}`;
+                    detectedCategories.forEach(cat => {
+                        operations.push({
+                            function: 'monthlyBreakdown',
+                            params: { category: cat.category, subcategory: cat.subcategory }
+                        });
+                    });
+                } else {
+                    intentSummary = `Wydatki miesięczne dla "${subcategory || category}"`;
+                    operations.push({
+                        function: 'monthlyBreakdown',
+                        params: { category, subcategory }
+                    });
+                }
+                return this._buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo);
+            }
+            
+            if (resolvedIntents.includes('trend')) {
+                route = 'compute_trend';
+                intentSummary = `Trend wydatków`;
+                operations.push({ function: 'trendAnalysis', params: { metric: 'expenses' } });
+                return this._buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo);
+            }
+            
+            if (resolvedIntents.includes('top')) {
+                route = 'compute_top';
+                intentSummary = `Ranking wydatków`;
+                operations.push({ function: 'topExpenses', params: { n: 10, level: 'subcategory' } });
+                return this._buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo);
+            }
+            
+            if (resolvedIntents.includes('compare')) {
+                route = 'compute_compare';
+                intentSummary = `Porównanie miesięcy`;
+                // Porównaj ostatnie 2 miesiące
+                const periods = cache?.availablePeriods || [];
+                if (periods.length >= 2) {
+                    const p1 = `${periods[1].rok}-${String(periods[1].miesiac).padStart(2, '0')}`;
+                    const p2 = `${periods[0].rok}-${String(periods[0].miesiac).padStart(2, '0')}`;
+                    operations.push({ function: 'compareMonths', params: { period1: p1, period2: p2 } });
+                }
+                return this._buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo);
+            }
+            
+            // Domyślnie: sum
+            route = 'compute_sum';
+            if (hasMultipleCategories) {
+                intentSummary = `Suma wydatków dla: ${detectedCategories.map(c => c.subcategory || c.category).join(', ')}`;
+                detectedCategories.forEach(cat => {
+                    operations.push({
+                        function: cat.subcategory ? 'sumBySubcategory' : 'sumByCategory',
+                        params: { category: cat.category, subcategory: cat.subcategory, periodFrom, periodTo }
+                    });
+                });
+            } else {
+                intentSummary = `Suma wydatków dla "${subcategory || category}"`;
+                operations.push({
+                    function: subcategory ? 'sumBySubcategory' : 'sumByCategory',
+                    params: { category, subcategory, periodFrom, periodTo }
+                });
+            }
+            return this._buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo);
+        }
+        
+        // STARA LOGIKA (fallback gdy resolver nie pomógł)
         
         // Suma / wydatki na X / trend / zmiana w czasie
         if (query.match(/suma|ile|wydatki na|wydałem|wydałam|koszt|koszty|jak się zmien|w poszczególnych|miesiącach|zmieniało/)) {
             
-            // Jeśli pytanie o zmiany w czasie - użyj trendByPeriod
+            // Jeśli pytanie o zmiany w czasie - użyj monthlyBreakdown
             if (query.match(/jak się zmien|zmieniało|w poszczególnych|miesiącach|miesięcznie/)) {
                 route = 'compute_trend';
                 
@@ -316,13 +510,12 @@ FORMAT ODPOWIEDZI:
                     // Generuj operację dla każdej wykrytej kategorii
                     detectedCategories.forEach(cat => {
                         operations.push({
-                            function: 'trendByPeriod',
+                            function: 'monthlyBreakdown',
                             params: { 
                                 category: cat.category, 
                                 subcategory: cat.subcategory, 
                                 periodFrom, 
-                                periodTo,
-                                metric: 'expenses'
+                                periodTo
                             }
                         });
                     });
@@ -331,8 +524,8 @@ FORMAT ODPOWIEDZI:
                     intentSummary = `Wydatki miesięczne${catLabel ? ` dla ${catLabel}` : ''}`;
                     
                     operations.push({
-                        function: 'trendByPeriod',
-                        params: { category, subcategory, periodFrom, periodTo, metric: 'expenses' }
+                        function: 'monthlyBreakdown',
+                        params: { category, subcategory, periodFrom, periodTo }
                     });
                 }
             } else {
@@ -506,6 +699,22 @@ FORMAT ODPOWIEDZI:
     },
     
     /**
+     * Helper do budowania wyniku fallback
+     */
+    _buildFallbackResult(intentSummary, route, operations, category, subcategory, periodFrom, periodTo) {
+        return {
+            intent_summary: intentSummary,
+            route,
+            operations,
+            canonical_category: category,
+            canonical_subcategory: subcategory,
+            period_from: periodFrom,
+            period_to: periodTo,
+            source: 'fallback_with_synonyms'
+        };
+    },
+    
+    /**
      * Wykrywa WSZYSTKIE kategorie/podkategorie wymienione w zapytaniu
      */
     _detectAllCategories(userQuery) {
@@ -632,7 +841,7 @@ ZASADY:
 FORMAT ODPOWIEDZI:
 - Zacznij od bezpośredniej odpowiedzi na pytanie
 - Podaj kluczowe liczby
-- Dodaj krótki kontekst lub wnioski
+- Dodaj kontekst lub wnioski
 
 Odpowiadaj po polsku w naturalnym, przyjaznym tonie.`;
     }
