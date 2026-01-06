@@ -96,13 +96,23 @@ ${periods.slice(0, 12).map(p => p.label).join(', ')}
 
 WAŻNE ZASADY:
 1. Odpowiadaj TYLKO poprawnym JSON bez dodatkowego tekstu
-2. Mapuj polskie synonimy na oficjalne nazwy kategorii:
+2. Mapuj polskie synonimy na oficjalne nazwy kategorii i podkategorii:
    - "paliwo", "benzyna", "tankowanie" → kategoria "Auto i transport", podkategoria "Paliwo"
    - "jedzenie poza domem", "restauracje" → kategoria "Codzienne wydatki", podkategoria "Jedzenie poza domem"
    - "czynsz", "najem" → kategoria "Płatności", podkategoria "Czynsz i wynajem"
+   - "prezent", "prezenty" → kategoria "Osobiste", podkategoria "Prezenty i wsparcie"
+   - "ubrania", "odzież", "buty" → kategoria "Osobiste", podkategoria "Odzież i obuwie"
+   - "zdrowie", "leki", "lekarz" → kategoria "Osobiste", podkategoria "Zdrowie i uroda"
+   - "podróże", "wakacje", "wyjazd" → kategoria "Rozrywka", podkategoria "Podróże i wyjazdy"
+   - "sport", "siłownia", "hobby" → kategoria "Rozrywka", podkategoria "Sport i hobby"
+   - "alkohol", "piwo", "wino" → kategoria "Codzienne wydatki", podkategoria "Alkohol"
+   - "prąd", "elektryczność" → kategoria "Płatności", podkategoria "Prąd"
+   - "internet", "telefon" → kategoria "Płatności", podkategoria "TV, internet, telefon"
+   - "raty", "kredyt" → kategoria "Płatności", podkategoria "Spłaty rat"
 3. Jeśli użytkownik nie podał okresu, użyj null (całość historii)
 4. Jeśli pytanie jest niejasne, ustaw route: "clarify"
 5. Dla ogólnych pytań o finanse ustaw route: "general"
+6. ZAWSZE używaj dokładnych nazw podkategorii z listy DOSTĘPNE PODKATEGORIE
 
 FORMAT ODPOWIEDZI:
 {
@@ -141,8 +151,27 @@ FORMAT ODPOWIEDZI:
         if (response.canonical_category) {
             const validCategories = cache.categoryList || BudgetCategories.getAllCategories();
             if (!validCategories.includes(response.canonical_category)) {
-                console.warn('BudgetAIRouter: Nieznana kategoria:', response.canonical_category);
-                response.canonical_category = null;
+                // Może to jest podkategoria? Szukaj we wszystkich kategoriach
+                let foundCategory = null;
+                let foundSubcategory = null;
+                
+                for (const cat of validCategories) {
+                    const subs = cache.subcategoryList?.[cat] || BudgetCategories.getSubcategories(cat);
+                    if (subs.includes(response.canonical_category)) {
+                        foundCategory = cat;
+                        foundSubcategory = response.canonical_category;
+                        break;
+                    }
+                }
+                
+                if (foundCategory) {
+                    console.log('BudgetAIRouter: Naprawiono kategorię:', response.canonical_category, '→', foundCategory, '/', foundSubcategory);
+                    response.canonical_category = foundCategory;
+                    response.canonical_subcategory = foundSubcategory;
+                } else {
+                    console.warn('BudgetAIRouter: Nieznana kategoria:', response.canonical_category);
+                    response.canonical_category = null;
+                }
             }
         }
         
@@ -155,15 +184,53 @@ FORMAT ODPOWIEDZI:
             }
         }
         
-        // Waliduj operacje
+        // Jeśli mamy tylko subcategory bez category, spróbuj znaleźć kategorię
+        if (response.canonical_subcategory && !response.canonical_category) {
+            const validCategories = cache.categoryList || BudgetCategories.getAllCategories();
+            for (const cat of validCategories) {
+                const subs = cache.subcategoryList?.[cat] || BudgetCategories.getSubcategories(cat);
+                if (subs.includes(response.canonical_subcategory)) {
+                    response.canonical_category = cat;
+                    console.log('BudgetAIRouter: Znaleziono kategorię dla podkategorii:', response.canonical_subcategory, '→', cat);
+                    break;
+                }
+            }
+        }
+        
+        // Waliduj operacje - napraw też kategorie w operacjach
         if (response.operations && Array.isArray(response.operations)) {
             const validFunctions = Object.keys(BudgetAICompute.AVAILABLE_FUNCTIONS);
+            const validCategories = cache.categoryList || BudgetCategories.getAllCategories();
             
             response.operations = response.operations.filter(op => {
                 if (!op.function || !validFunctions.includes(op.function)) {
                     console.warn('BudgetAIRouter: Nieznana funkcja:', op.function);
                     return false;
                 }
+                
+                // Napraw kategorie w params
+                if (op.params) {
+                    // Jeśli category nie jest prawidłowa, sprawdź czy to podkategoria
+                    if (op.params.category && !validCategories.includes(op.params.category)) {
+                        for (const cat of validCategories) {
+                            const subs = cache.subcategoryList?.[cat] || BudgetCategories.getSubcategories(cat);
+                            if (subs.includes(op.params.category)) {
+                                op.params.subcategory = op.params.category;
+                                op.params.category = cat;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Użyj canonical jeśli brak w params
+                    if (!op.params.category && response.canonical_category) {
+                        op.params.category = response.canonical_category;
+                    }
+                    if (!op.params.subcategory && response.canonical_subcategory) {
+                        op.params.subcategory = response.canonical_subcategory;
+                    }
+                }
+                
                 return true;
             });
         } else {
@@ -207,7 +274,8 @@ FORMAT ODPOWIEDZI:
         // Suma / wydatki na X
         if (query.match(/suma|ile|wydatki na|wydałem|wydałam|koszt|koszty/)) {
             route = 'compute_sum';
-            intentSummary = `Suma wydatków${category ? ` dla "${category}"` : ''}`;
+            const catLabel = subcategory ? `"${subcategory}"` : (category ? `"${category}"` : '');
+            intentSummary = `Suma wydatków${catLabel ? ` dla ${catLabel}` : ''}`;
             
             operations.push({
                 function: 'sumByCategory',
