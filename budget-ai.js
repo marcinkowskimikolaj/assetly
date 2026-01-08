@@ -10,52 +10,52 @@
  * - Walidacja kategorii w wynikach
  */
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // KONFIGURACJA
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const BUDGET_QUICK_PROMPTS = [
     {
         id: 'summary',
         label: 'Podsumowanie',
-        icon: '📊',
+        icon: 'ðŸ“Š',
         prompt: 'Podsumuj moje finanse z ostatniego zamkniętego miesiąca. Podaj: bilans, wykonanie planu, 3 najważniejsze obserwacje.'
     },
     {
         id: 'top',
         label: 'Top wydatki',
-        icon: '📈',
+        icon: 'ðŸ“ˆ',
         prompt: 'Pokaż top 10 kategorii wydatków w całej historii. Które pochłaniają najwięcej pieniędzy?'
     },
     {
         id: 'savings',
         label: 'Gdzie oszczędzić',
-        icon: '💰',
+        icon: 'ðŸ’°',
         prompt: 'Zidentyfikuj 3 kategorie gdzie wydaję więcej niż średnia historyczna. Dla każdej podaj konkretną kwotę potencjalnej oszczędności.'
     },
     {
         id: 'trends',
         label: 'Trendy',
-        icon: '📉',
+        icon: 'ðŸ“‰',
         prompt: 'Jak zmieniały się moje wydatki i dochody przez ostatnie 6 miesięcy? Czy widzisz niepokojące trendy?'
     },
     {
         id: 'compare',
         label: 'Porównanie m/m',
-        icon: '📅',
+        icon: 'ðŸ“…',
         prompt: 'Porównaj moje finanse z ostatniego miesiąca z poprzednim miesiącem. Co się zmieniło?'
     },
     {
         id: '503020',
         label: 'Analiza 50/30/20',
-        icon: '🎯',
+        icon: 'ðŸŽ¯',
         prompt: 'Przeanalizuj moje wydatki według metodyki 50/30/20. Czy trzymam się zdrowych proporcji?'
     }
 ];
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // STAN
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 let budgetChatHistory = [];
 let budgetAiInitialized = false;
@@ -92,9 +92,9 @@ function clearPreviousQueryState() {
     console.log('BudgetAI: Cleared previous query state');
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // INICJALIZACJA
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function initBudgetAI() {
     if (budgetAiInitialized) return;
@@ -116,9 +116,9 @@ async function initBudgetAI() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RENDEROWANIE TAB AI
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function renderBudgetAITab() {
     const container = document.getElementById('budget-ai');
@@ -136,15 +136,15 @@ async function renderBudgetAITab() {
             <div class="card ai-config-card">
                 <div class="card-header card-header-ai">
                     <div class="ai-header-left">
-                        <h3 class="card-title">🤖 Asystent budżetowy</h3>
-                        <span class="ai-config-badge ${config.level}">${config.ready ? '✓ Gotowy' : '⚠️ Konfiguracja wymagana'}</span>
+                        <h3 class="card-title">ðŸ¤– Asystent budżetowy</h3>
+                        <span class="ai-config-badge ${config.level}">${config.ready ? 'âœ“ Gotowy' : 'âš ï¸ Konfiguracja wymagana'}</span>
                     </div>
                     <div class="header-actions">
                         <button class="btn btn-ghost btn-sm" onclick="clearBudgetChatHistory()" title="Wyczyść historię">
-                            🗑️
+                            ðŸ—‘ï¸
                         </button>
                         <button class="btn btn-ghost btn-sm" onclick="BudgetAISettings.show()" title="Ustawienia AI">
-                            ⚙️
+                            âš™ï¸
                         </button>
                     </div>
                 </div>
@@ -153,7 +153,7 @@ async function renderBudgetAITab() {
                     <div class="ai-config-warning">
                         <p>${config.message}</p>
                         <button class="btn btn-primary btn-sm" onclick="BudgetAISettings.show()">
-                            ⚙️ Skonfiguruj AI
+                            âš™ï¸ Skonfiguruj AI
                         </button>
                     </div>
                 ` : ''}
@@ -176,12 +176,12 @@ async function renderBudgetAITab() {
                 <div id="budgetChatMessages" class="chat-messages">
                     ${budgetChatHistory.length === 0 ? `
                         <div class="chat-welcome">
-                            <p>👋 Cześć! Jestem Twoim asystentem budżetowym.</p>
+                            <p>ðŸ‘‹ Cześć! Jestem Twoim asystentem budżetowym.</p>
                             <p>Mogę pomóc Ci przeanalizować wydatki, znaleźć oszczędności, porównać trendy i odpowiedzieć na pytania o Twój budżet.</p>
                             ${config.ready ? `
                                 <p>Wybierz jedną z szybkich analiz powyżej lub zadaj własne pytanie.</p>
                             ` : `
-                                <p>⚠️ Najpierw skonfiguruj klucze API w ustawieniach.</p>
+                                <p>âš ï¸ Najpierw skonfiguruj klucze API w ustawieniach.</p>
                             `}
                         </div>
                     ` : ''}
@@ -197,7 +197,7 @@ async function renderBudgetAITab() {
                     <button class="btn btn-primary" 
                             onclick="sendBudgetMessage()" 
                             ${!config.ready || budgetAiProcessing ? 'disabled' : ''}>
-                        ${budgetAiProcessing ? '⏳' : 'Wyślij'}
+                        ${budgetAiProcessing ? 'â³' : 'Wyślij'}
                     </button>
                 </div>
             </div>
@@ -224,9 +224,9 @@ async function renderBudgetAITab() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
-// WYSYŁANIE WIADOMOŚCI (NOWY FLOW v3)
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// WYSYÅANIE WIADOMOÅšCI (NOWY FLOW v3)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function sendBudgetMessage(customMessage = null) {
     const input = document.getElementById('budgetChatInput');
@@ -237,7 +237,7 @@ async function sendBudgetMessage(customMessage = null) {
     
     // Sprawdź konfigurację
     if (!AIProviders.isReady()) {
-        addBudgetChatMessage('assistant', '⚠️ Brak skonfigurowanych providerów AI. Kliknij ⚙️ aby skonfigurować.');
+        addBudgetChatMessage('assistant', 'âš ï¸ Brak skonfigurowanych providerów AI. Kliknij âš™ï¸ aby skonfigurować.');
         return;
     }
     
@@ -253,7 +253,7 @@ async function sendBudgetMessage(customMessage = null) {
     // Pokaż loading
     budgetAiProcessing = true;
     updateChatUIState();
-    const loadingId = addBudgetChatMessageToUI('assistant', '⏳ Analizuję...', null, true);
+    const loadingId = addBudgetChatMessageToUI('assistant', 'â³ Analizuję...', null, true);
     
     try {
         // KROK 1: Pobierz cache
@@ -301,7 +301,7 @@ async function sendBudgetMessage(customMessage = null) {
         if (routing.route === 'clarify') {
             response = {
                 success: true,
-                content: `🤔 Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami\n- Pytaniami typu "W którym miesiącu wydałem najwięcej na X?"`,
+                content: `ðŸ¤” Nie jestem pewien co dokładnie chcesz sprawdzić. Czy możesz doprecyzować?\n\nMogę pomóc z:\n- Sumami wydatków dla kategorii (np. "suma wydatków na paliwo")\n- Porównaniami miesięcy\n- Analizą trendów\n- Top wydatkami\n- Pytaniami typu "W którym miesiącu wydałem najwięcej na X?"`,
                 provider: 'system'
             };
             debugInfo.generatorProvider = 'system';
@@ -332,7 +332,7 @@ async function sendBudgetMessage(customMessage = null) {
             })));
             
             // KROK 4b: Weryfikacja spójności wyników
-            const consistencyIssues = this._verifyResultsConsistency(routing, computeResults);
+            const consistencyIssues = _verifyResultsConsistency(routing, computeResults);
             if (consistencyIssues.length > 0) {
                 console.warn('BudgetAI: Result consistency issues:', consistencyIssues);
                 debugInfo.consistencyIssues = consistencyIssues;
@@ -366,13 +366,13 @@ async function sendBudgetMessage(customMessage = null) {
             saveBudgetChatHistory();
         } else {
             debugInfo.error = response.error;
-            addBudgetChatMessage('assistant', `❌ Błąd: ${response.error}`, 'error', debugInfo);
+            addBudgetChatMessage('assistant', `âŒ Błąd: ${response.error}`, 'error', debugInfo);
         }
         
     } catch (error) {
         console.error('BudgetAI: Błąd:', error);
         removeBudgetChatMessageFromUI(loadingId);
-        addBudgetChatMessage('assistant', `❌ Błąd: ${error.message}`, 'error', { error: error.message });
+        addBudgetChatMessage('assistant', `âŒ Błąd: ${error.message}`, 'error', { error: error.message });
     } finally {
         budgetAiProcessing = false;
         updateChatUIState();
@@ -432,9 +432,9 @@ function runBudgetQuickPrompt(promptId) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // UI CZATU
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 let budgetMessageCounter = 0;
 
@@ -486,7 +486,7 @@ function addBudgetChatMessageToUI(role, content, provider = null, isLoading = fa
     }
     
     div.innerHTML = `
-        <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+        <div class="message-avatar">${role === 'user' ? 'ðŸ‘¤' : 'ðŸ¤–'}</div>
         <div class="message-content">
             ${formattedContent}
             ${providerBadge}
@@ -507,42 +507,42 @@ function renderDebugPanel(debugInfo) {
     if (!debugInfo) return '';
     
     // Określ status ogólny
-    let statusIcon = '✅';
+    let statusIcon = 'âœ…';
     let statusText = 'Sukces';
     let statusClass = 'success';
     
     if (debugInfo.error) {
-        statusIcon = '❌';
+        statusIcon = 'âŒ';
         statusText = 'Błąd';
         statusClass = 'error';
     } else if (debugInfo.routerSource === 'fallback') {
-        statusIcon = '⚠️';
+        statusIcon = 'âš ï¸';
         statusText = 'Fallback (bez AI)';
         statusClass = 'warning';
     } else if (debugInfo.planRepaired) {
-        statusIcon = '🔧';
+        statusIcon = 'ðŸ”§';
         statusText = 'Plan naprawiony';
         statusClass = 'warning';
     } else if (debugInfo.computeSuccess === false) {
-        statusIcon = '⚠️';
+        statusIcon = 'âš ï¸';
         statusText = 'Błąd obliczeń';
         statusClass = 'warning';
     }
     
     // Router info
-    const routerInfo = debugInfo.routerSource === 'llm7' ? '🤖 LLM7' :
-                       debugInfo.routerSource === 'llm7_repaired' ? '🔧 LLM7 (naprawiony)' :
-                       debugInfo.routerSource === 'fallback' ? '📋 Regex/Fallback' :
+    const routerInfo = debugInfo.routerSource === 'llm7' ? 'ðŸ¤– LLM7' :
+                       debugInfo.routerSource === 'llm7_repaired' ? 'ðŸ”§ LLM7 (naprawiony)' :
+                       debugInfo.routerSource === 'fallback' ? 'ðŸ“‹ Regex/Fallback' :
                        debugInfo.routerSource || '?';
     
     // Generator info
     const generatorInfo = debugInfo.generatorProvider ? 
         `${getProviderIcon(debugInfo.generatorProvider)} ${debugInfo.generatorProvider}` : 
-        '—';
+        'â€”';
     
     // Kategoria/podkategoria
     const categoryInfo = debugInfo.category ? 
-        (debugInfo.subcategory ? `${debugInfo.category} → ${debugInfo.subcategory}` : debugInfo.category) :
+        (debugInfo.subcategory ? `${debugInfo.category} â†’ ${debugInfo.subcategory}` : debugInfo.category) :
         '(nie wykryto)';
     
     // Operacje
@@ -550,13 +550,13 @@ function renderDebugPanel(debugInfo) {
         debugInfo.operations.join(', ') : '(brak)';
     
     // Question shape
-    const shapeInfo = debugInfo.questionShape || '—';
+    const shapeInfo = debugInfo.questionShape || 'â€”';
     
     return `
         <div class="debug-panel">
             <div class="debug-header" onclick="this.parentElement.classList.toggle('expanded')">
                 <span class="debug-status ${statusClass}">${statusIcon} ${statusText}</span>
-                <span class="debug-toggle">▼</span>
+                <span class="debug-toggle">â–¼</span>
             </div>
             <div class="debug-content">
                 <div class="debug-row">
@@ -613,9 +613,9 @@ function removeBudgetChatMessageFromUI(id) {
 
 function getProviderIcon(provider) {
     switch (provider) {
-        case 'GEMINI': return '✨';
-        case 'OPENAI': return '🤖';
-        case 'LLM7': return '🔀';
+        case 'GEMINI': return 'âœ¨';
+        case 'OPENAI': return 'ðŸ¤–';
+        case 'LLM7': return 'ðŸ”€';
         default: return '';
     }
 }
@@ -656,14 +656,14 @@ function updateChatUIState() {
     if (input) input.disabled = budgetAiProcessing;
     if (sendBtn) {
         sendBtn.disabled = budgetAiProcessing;
-        sendBtn.textContent = budgetAiProcessing ? '⏳' : 'Wyślij';
+        sendBtn.textContent = budgetAiProcessing ? 'â³' : 'Wyślij';
     }
     quickBtns.forEach(btn => btn.disabled = budgetAiProcessing);
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // HISTORIA I PERSISTENCE
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function saveBudgetChatHistory() {
     try {
@@ -705,9 +705,9 @@ function clearBudgetChatHistory() {
     renderBudgetAITab();
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PROACTIVE INSIGHTS
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function checkAndRunProactiveInsights() {
     if (sessionStorage.getItem('budget_proactive_insight_shown_v2')) {
@@ -792,7 +792,7 @@ function renderProactiveInsight(insight) {
     const banner = document.getElementById('proactive-insight-banner');
     if (!banner) return;
     
-    const icon = insight.type === 'warning' ? '⚠️' : insight.type === 'success' ? '📈' : '💡';
+    const icon = insight.type === 'warning' ? 'âš ï¸' : insight.type === 'success' ? 'ðŸ“ˆ' : 'ðŸ’¡';
     
     banner.innerHTML = `
         <div class="insight-icon-container">
@@ -803,16 +803,16 @@ function renderProactiveInsight(insight) {
             <p class="insight-body">${escapeHtml(insight.message)}</p>
         </div>
         <button class="insight-close" onclick="this.parentElement.remove()">
-            ✕
+            âœ•
         </button>
     `;
     
     banner.style.display = 'flex';
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // DODATKOWE STYLE DLA NOWEGO UI
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 (function injectBudgetAIStyles() {
     if (document.getElementById('budget-ai-v3-styles')) return;
@@ -1178,9 +1178,9 @@ function renderProactiveInsight(insight) {
     document.head.appendChild(styles);
 })();
 
-// ═══════════════════════════════════════════════════════════
-// KOMPATYBILNOŚĆ WSTECZNA
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// KOMPATYBILNOÅšÄ† WSTECZNA
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function showBudgetApiKeyModal() {
     BudgetAISettings.show();
