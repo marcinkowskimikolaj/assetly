@@ -392,18 +392,23 @@ WAŻNE: Ty DECYDUJESZ o interpretacji. Dane pomocnicze od JS to tylko HINTY - mo
         // ─────────────────────────────────────────────────────────
         prompt += `
 ═══════════════════════════════════════════════════════════════════════
-TAKSONOMIA KATEGORII I PODKATEGORII (używaj DOKŁADNIE tych nazw!)
+TAKSONOMIA KATEGORII I PODKATEGORII
 ═══════════════════════════════════════════════════════════════════════
+
+STRUKTURA: KATEGORIA (główna) → PODKATEGORIA (szczegółowa)
+W params.category używaj nazwy KATEGORII, w params.subcategory nazwy PODKATEGORII!
 
 `;
         
         for (const category of this.VALID_CATEGORIES) {
             const subs = this.VALID_SUBCATEGORIES[category] || [];
-            prompt += `📁 ${category}\n`;
+            prompt += `📁 KATEGORIA: "${category}"\n`;
             if (subs.length > 0) {
                 subs.forEach(sub => {
-                    prompt += `   └─ ${sub}\n`;
+                    prompt += `   └─ PODKATEGORIA: "${sub}"\n`;
                 });
+            } else {
+                prompt += `   └─ (brak podkategorii)\n`;
             }
             prompt += '\n';
         }
@@ -520,6 +525,16 @@ INSTRUKCJE INTERPRETACJI (TY DECYDUJESZ!)
 FORMAT ODPOWIEDZI (TYLKO JSON!)
 ═══════════════════════════════════════════════════════════════════════
 
+WAŻNE O CATEGORY vs SUBCATEGORY:
+• "category" = główna kategoria (np. "Osobiste", "Codzienne wydatki", "Auto i transport")
+• "subcategory" = podkategoria (np. "Zdrowie i uroda", "Żywność i chemia domowa", "Paliwo")
+
+Przykłady poprawnego mapowania:
+• Zdrowie → category: "Osobiste", subcategory: "Zdrowie i uroda"
+• Żywność → category: "Codzienne wydatki", subcategory: "Żywność i chemia domowa"
+• Paliwo → category: "Auto i transport", subcategory: "Paliwo"
+• Zwierzęta → category: "Codzienne wydatki", subcategory: "Zwierzęta"
+
 {
   "intent_summary": "Krótki opis co użytkownik chce wiedzieć",
   "interpretation_notes": "Twoje rozumowanie przy interpretacji (opcjonalne)",
@@ -529,8 +544,8 @@ FORMAT ODPOWIEDZI (TYLKO JSON!)
     {
       "function": "nazwa_funkcji",
       "params": {
-        "category": "dokładna nazwa kategorii lub null",
-        "subcategory": "dokładna nazwa podkategorii lub null",
+        "category": "GŁÓWNA kategoria (np. 'Osobiste') lub null",
+        "subcategory": "PODKATEGORIA (np. 'Zdrowie i uroda') lub null",
         "periodFrom": "YYYY-MM lub null",
         "periodTo": "YYYY-MM lub null"
       },
@@ -621,6 +636,26 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
             // Napraw kategorie w params operacji
             routing.operations.forEach(op => {
                 if (op.params) {
+                    // KLUCZOWA NAPRAWA: Sprawdź czy params.category to tak naprawdę PODKATEGORIA
+                    if (op.params.category && !this.VALID_CATEGORIES.includes(op.params.category)) {
+                        // Może LLM7 wpisał podkategorię do category?
+                        const correctCategory = this._findCategoryForSubcategory(op.params.category);
+                        if (correctCategory) {
+                            console.log(`BudgetAIRouter: Auto-fixed operation params: "${op.params.category}" is subcategory of "${correctCategory}"`);
+                            op.params.subcategory = op.params.category;
+                            op.params.category = correctCategory;
+                        }
+                    }
+                    
+                    // Jeśli mamy subcategory ale nie mamy category, znajdź kategorię
+                    if (op.params.subcategory && !op.params.category) {
+                        const correctCategory = this._findCategoryForSubcategory(op.params.subcategory);
+                        if (correctCategory) {
+                            op.params.category = correctCategory;
+                            console.log(`BudgetAIRouter: Auto-added category "${correctCategory}" for subcategory "${op.params.subcategory}"`);
+                        }
+                    }
+                    
                     // Propaguj canonical do params jeśli brak
                     if (!op.params.category && routing.canonical_category) {
                         op.params.category = routing.canonical_category;
