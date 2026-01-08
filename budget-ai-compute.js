@@ -1,54 +1,68 @@
 /**
- * Assetly - Budget AI Compute (v3)
+ * Assetly - Budget AI Compute (v3.1)
  * Deterministyczne funkcje obliczeniowe dla AI
  * 
- * ZMIANY v3:
- * - topExpenses respektuje filtry kategorii (filterCategory param)
- * - monthlyBreakdown zwraca notFound gdy brak danych
- * - Metadane w wynikach (_meta) do weryfikacji spójności
- * - Obsługa zarówno "value" jak i "amount" w breakdown
- * - Stabilna iteracja po obiektach (Object.entries zamiast keys+values)
- * - Eliminacja pustych tokenów w normalizacji
+ * ZMIANY v3.1:
+ * - Rozszerzone synonimy dla "jazda samochodem", "zdrowie"
+ * - Naprawiono kodowanie UTF-8
+ * - Obsługa wielu kategorii w jednym zapytaniu
  */
 
 const BudgetAICompute = {
     
     // ═══════════════════════════════════════════════════════════
-    // SŁOWNIK SYNONIMÓW I NORMALIZACJA
+    // SŁOWNIK SYNONIMÓW I NORMALIZACJA (ROZSZERZONY)
     // ═══════════════════════════════════════════════════════════
     
     // Synonimy kategorii (mapowanie na nazwę kategorii)
     CATEGORY_SYNONYMS: {
+        // Auto i transport
         'auto': 'Auto i transport',
         'samochód': 'Auto i transport',
         'samochod': 'Auto i transport',
+        'samochodem': 'Auto i transport',
         'transport': 'Auto i transport',
         'jazda': 'Auto i transport',
+        'jeżdżenie': 'Auto i transport',
+        'jezdzenie': 'Auto i transport',
+        'kierowca': 'Auto i transport',
+        // Codzienne wydatki
         'jedzenie': 'Codzienne wydatki',
         'żywność': 'Codzienne wydatki',
         'zywnosc': 'Codzienne wydatki',
         'zakupy': 'Codzienne wydatki',
         'codzienne': 'Codzienne wydatki',
         'spożywcze': 'Codzienne wydatki',
+        'spozywcze': 'Codzienne wydatki',
+        // Dom
         'dom': 'Dom',
         'mieszkanie': 'Dom',
         'remont': 'Dom',
+        // Dzieci
         'dzieci': 'Dzieci',
         'dziecko': 'Dzieci',
+        // Firmowe
         'firma': 'Firmowe',
         'biznes': 'Firmowe',
         'działalność': 'Firmowe',
+        'dzialalnosc': 'Firmowe',
+        // Osobiste
         'osobiste': 'Osobiste',
         'prywatne': 'Osobiste',
+        'zdrowie': 'Osobiste',
+        'uroda': 'Osobiste',
+        // Oszczędności
         'oszczędności': 'Oszczędności i inw.',
         'oszczednosci': 'Oszczędności i inw.',
         'inwestycje': 'Oszczędności i inw.',
         'lokaty': 'Oszczędności i inw.',
+        // Płatności
         'płatności': 'Płatności',
         'platnosci': 'Płatności',
         'rachunki': 'Płatności',
         'opłaty': 'Płatności',
         'oplaty': 'Płatności',
+        // Rozrywka
         'rozrywka': 'Rozrywka',
         'zabawa': 'Rozrywka',
         'hobby': 'Rozrywka'
@@ -56,28 +70,67 @@ const BudgetAICompute = {
     
     // Synonimy podkategorii (mapowanie na {category, subcategory})
     SUBCATEGORY_SYNONYMS: {
-        // Auto i transport
+        // Auto i transport - Paliwo (ROZSZERZONE)
         'paliwo': { category: 'Auto i transport', subcategory: 'Paliwo' },
         'benzyna': { category: 'Auto i transport', subcategory: 'Paliwo' },
         'diesel': { category: 'Auto i transport', subcategory: 'Paliwo' },
         'tankowanie': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'tankowałem': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'tankowalem': { category: 'Auto i transport', subcategory: 'Paliwo' },
         'stacja benzynowa': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'jazda samochodem': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'jeżdżenie samochodem': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'koszt jazdy': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'koszty jazdy': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'eksploatacja auta': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        'eksploatacja samochodu': { category: 'Auto i transport', subcategory: 'Paliwo' },
+        
+        // Auto i transport - Parking
         'parking': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
         'autostrada': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
         'opłaty drogowe': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'myto': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        'e-toll': { category: 'Auto i transport', subcategory: 'Parking i opłaty' },
+        
+        // Auto i transport - Serwis
         'serwis': { category: 'Auto i transport', subcategory: 'Serwis i części' },
         'mechanik': { category: 'Auto i transport', subcategory: 'Serwis i części' },
         'naprawa auta': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'naprawa samochodu': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'przegląd': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'przeglad': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'opony': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        'wymiana opon': { category: 'Auto i transport', subcategory: 'Serwis i części' },
+        
+        // Auto i transport - Ubezpieczenie
         'ubezpieczenie auta': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'ubezpieczenie samochodu': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
         'oc': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
         'ac': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
+        'polisa auta': { category: 'Auto i transport', subcategory: 'Ubezpieczenie auta' },
         
-        // Codzienne wydatki
+        // Auto i transport - Przejazdy
+        'uber': { category: 'Auto i transport', subcategory: 'Przejazdy' },
+        'bolt': { category: 'Auto i transport', subcategory: 'Przejazdy' },
+        'taxi': { category: 'Auto i transport', subcategory: 'Przejazdy' },
+        'taksówka': { category: 'Auto i transport', subcategory: 'Przejazdy' },
+        'taksowka': { category: 'Auto i transport', subcategory: 'Przejazdy' },
+        
+        // Codzienne wydatki - Żywność
         'restauracja': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
         'restauracje': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
         'bar': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
         'kawiarnia': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
         'na mieście': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'na miescie': { category: 'Codzienne wydatki', subcategory: 'Jedzenie poza domem' },
+        'żywność': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        'zywnosc': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        'spożywcze': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        'spozywcze': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        'biedronka': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        'lidl': { category: 'Codzienne wydatki', subcategory: 'Żywność i chemia domowa' },
+        
+        // Codzienne wydatki - Zwierzęta
         'alkohol': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
         'piwo': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
         'wino': { category: 'Codzienne wydatki', subcategory: 'Alkohol' },
@@ -137,15 +190,20 @@ const BudgetAICompute = {
         'teatr': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
         'koncert': { category: 'Rozrywka', subcategory: 'Wyjścia i wydarzenia' },
         
-        // Osobiste
-        'ubrania': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
-        'odzież': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
-        'odziez': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
-        'buty': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        // Osobiste - Zdrowie (NOWE)
+        'zdrowie': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
         'lekarz': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
         'apteka': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
         'leki': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
         'fryzjer': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'kosmetyczka': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        'uroda': { category: 'Osobiste', subcategory: 'Zdrowie i uroda' },
+        
+        // Osobiste - inne
+        'ubrania': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'odzież': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'odziez': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
+        'buty': { category: 'Osobiste', subcategory: 'Odzież i obuwie' },
         'prezent': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
         'prezenty': { category: 'Osobiste', subcategory: 'Prezenty i wsparcie' },
         'książka': { category: 'Osobiste', subcategory: 'Multimedia, książki i prasa' },
@@ -306,9 +364,9 @@ const BudgetAICompute = {
         return null;
     },
     
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // WHITELISTA FUNKCJI DLA ROUTERA
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     AVAILABLE_FUNCTIONS: {
         sumByCategory: {
@@ -348,7 +406,7 @@ const BudgetAICompute = {
         },
         averageExpense: {
             name: 'averageExpense',
-            description: 'Średni wydatek miesięczny',
+            description: 'Åšredni wydatek miesięczny',
             params: ['category?', 'subcategory?', 'months?']
         },
         analyze503020: {
@@ -389,9 +447,9 @@ const BudgetAICompute = {
         }));
     },
     
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // WYKONANIE OPERACJI
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     /**
      * Wykonuje listę operacji i zwraca wyniki
@@ -489,9 +547,9 @@ const BudgetAICompute = {
         }
     },
     
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // IMPLEMENTACJE FUNKCJI
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     sumByCategory(category, subcategory, periodFrom, periodTo, cache) {
         let total = 0;
@@ -1036,7 +1094,7 @@ const BudgetAICompute = {
     getSummary(period, cache) {
         const periods = cache.availablePeriods || [];
         
-        // Jeśli nie podano okresu, znajdź ostatni ZAMKNIĘTY miesiąc
+        // Jeśli nie podano okresu, znajdź ostatni ZAMKNIÄ˜TY miesiąc
         let lastPeriod = period;
         if (!lastPeriod && periods.length > 0) {
             lastPeriod = this._getLastClosedPeriod(periods);
@@ -1072,7 +1130,7 @@ const BudgetAICompute = {
     },
     
     /**
-     * Zwraca ostatni ZAMKNIĘTY okres (nie bieżący miesiąc)
+     * Zwraca ostatni ZAMKNIÄ˜TY okres (nie bieżący miesiąc)
      */
     _getLastClosedPeriod(availablePeriods) {
         const currentPeriod = this._getCurrentPeriod();
@@ -1145,9 +1203,9 @@ const BudgetAICompute = {
         return period;
     },
     
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // HELPERY
-    // ═══════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     
     _periodInRange(period, from, to) {
         if (!from && !to) return true;
