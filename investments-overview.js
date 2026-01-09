@@ -1,6 +1,6 @@
 /**
  * Assetly - Investments Overview
- * Tab: PrzeglÄ…d inwestycji
+ * Tab: Przegląd inwestycji
  */
 
 function renderOverview() {
@@ -19,9 +19,9 @@ function renderOverview() {
     container.innerHTML = `
         <div class="overview-grid">
             
-            <!-- GÅ‚Ã³wna wartoÅ›Ä‡ -->
+            <!-- Główna wartość -->
             <div class="overview-hero card-glass">
-                <div class="overview-hero-label">ÅÄ…czna wartoÅ›Ä‡ inwestycji</div>
+                <div class="overview-hero-label">Åączna wartość inwestycji</div>
                 <div class="overview-hero-value">${formatMoney(totalValue)}</div>
             </div>
             
@@ -71,7 +71,7 @@ function renderOverview() {
             <!-- Portfele -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">PodziaÅ‚ po portfelach</h3>
+                    <h3 class="card-title">Podział po portfelach</h3>
                 </div>
                 ${renderPortfoliosSummary()}
             </div>
@@ -86,10 +86,10 @@ function renderOverview() {
                 </div>
             </div>
             
-            <!-- Ostatnie wpÅ‚aty -->
+            <!-- Ostatnie wpłaty -->
             <div class="card overview-history">
                 <div class="card-header">
-                    <h3 class="card-title">Ostatnie wpÅ‚aty</h3>
+                    <h3 class="card-title">Ostatnie wpłaty</h3>
                 </div>
                 ${renderRecentPayments()}
             </div>
@@ -107,7 +107,7 @@ function renderPortfoliosSummary() {
             <div class="empty-state-small">
                 <p>Brak portfeli</p>
                 <button class="btn btn-secondary btn-sm" onclick="switchTab('portfolios')">
-                    UtwÃ³rz portfel
+                    Utwórz portfel
                 </button>
             </div>
         `;
@@ -122,7 +122,7 @@ function renderPortfoliosSummary() {
                     <div class="portfolio-summary-info">
                         <div class="portfolio-summary-name">${escapeHtml(p.nazwa)}</div>
                         <div class="portfolio-summary-meta">
-                            ${p.broker ? p.broker + ' â€¢ ' : ''}${p.assets.length} aktywÃ³w
+                            ${p.broker ? p.broker + ' â€¢ ' : ''}${p.assets.length} aktywów
                             ${p.kontoEmerytalne ? `<span class="retirement-badge ${p.kontoEmerytalne.toLowerCase()}">${p.kontoEmerytalne}</span>` : ''}
                         </div>
                     </div>
@@ -137,7 +137,7 @@ function renderRecentPayments() {
     if (paymentHistory.length === 0) {
         return `
             <div class="empty-state-small">
-                <p>Brak historii wpÅ‚at</p>
+                <p>Brak historii wpłat</p>
             </div>
         `;
     }
