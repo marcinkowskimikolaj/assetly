@@ -417,6 +417,15 @@ const InvestmentsSheets = {
             assets: []
         };
         
+        // Pobierz portfele IKE i IKZE
+        const portfolios = await this.getPortfolios();
+        const portfelIKE = portfolios.find(p => p.kontoEmerytalne === 'IKE');
+        const portfelIKZE = portfolios.find(p => p.kontoEmerytalne === 'IKZE');
+        
+        if (!portfelIKE || !portfelIKZE) {
+            throw new Error('Nie znaleziono portfeli IKE/IKZE. Utwórz portfele przed realizacją zakupów.');
+        }
+        
         for (const item of items) {
             const asset = {
                 kategoria: 'Inwestycje',
@@ -430,6 +439,14 @@ const InvestmentsSheets = {
             
             // addAsset automatycznie obsłuży duplikaty (zsumuje wartość)
             const result = await sheetsAPI.addAsset(asset);
+            
+            // Automatycznie przypisz do portfela IKE lub IKZE
+            const konto = item.konto === 'TOZAME' ? '' : item.konto;
+            if (konto === 'IKE') {
+                await this.assignAssetToPortfolio(portfelIKE.id, result.id);
+            } else if (konto === 'IKZE') {
+                await this.assignAssetToPortfolio(portfelIKZE.id, result.id);
+            }
             
             if (result.wasUpdated) {
                 results.updated++;
