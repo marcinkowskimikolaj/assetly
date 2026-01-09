@@ -12,6 +12,7 @@ let portfolios = [];
 let plan = null;
 let planInstruments = [];
 let paymentHistory = [];
+let depositUsage = { IKE: 0, IKZE: 0 }; // Poprawne wykorzystanie limitów z Historia_Wplat
 
 // ═══════════════════════════════════════════════════════════
 // INICJALIZACJA
@@ -72,6 +73,9 @@ async function loadInvestmentsData() {
         plan = planData;
         planInstruments = instrumentsData;
         paymentHistory = historyData;
+        
+        // Wylicz POPRAWNE wykorzystanie limitów IKE/IKZE z Historia_Wplat
+        depositUsage = IKE_IKZE.calculateUsageFromDeposits(paymentHistory);
         
         // Przypisz aktywa do portfeli
         portfolios.forEach(p => {
