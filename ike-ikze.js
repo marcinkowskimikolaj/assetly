@@ -67,7 +67,9 @@ const IKE_IKZE = {
     },
     
     /**
-     * Oblicza wykorzystanie IKE/IKZE na podstawie aktywów
+     * [DEPRECATED] Oblicza wykorzystanie IKE/IKZE na podstawie aktywów
+     * UWAGA: To jest BŁĘDNA metoda - suma wartości aktywów != suma wpłat
+     * Użyj calculateUsageFromDeposits() zamiast tej funkcji
      */
     calculateUsage(assets) {
         const currentYear = new Date().getFullYear();
@@ -89,6 +91,36 @@ const IKE_IKZE = {
                 } else if (konto === 'IKZE') {
                     usage.IKZE += convertToPLN(asset.wartosc, asset.waluta);
                 }
+            }
+        });
+        
+        return usage;
+    },
+    
+    /**
+     * Oblicza POPRAWNE wykorzystanie IKE/IKZE na podstawie wpłat z Historia_Wplat
+     * To jest jedyna poprawna metoda - limit zależy od wpłat gotówki, nie od wyceny aktywów
+     */
+    calculateUsageFromDeposits(paymentHistory, year = null) {
+        const targetYear = year || new Date().getFullYear();
+        
+        const usage = {
+            IKE: 0,
+            IKZE: 0
+        };
+        
+        if (!paymentHistory || paymentHistory.length === 0) {
+            return usage;
+        }
+        
+        paymentHistory.forEach(payment => {
+            // Sprawdź rok wpłaty
+            const paymentDate = new Date(payment.data);
+            const paymentYear = paymentDate.getFullYear();
+            
+            if (paymentYear === targetYear) {
+                usage.IKE += payment.kwotaIke || 0;
+                usage.IKZE += payment.kwotaIkze || 0;
             }
         });
         
@@ -141,14 +173,20 @@ const IKE_IKZE = {
     
     /**
      * Generuje HTML dla sekcji IKE/IKZE
+     * @param {Array} assets - Tablica aktywów (DEPRECATED - używane tylko jeśli usage nie podano)
+     * @param {Object} usage - Opcjonalne: poprawne wykorzystanie z Historia_Wplat {IKE: number, IKZE: number}
      */
-    renderSection(assets) {
+    renderSection(assets, usage = null) {
         const limits = this.limits || {
             IKE: this.DEFAULT_LIMITS.IKE,
             IKZE: this.DEFAULT_LIMITS.IKZE
         };
         
-        const usage = this.calculateUsage(assets);
+        // Jeśli usage nie podano, użyj starej (błędnej) metody z ostrzeżeniem
+        if (!usage) {
+            console.warn('[IKE_IKZE] renderSection wywołany bez parametru usage - używam BŁĘDNEJ metody calculateUsage(assets). Podaj usage z Historia_Wplat!');
+            usage = this.calculateUsage(assets);
+        }
         
         const ikePercentage = this.calculatePercentage(usage.IKE, limits.IKE);
         const ikzePercentage = this.calculatePercentage(usage.IKZE, limits.IKZE);
