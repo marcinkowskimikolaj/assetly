@@ -4,6 +4,8 @@
 
 let sheetsAPI = null;
 let assets = [];
+let paymentHistory = []; // Historia wpłat z zakładki Historia_Wplat
+let depositUsage = { IKE: 0, IKZE: 0 }; // Poprawne wykorzystanie limitów z Historia_Wplat
 let currencyRates = { PLN: 1 };
 let pieChart = null;
 let currentEditId = null;
@@ -56,10 +58,19 @@ function setupEventListeners() {
         if (e.target.id === 'confirmModal') closeConfirmModal();
     });
     document.getElementById('confirmCancelBtn').addEventListener('click', closeConfirmModal);
+    
+    // Auto-refresh gdy dane zmienią się w innej karcie (np. z Investments)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'assetly_data_changed' && sheetsAPI) {
+            console.log('[Dashboard] Wykryto zmiany danych - odświeżam...');
+            loadAssets();
+            loadPaymentHistory();
+        }
+    });
 }
 
 // ============================================
-// POŁĄCZENIE Z ARKUSZEM
+// POÅĄCZENIE Z ARKUSZEM
 // ============================================
 
 async function connectSpreadsheet() {
@@ -74,11 +85,12 @@ async function connectSpreadsheet() {
         
         updateConnectionStatus('connected');
         
-        // Pobierz kursy walut, limity i aktywa równolegle
+        // Pobierz kursy walut, limity, aktywa i historię wpłat równolegle
         await Promise.all([
             fetchCurrencyRates(),
             IKE_IKZE.fetchLimits(sheetsAPI),
-            loadAssets(false) // nie renderuj jeszcze
+            loadAssets(false), // nie renderuj jeszcze
+            loadPaymentHistory() // pobierz historię wpłat dla limitów IKE/IKZE
         ]);
         
         // Teraz renderuj z wszystkimi danymi
@@ -110,7 +122,7 @@ function updateConnectionStatus(status) {
     const texts = {
         connected: 'Połączono',
         disconnected: 'Rozłączono',
-        loading: 'Łączenie...'
+        loading: 'Åączenie...'
     };
     
     badge.innerHTML = `<span class="connection-dot"></span>${texts[status] || status}`;
@@ -172,6 +184,36 @@ async function loadAssets(shouldRender = true) {
         showToast('Błąd ładowania danych', 'error');
     } finally {
         if (shouldRender) showLoading(false);
+    }
+}
+
+async function loadPaymentHistory() {
+    try {
+        // Pobierz dane z zakładki Historia_Wplat
+        const response = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: 'Historia_Wplat!A2:F'
+        });
+        
+        const rows = response.result.values || [];
+        paymentHistory = rows.map(row => ({
+            id: row[0] || '',
+            data: row[1] || '',
+            kwotaCalkowita: parseFloat(row[2]) || 0,
+            kwotaIke: parseFloat(row[3]) || 0,
+            kwotaIkze: parseFloat(row[4]) || 0,
+            szczegolyJSON: row[5] || ''
+        })).filter(p => p.id);
+        
+        // Wylicz poprawne wykorzystanie limitów z Historia_Wplat
+        depositUsage = IKE_IKZE.calculateUsageFromDeposits(paymentHistory);
+        
+        console.log('[Dashboard] Wykorzystanie limitów IKE/IKZE (z Historia_Wplat):', depositUsage);
+        
+    } catch (error) {
+        console.warn('Nie można pobrać Historia_Wplat (może nie istnieć):', error);
+        paymentHistory = [];
+        depositUsage = { IKE: 0, IKZE: 0 };
     }
 }
 
@@ -364,7 +406,7 @@ function renderBreakdown() {
                     <div class="breakdown-name">${displayName}</div>
                     <div class="breakdown-value ${data.wartoscPLN < 0 ? 'negative' : ''}">
                         ${formatCurrency(data.wartosc, data.waluta)}
-                        ${showConverted ? `<span class="breakdown-converted">≈ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
+                        ${showConverted ? `<span class="breakdown-converted">â‰ˆ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
                     </div>
                 </div>
             </div>
@@ -539,7 +581,7 @@ function renderAssetsList() {
                 </div>
                 <div class="asset-values">
                     <div class="asset-value-main ${isDebt ? 'negative' : ''}">${formatCurrency(displayValue, asset.waluta)}</div>
-                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">≈ ${formatCurrency(displayValuePLN)}</div>` : ''}
+                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">â‰ˆ ${formatCurrency(displayValuePLN)}</div>` : ''}
                 </div>
                 <div class="asset-actions">
                     <button class="btn btn-ghost btn-icon" onclick="showEditAssetModal('${asset.id}')" title="Edytuj">
@@ -637,7 +679,8 @@ function updateKontoEmerytalneVisibility() {
 function renderIkeIkze() {
     const container = document.getElementById('ikeIkzeSection');
     if (container) {
-        container.innerHTML = IKE_IKZE.renderSection(assets);
+        // Przekazujemy poprawne wykorzystanie z Historia_Wplat zamiast sum wartości aktywów
+        container.innerHTML = IKE_IKZE.renderSection(assets, depositUsage);
     }
 }
 
