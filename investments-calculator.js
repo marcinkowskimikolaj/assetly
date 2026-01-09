@@ -29,9 +29,9 @@ function renderCalculator() {
     // Oblicz wpłaty na podstawie planu
     calculatePayments();
     
-    // Pobierz limity i wykorzystanie
+    // Pobierz limity i wykorzystanie z Historia_Wplat
     const limits = IKE_IKZE.limits || IKE_IKZE.DEFAULT_LIMITS;
-    const usage = IKE_IKZE.calculateUsage(allAssets);
+    const usage = depositUsage; // Używamy depositUsage z Historia_Wplat
     const ikeRemaining = Math.max(0, limits.IKE - usage.IKE);
     const ikzeRemaining = Math.max(0, limits.IKZE - usage.IKZE);
     
@@ -260,7 +260,7 @@ function updateCalculatorItem(index, value) {
 
 function updateCalculatorSummary() {
     const limits = IKE_IKZE.limits || IKE_IKZE.DEFAULT_LIMITS;
-    const usage = IKE_IKZE.calculateUsage(allAssets);
+    const usage = depositUsage; // Używamy depositUsage z Historia_Wplat
     
     const ikeTotal = calculatorItems.filter(i => i.konto === 'IKE').reduce((sum, i) => sum + i.wartosc, 0);
     const ikzeTotal = calculatorItems.filter(i => i.konto === 'IKZE').reduce((sum, i) => sum + i.wartosc, 0);
@@ -302,9 +302,9 @@ function renderPaymentHistory() {
     `;
 }
 
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // REALIZACJA ZAKUPÓW
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function executePayment() {
     // Filtruj tylko pozycje z wartością > 0
@@ -356,6 +356,13 @@ async function executePayment() {
         
         // Odśwież widok
         renderCalculator();
+        
+        // Wymuś odświeżenie Dashboard jeśli jest otwarty w innej karcie
+        try {
+            localStorage.setItem('assetly_data_changed', Date.now().toString());
+        } catch (e) {
+            // Ignore localStorage errors
+        }
         
     } catch (error) {
         console.error('Błąd realizacji:', error);
