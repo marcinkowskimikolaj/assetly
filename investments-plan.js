@@ -25,9 +25,9 @@ function renderPlan() {
     const kwotaIke = kwotaInwestycji * (currentPlan.ikeProcentowy / 100);
     const kwotaIkze = kwotaInwestycji * ((100 - currentPlan.ikeProcentowy) / 100);
     
-    // Pobierz limity
+    // Pobierz limity i wykorzystanie z Historia_Wplat
     const limits = IKE_IKZE.limits || IKE_IKZE.DEFAULT_LIMITS;
-    const usage = IKE_IKZE.calculateUsage(allAssets);
+    const usage = depositUsage; // Używamy depositUsage z Historia_Wplat
     const ikeRemaining = Math.max(0, limits.IKE - usage.IKE);
     const ikzeRemaining = Math.max(0, limits.IKZE - usage.IKZE);
     
@@ -237,9 +237,9 @@ function renderInstrumentsList(instruments, konto, title) {
     `;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 // AKTUALIZACJE KALKULACJI
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 
 function getPlanKwotaInwestycji() {
     const wynagrodzenie = parseFloat(document.getElementById('planWynagrodzenie')?.value) || 0;
@@ -306,9 +306,9 @@ function refreshInstrumentsDisplay() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 // ZARZĄDZANIE INSTRUMENTAMI
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 
 function addInstrument(konto) {
     planInstrumentsTemp.push({
@@ -345,9 +345,9 @@ function updateInstrument(konto, index, field, value) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 // ZAPISYWANIE PLANU
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 
 async function handlePlanSubmit(e) {
     e.preventDefault();
