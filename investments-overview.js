@@ -1,6 +1,6 @@
 /**
  * Assetly - Investments Overview
- * Tab: Przegląd inwestycji
+ * Tab: PrzeglÄ…d inwestycji
  */
 
 function renderOverview() {
@@ -12,16 +12,16 @@ function renderOverview() {
     const ikzeValue = getIKZEValue();
     
     const limits = IKE_IKZE.limits || IKE_IKZE.DEFAULT_LIMITS;
-    const ikeUsage = IKE_IKZE.calculateUsage(allAssets);
+    const ikeUsage = depositUsage; // Używamy depositUsage z Historia_Wplat zamiast calculateUsage
     const ikePercent = IKE_IKZE.calculatePercentage(ikeUsage.IKE, limits.IKE);
     const ikzePercent = IKE_IKZE.calculatePercentage(ikeUsage.IKZE, limits.IKZE);
     
     container.innerHTML = `
         <div class="overview-grid">
             
-            <!-- Główna wartość -->
+            <!-- GÅ‚Ã³wna wartoÅ›Ä‡ -->
             <div class="overview-hero card-glass">
-                <div class="overview-hero-label">Łączna wartość inwestycji</div>
+                <div class="overview-hero-label">ÅÄ…czna wartoÅ›Ä‡ inwestycji</div>
                 <div class="overview-hero-value">${formatMoney(totalValue)}</div>
             </div>
             
@@ -71,7 +71,7 @@ function renderOverview() {
             <!-- Portfele -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Podział po portfelach</h3>
+                    <h3 class="card-title">PodziaÅ‚ po portfelach</h3>
                 </div>
                 ${renderPortfoliosSummary()}
             </div>
@@ -86,10 +86,10 @@ function renderOverview() {
                 </div>
             </div>
             
-            <!-- Ostatnie wpłaty -->
+            <!-- Ostatnie wpÅ‚aty -->
             <div class="card overview-history">
                 <div class="card-header">
-                    <h3 class="card-title">Ostatnie wpłaty</h3>
+                    <h3 class="card-title">Ostatnie wpÅ‚aty</h3>
                 </div>
                 ${renderRecentPayments()}
             </div>
@@ -107,7 +107,7 @@ function renderPortfoliosSummary() {
             <div class="empty-state-small">
                 <p>Brak portfeli</p>
                 <button class="btn btn-secondary btn-sm" onclick="switchTab('portfolios')">
-                    Utwórz portfel
+                    UtwÃ³rz portfel
                 </button>
             </div>
         `;
@@ -122,7 +122,7 @@ function renderPortfoliosSummary() {
                     <div class="portfolio-summary-info">
                         <div class="portfolio-summary-name">${escapeHtml(p.nazwa)}</div>
                         <div class="portfolio-summary-meta">
-                            ${p.broker ? p.broker + ' • ' : ''}${p.assets.length} aktywów
+                            ${p.broker ? p.broker + ' â€¢ ' : ''}${p.assets.length} aktywÃ³w
                             ${p.kontoEmerytalne ? `<span class="retirement-badge ${p.kontoEmerytalne.toLowerCase()}">${p.kontoEmerytalne}</span>` : ''}
                         </div>
                     </div>
@@ -137,7 +137,7 @@ function renderRecentPayments() {
     if (paymentHistory.length === 0) {
         return `
             <div class="empty-state-small">
-                <p>Brak historii wpłat</p>
+                <p>Brak historii wpÅ‚at</p>
             </div>
         `;
     }
@@ -151,7 +151,7 @@ function renderRecentPayments() {
                     <div class="payment-date">${formatDate(p.data)}</div>
                     <div class="payment-amount">${formatMoney(p.kwotaCalkowita)}</div>
                     <div class="payment-split">
-                        IKE: ${formatMoney(p.kwotaIke)} • IKZE: ${formatMoney(p.kwotaIkze)}
+                        IKE: ${formatMoney(p.kwotaIke)} â€¢ IKZE: ${formatMoney(p.kwotaIkze)}
                     </div>
                 </div>
             `).join('')}
