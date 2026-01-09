@@ -8,6 +8,38 @@ class SheetsAPI {
         this.sheetName = CONFIG.SHEET_NAME;
     }
     
+    /**
+     * Normalizuje nazwę aktywa dla deduplikacji
+     * Usuwa ticker, różnice w formatowaniu, które nie powinny tworzyć duplikatów
+     */
+    normalizeAssetName(name) {
+        if (!name) return '';
+        
+        let normalized = name.toLowerCase().trim();
+        
+        // Usuń ticker z formatu "TICKER - Nazwa" lub "TICKER.XX - Nazwa"
+        // Przykłady: "IWDA.UK - Core MSCI World" → "core msci world"
+        normalized = normalized.replace(/^[a-z0-9.]+\s*-\s*/i, '');
+        
+        // Ujednolicenie formatowania
+        normalized = normalized
+            .replace(/\s+/g, ' ')              // multiple spaces → single space
+            .replace(/[-–—]/g, '-')            // unify dashes
+            .replace(/[()[\]{}]/g, '')         // remove brackets
+            .replace(/[^\w\s-]/g, '');         // remove special chars
+        
+        return normalized;
+    }
+    
+    /**
+     * Generuje klucz unikatowy aktywa do deduplikacji
+     */
+    getAssetKey(asset) {
+        const normalizedName = this.normalizeAssetName(asset.nazwa);
+        const konto = (asset.kontoEmerytalne || '').toUpperCase().trim();
+        return `${asset.kategoria}|${normalizedName}|${asset.waluta}|${konto}`;
+    }
+    
     async testConnection() {
         try {
             const response = await gapi.client.sheets.spreadsheets.get({
@@ -20,7 +52,7 @@ class SheetsAPI {
             );
             
             if (!hasAktywa) {
-                throw new Error(`Brak zakładki "${this.sheetName}" w arkuszu`);
+                throw new Error(`Brak zakÅ‚adki "${this.sheetName}" w arkuszu`);
             }
             
             return true;
@@ -62,17 +94,14 @@ class SheetsAPI {
         try {
             await ensureValidToken();
             
-            // Sprawdź czy istnieje już takie samo aktywo
+            // Sprawdź czy istnieje już takie samo aktywo (używając znormalizowanego klucza)
             const existingAssets = await this.getAllAssets();
-            const duplicate = existingAssets.find(a => 
-                a.kategoria === asset.kategoria &&
-                a.nazwa === asset.nazwa &&
-                a.waluta === asset.waluta &&
-                (a.kontoEmerytalne || '') === (asset.kontoEmerytalne || '')
-            );
+            const assetKey = this.getAssetKey(asset);
+            
+            const duplicate = existingAssets.find(a => this.getAssetKey(a) === assetKey);
             
             if (duplicate) {
-                // Aktualizuj istniejące - zsumuj wartość
+                // Aktualizuj istniejące - zsumuj wartość (SUMA ZAKUPÓW)
                 const newValue = duplicate.wartosc + asset.wartosc;
                 const newNotatki = this.mergeNotes(duplicate.notatki, asset.notatki, asset.wartosc);
                 
@@ -121,12 +150,12 @@ class SheetsAPI {
         }
     }
     
-    // Helper: łączy notatki przy aktualizacji duplikatu
+    // Helper: Å‚Ä…czy notatki przy aktualizacji duplikatu
     mergeNotes(existingNotes, newNotes, addedValue) {
         const dateStr = new Date().toLocaleDateString('pl-PL');
         const valueNote = `+${addedValue.toFixed(2)} PLN (${dateStr})`;
         
-        // Jeśli nowa notatka ma treść, użyj jej
+        // JeÅ›li nowa notatka ma treÅ›Ä‡, uÅ¼yj jej
         if (newNotes && newNotes.trim()) {
             if (existingNotes) {
                 return `${existingNotes}; ${newNotes}`;
@@ -134,9 +163,9 @@ class SheetsAPI {
             return newNotes;
         }
         
-        // W przeciwnym razie dodaj informację o zwiększeniu wartości
+        // W przeciwnym razie dodaj informacjÄ™ o zwiÄ™kszeniu wartoÅ›ci
         if (existingNotes) {
-            // Sprawdź czy notatka już zawiera historię zakupów
+            // SprawdÅº czy notatka juÅ¼ zawiera historiÄ™ zakupÃ³w
             if (existingNotes.includes('+') && existingNotes.includes('PLN')) {
                 return `${existingNotes}, ${valueNote}`;
             }
@@ -199,7 +228,7 @@ class SheetsAPI {
                 s.properties.title === this.sheetName
             );
             
-            if (!sheet) throw new Error('Nie znaleziono zakładki');
+            if (!sheet) throw new Error('Nie znaleziono zakÅ‚adki');
             
             await gapi.client.sheets.spreadsheets.batchUpdate({
                 spreadsheetId: this.spreadsheetId,
