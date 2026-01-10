@@ -132,7 +132,7 @@ function renderUnassignedAssets() {
 }
 
 // ───────────────────────────────────────────────────────────
-// SZCZEGÓÅY PORTFELA
+// SZCZEGÓŁY PORTFELA
 // ───────────────────────────────────────────────────────────
 
 function showPortfolioDetails(portfolioId) {
