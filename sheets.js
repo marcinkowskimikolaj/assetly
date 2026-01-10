@@ -52,7 +52,7 @@ class SheetsAPI {
             );
             
             if (!hasAktywa) {
-                throw new Error(`Brak zakładki "${this.sheetName}" w arkuszu`);
+                throw new Error(`Brak zakÅ‚adki "${this.sheetName}" w arkuszu`);
             }
             
             return true;
@@ -150,12 +150,12 @@ class SheetsAPI {
         }
     }
     
-    // Helper: łączy notatki przy aktualizacji duplikatu
+    // Helper: Å‚Ä…czy notatki przy aktualizacji duplikatu
     mergeNotes(existingNotes, newNotes, addedValue) {
         const dateStr = new Date().toLocaleDateString('pl-PL');
         const valueNote = `+${addedValue.toFixed(2)} PLN (${dateStr})`;
         
-        // Jeśli nowa notatka ma treść, użyj jej
+        // JeÅ›li nowa notatka ma treÅ›Ä‡, uÅ¼yj jej
         if (newNotes && newNotes.trim()) {
             if (existingNotes) {
                 return `${existingNotes}; ${newNotes}`;
@@ -163,9 +163,9 @@ class SheetsAPI {
             return newNotes;
         }
         
-        // W przeciwnym razie dodaj informację o zwiększeniu wartości
+        // W przeciwnym razie dodaj informacjÄ™ o zwiÄ™kszeniu wartoÅ›ci
         if (existingNotes) {
-            // Sprawdź czy notatka już zawiera historię zakupów
+            // SprawdÅº czy notatka juÅ¼ zawiera historiÄ™ zakupÃ³w
             if (existingNotes.includes('+') && existingNotes.includes('PLN')) {
                 return `${existingNotes}, ${valueNote}`;
             }
@@ -228,7 +228,7 @@ class SheetsAPI {
                 s.properties.title === this.sheetName
             );
             
-            if (!sheet) throw new Error('Nie znaleziono zakładki');
+            if (!sheet) throw new Error('Nie znaleziono zakÅ‚adki');
             
             await gapi.client.sheets.spreadsheets.batchUpdate({
                 spreadsheetId: this.spreadsheetId,
@@ -249,6 +249,84 @@ class SheetsAPI {
             return true;
             
         } catch (error) {
+            throw error;
+        }
+    }
+    
+    /**
+     * Łączy wiele aktywów w jedno
+     * @param {string} primaryId - ID aktywa które pozostanie (główne)
+     * @param {string[]} assetIds - Tablica ID wszystkich aktywów do połączenia (włącznie z primaryId)
+     */
+    async mergeAssets(primaryId, assetIds) {
+        try {
+            await ensureValidToken();
+            
+            // Pobierz wszystkie aktywa
+            const allAssets = await this.getAllAssets();
+            
+            // Znajdź główne aktywo i aktywa do połączenia
+            const primaryAsset = allAssets.find(a => a.id === primaryId);
+            const assetsToMerge = allAssets.filter(a => assetIds.includes(a.id));
+            
+            if (!primaryAsset) {
+                throw new Error('Nie znaleziono głównego aktywa');
+            }
+            
+            if (assetsToMerge.length < 2) {
+                throw new Error('Wybierz co najmniej 2 aktywa do połączenia');
+            }
+            
+            // Walidacja - czy można je połączyć?
+            const currencies = [...new Set(assetsToMerge.map(a => a.waluta))];
+            const accounts = [...new Set(assetsToMerge.map(a => a.kontoEmerytalne || ''))];
+            
+            if (currencies.length > 1) {
+                throw new Error('Nie można połączyć aktywów w różnych walutach');
+            }
+            
+            if (accounts.length > 1) {
+                throw new Error('Nie można połączyć aktywów z różnych kont emerytalnych');
+            }
+            
+            // OBLICZ NOWĄ WARTOŚĆ (suma wszystkich)
+            const totalValue = assetsToMerge.reduce((sum, a) => sum + a.wartosc, 0);
+            
+            // Zaktualizuj główne aktywo z nową sumą wartości
+            await this.updateAsset(primaryId, {
+                ...primaryAsset,
+                wartosc: totalValue
+                // Nazwa, notatki, kategoria, podkategoria - pozostają z primaryAsset
+            });
+            
+            // Usuń pozostałe aktywa (wszystkie OPRÓCZ głównego)
+            const assetsToDelete = assetIds.filter(id => id !== primaryId);
+            
+            for (const assetId of assetsToDelete) {
+                // Usuń relacje portfel-aktywa dla tego aktywa (jeśli istnieją)
+                try {
+                    if (window.InvestmentsSheets) {
+                        await window.InvestmentsSheets.removeAllRelationsForAsset(assetId);
+                    }
+                } catch (err) {
+                    console.warn('Nie można usunąć relacji portfel-aktywa:', err);
+                }
+                
+                await this.deleteAsset(assetId);
+            }
+            
+            console.log(`[Merge] Połączono ${assetsToMerge.length} aktywów. Główne: ${primaryId}, Usunięto: ${assetsToDelete.length}`);
+            
+            return {
+                success: true,
+                primaryId: primaryId,
+                mergedCount: assetsToMerge.length,
+                deletedCount: assetsToDelete.length,
+                totalValue: totalValue
+            };
+            
+        } catch (error) {
+            console.error('Błąd merge:', error);
             throw error;
         }
     }
