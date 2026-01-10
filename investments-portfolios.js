@@ -131,9 +131,9 @@ function renderUnassignedAssets() {
     `;
 }
 
-// ═══════════════════════════════════════════════════════════
-// SZCZEGÓŁY PORTFELA
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
+// SZCZEGÓÅY PORTFELA
+// ───────────────────────────────────────────────────────────
 
 function showPortfolioDetails(portfolioId) {
     const portfolio = portfolios.find(p => p.id === portfolioId);
@@ -308,9 +308,9 @@ function closePortfolioDetails() {
     currentPortfolioId = null;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 // MODAL: DODAJ/EDYTUJ PORTFEL
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 
 function showAddPortfolioModal() {
     portfolioModalMode = 'add';
@@ -389,9 +389,9 @@ async function handlePortfolioSubmit(e) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 // OPERACJE NA PORTFELACH
-// ═══════════════════════════════════════════════════════════
+// ───────────────────────────────────────────────────────────
 
 async function assignAssetToPortfolio(assetId, portfolioId) {
     if (!portfolioId) return;
@@ -454,4 +454,32 @@ async function deletePortfolio(portfolioId) {
     } finally {
         showInvestmentsLoading(false);
     }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MERGE DUPLICATES - INVESTMENTS MODULE
+// ═══════════════════════════════════════════════════════════
+
+function showMergeDuplicatesModalInv() {
+    // Wykryj duplikaty w aktywach inwestycyjnych
+    const duplicates = MergeAssets.detectDuplicates(investmentAssets);
+    
+    // Renderuj modal
+    const modalHtml = MergeAssets.renderDuplicatesModal(duplicates, investmentAssets, 'investments');
+    
+    // Dodaj do DOM jeśli jeszcze nie istnieje
+    let modalContainer = document.getElementById('mergeDuplicatesModalInv');
+    if (!modalContainer) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = modalHtml;
+        document.body.appendChild(tempDiv.firstElementChild);
+        modalContainer = document.getElementById('mergeDuplicatesModalInv');
+    } else {
+        // Zaktualizuj content
+        modalContainer.outerHTML = modalHtml;
+        modalContainer = document.getElementById('mergeDuplicatesModalInv');
+    }
+    
+    // Pokaż modal
+    modalContainer.classList.add('active');
 }
