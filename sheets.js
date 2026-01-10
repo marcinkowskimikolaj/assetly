@@ -52,7 +52,7 @@ class SheetsAPI {
             );
             
             if (!hasAktywa) {
-                throw new Error(`Brak zakładki "${this.sheetName}" w arkuszu`);
+                throw new Error(`Brak zakÅ‚adki "${this.sheetName}" w arkuszu`);
             }
             
             return true;
@@ -150,12 +150,12 @@ class SheetsAPI {
         }
     }
     
-    // Helper: łączy notatki przy aktualizacji duplikatu
+    // Helper: Å‚Ä…czy notatki przy aktualizacji duplikatu
     mergeNotes(existingNotes, newNotes, addedValue) {
         const dateStr = new Date().toLocaleDateString('pl-PL');
         const valueNote = `+${addedValue.toFixed(2)} PLN (${dateStr})`;
         
-        // Jeśli nowa notatka ma treść, użyj jej
+        // JeÅ›li nowa notatka ma treÅ›Ä‡, uÅ¼yj jej
         if (newNotes && newNotes.trim()) {
             if (existingNotes) {
                 return `${existingNotes}; ${newNotes}`;
@@ -163,9 +163,9 @@ class SheetsAPI {
             return newNotes;
         }
         
-        // W przeciwnym razie dodaj informację o zwiększeniu wartości
+        // W przeciwnym razie dodaj informacjÄ™ o zwiÄ™kszeniu wartoÅ›ci
         if (existingNotes) {
-            // Sprawdź czy notatka już zawiera historię zakupów
+            // SprawdÅº czy notatka juÅ¼ zawiera historiÄ™ zakupÃ³w
             if (existingNotes.includes('+') && existingNotes.includes('PLN')) {
                 return `${existingNotes}, ${valueNote}`;
             }
@@ -228,7 +228,7 @@ class SheetsAPI {
                 s.properties.title === this.sheetName
             );
             
-            if (!sheet) throw new Error('Nie znaleziono zakładki');
+            if (!sheet) throw new Error('Nie znaleziono zakÅ‚adki');
             
             await gapi.client.sheets.spreadsheets.batchUpdate({
                 spreadsheetId: this.spreadsheetId,
