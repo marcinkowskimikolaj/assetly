@@ -70,7 +70,7 @@ function setupEventListeners() {
 }
 
 // ============================================
-// POÅĄCZENIE Z ARKUSZEM
+// POŁĄCZENIE Z ARKUSZEM
 // ============================================
 
 async function connectSpreadsheet() {
@@ -122,7 +122,7 @@ function updateConnectionStatus(status) {
     const texts = {
         connected: 'Połączono',
         disconnected: 'Rozłączono',
-        loading: 'Åączenie...'
+        loading: 'Łączenie...'
     };
     
     badge.innerHTML = `<span class="connection-dot"></span>${texts[status] || status}`;
@@ -406,7 +406,7 @@ function renderBreakdown() {
                     <div class="breakdown-name">${displayName}</div>
                     <div class="breakdown-value ${data.wartoscPLN < 0 ? 'negative' : ''}">
                         ${formatCurrency(data.wartosc, data.waluta)}
-                        ${showConverted ? `<span class="breakdown-converted">â‰ˆ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
+                        ${showConverted ? `<span class="breakdown-converted">≈ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
                     </div>
                 </div>
             </div>
@@ -581,7 +581,7 @@ function renderAssetsList() {
                 </div>
                 <div class="asset-values">
                     <div class="asset-value-main ${isDebt ? 'negative' : ''}">${formatCurrency(displayValue, asset.waluta)}</div>
-                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">â‰ˆ ${formatCurrency(displayValuePLN)}</div>` : ''}
+                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">≈ ${formatCurrency(displayValuePLN)}</div>` : ''}
                 </div>
                 <div class="asset-actions">
                     <button class="btn btn-ghost btn-icon" onclick="showEditAssetModal('${asset.id}')" title="Edytuj">
