@@ -1,5 +1,5 @@
 /**
- * Assetly - Główna logika aplikacji
+ * Assetly - GÅ‚Ã³wna logika aplikacji
  */
 
 let sheetsAPI = null;
@@ -23,7 +23,7 @@ async function initApp() {
         await initAuth();
         setupEventListeners();
         
-        // Automatyczne połączenie z arkuszem
+        // Automatyczne poÅ‚Ä…czenie z arkuszem
         if (CONFIG.SPREADSHEET_ID && !CONFIG.SPREADSHEET_ID.includes('WKLEJ')) {
             await connectSpreadsheet();
         } else {
@@ -33,7 +33,7 @@ async function initApp() {
         
     } catch (error) {
         console.error('Init error:', error);
-        showToast('Błąd inicjalizacji aplikacji', 'error');
+        showToast('BÅ‚Ä…d inicjalizacji aplikacji', 'error');
     }
 }
 
@@ -70,7 +70,7 @@ function setupEventListeners() {
 }
 
 // ============================================
-// POŁĄCZENIE Z ARKUSZEM
+// POÅÄ„CZENIE Z ARKUSZEM
 // ============================================
 
 async function connectSpreadsheet() {
@@ -100,13 +100,13 @@ async function connectSpreadsheet() {
         console.error('Connection error:', error);
         updateConnectionStatus('disconnected');
         
-        let message = 'Nie można połączyć z arkuszem';
-        if (error.message?.includes('Brak zakładki')) {
+        let message = 'Nie moÅ¼na poÅ‚Ä…czyÄ‡ z arkuszem';
+        if (error.message?.includes('Brak zakÅ‚adki')) {
             message = error.message;
         } else if (error.status === 404) {
             message = 'Nie znaleziono arkusza';
         } else if (error.status === 403) {
-            message = 'Brak dostępu do arkusza';
+            message = 'Brak dostÄ™pu do arkusza';
         }
         
         showToast(message, 'error');
@@ -120,9 +120,9 @@ function updateConnectionStatus(status) {
     badge.className = `connection-badge ${status}`;
     
     const texts = {
-        connected: 'Połączono',
-        disconnected: 'Rozłączono',
-        loading: 'Łączenie...'
+        connected: 'PoÅ‚Ä…czono',
+        disconnected: 'RozÅ‚Ä…czono',
+        loading: 'ÅÄ…czenie...'
     };
     
     badge.innerHTML = `<span class="connection-dot"></span>${texts[status] || status}`;
@@ -135,7 +135,7 @@ function updateConnectionStatus(status) {
 async function fetchCurrencyRates() {
     const currencies = WALUTY.filter(c => c !== 'PLN');
     
-    // Pobierz wszystkie kursy równolegle
+    // Pobierz wszystkie kursy rÃ³wnolegle
     const promises = currencies.map(async (currency) => {
         try {
             const response = await fetch(`${CONFIG.NBP_API_URL}${currency}/?format=json`);
@@ -144,7 +144,7 @@ async function fetchCurrencyRates() {
                 return { currency, rate: data.rates[0].mid };
             }
         } catch (error) {
-            // Cicha obsługa błędu
+            // Cicha obsÅ‚uga bÅ‚Ä™du
         }
         return { currency, rate: 1 };
     });
@@ -168,7 +168,7 @@ function formatCurrency(amount, currency = 'PLN') {
 }
 
 // ============================================
-// ZARZĄDZANIE AKTYWAMI
+// ZARZÄ„DZANIE AKTYWAMI
 // ============================================
 
 async function loadAssets(shouldRender = true) {
@@ -224,14 +224,14 @@ async function handleAddAsset(formData) {
         await loadAssets();
         
         if (result.wasUpdated) {
-            showToast(`Zaktualizowano "${formData.nazwa}" - zsumowano wartość`, 'success');
+            showToast(`Zaktualizowano "${formData.nazwa}" - zsumowano wartoÅ›Ä‡`, 'success');
         } else {
             showToast('Aktywo dodane!', 'success');
         }
         
         closeModal();
     } catch (error) {
-        showToast('Nie udało się dodać aktywa', 'error');
+        showToast('Nie udaÅ‚o siÄ™ dodaÄ‡ aktywa', 'error');
     } finally {
         showLoading(false);
     }
@@ -245,7 +245,7 @@ async function handleEditAsset(id, formData) {
         showToast('Aktywo zaktualizowane!', 'success');
         closeModal();
     } catch (error) {
-        showToast('Nie udało się zaktualizować aktywa', 'error');
+        showToast('Nie udaÅ‚o siÄ™ zaktualizowaÄ‡ aktywa', 'error');
     } finally {
         showLoading(false);
     }
@@ -256,10 +256,10 @@ async function handleDeleteAsset(id) {
         showLoading(true);
         await sheetsAPI.deleteAsset(id);
         await loadAssets();
-        showToast('Aktywo usunięte', 'success');
+        showToast('Aktywo usuniÄ™te', 'success');
         closeConfirmModal();
     } catch (error) {
-        showToast('Nie udało się usunąć aktywa', 'error');
+        showToast('Nie udaÅ‚o siÄ™ usunÄ…Ä‡ aktywa', 'error');
     } finally {
         showLoading(false);
     }
@@ -272,7 +272,7 @@ async function handleDeleteAsset(id) {
 function calculateTotalWorth() {
     return assets.reduce((total, asset) => {
         const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
-        if (asset.kategoria === 'Długi') {
+        if (asset.kategoria === 'DÅ‚ugi') {
             return total - Math.abs(valuePLN);
         }
         return total + valuePLN;
@@ -344,8 +344,8 @@ function renderNetWorth() {
     let total = 0;
     
     Object.entries(breakdown).forEach(([key, data]) => {
-        // Jeśli selectedBreakdownItems jest puste (pierwsze ładowanie), pokaż wszystko
-        // W przeciwnym razie sprawdź czy element jest zaznaczony
+        // JeÅ›li selectedBreakdownItems jest puste (pierwsze Å‚adowanie), pokaÅ¼ wszystko
+        // W przeciwnym razie sprawdÅº czy element jest zaznaczony
         if (selectedBreakdownItems.size === 0 || selectedBreakdownItems.has(key)) {
             total += data.wartoscPLN;
         }
@@ -367,7 +367,7 @@ function renderBreakdown() {
         .sort((a, b) => Math.abs(b[1].wartoscPLN) - Math.abs(a[1].wartoscPLN));
     
     if (items.length === 0) {
-        container.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: var(--text-muted); padding: 24px;">Brak aktywów do wyświetlenia</p>';
+        container.innerHTML = '<p class="text-center" style="grid-column: 1/-1; color: var(--text-muted); padding: 24px;">Brak aktywÃ³w do wyÅ›wietlenia</p>';
         selectedBreakdownItems.clear();
         return;
     }
@@ -376,14 +376,14 @@ function renderBreakdown() {
     const currentKeys = new Set(items.map(([key]) => key));
     const isFirstLoad = selectedBreakdownItems.size === 0;
     
-    // Usuń nieistniejące elementy
+    // UsuÅ„ nieistniejÄ…ce elementy
     selectedBreakdownItems.forEach(key => {
         if (!currentKeys.has(key)) {
             selectedBreakdownItems.delete(key);
         }
     });
     
-    // Dodaj nowe elementy (domyślnie zaznaczone)
+    // Dodaj nowe elementy (domyÅ›lnie zaznaczone)
     items.forEach(([key]) => {
         if (!selectedBreakdownItems.has(key)) {
             selectedBreakdownItems.add(key);
@@ -406,7 +406,7 @@ function renderBreakdown() {
                     <div class="breakdown-name">${displayName}</div>
                     <div class="breakdown-value ${data.wartoscPLN < 0 ? 'negative' : ''}">
                         ${formatCurrency(data.wartosc, data.waluta)}
-                        ${showConverted ? `<span class="breakdown-converted">≈ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
+                        ${showConverted ? `<span class="breakdown-converted">â‰ˆ ${formatCurrency(data.wartoscPLN)}</span>` : ''}
                     </div>
                 </div>
             </div>
@@ -416,7 +416,7 @@ function renderBreakdown() {
 
 function toggleBreakdownItem(key) {
     if (selectedBreakdownItems.has(key)) {
-        // Nie pozwól odznaczyć wszystkiego
+        // Nie pozwÃ³l odznaczyÄ‡ wszystkiego
         if (selectedBreakdownItems.size > 1) {
             selectedBreakdownItems.delete(key);
         }
@@ -459,8 +459,8 @@ function renderChart() {
     const categoryTotals = {};
     
     Object.entries(breakdown).forEach(([key, data]) => {
-        // Jeśli selectedBreakdownItems jest puste (pierwsze ładowanie), pokaż wszystko
-        // W przeciwnym razie sprawdź czy element jest zaznaczony
+        // JeÅ›li selectedBreakdownItems jest puste (pierwsze Å‚adowanie), pokaÅ¼ wszystko
+        // W przeciwnym razie sprawdÅº czy element jest zaznaczony
         if (selectedBreakdownItems.size > 0 && !selectedBreakdownItems.has(key)) return;
         if (data.categoryKey === 'dlugi') return;
         if (data.wartoscPLN <= 0) return;
@@ -543,7 +543,7 @@ function renderAssetsList() {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">${ICONS.wallet}</div>
-                <p class="empty-state-text">Nie masz jeszcze żadnych aktywów.<br>Dodaj pierwsze aktywo, aby rozpocząć śledzenie majątku.</p>
+                <p class="empty-state-text">Nie masz jeszcze Å¼adnych aktywÃ³w.<br>Dodaj pierwsze aktywo, aby rozpoczÄ…Ä‡ Å›ledzenie majÄ…tku.</p>
                 <button class="btn btn-primary" onclick="showAddAssetModal()">
                     ${ICONS.plus} Dodaj aktywo
                 </button>
@@ -561,7 +561,7 @@ function renderAssetsList() {
         const categoryKey = getCategoryKey(asset.kategoria);
         const categoryData = KATEGORIE[categoryKey] || { icon: 'wallet', color: '#6366F1' };
         const valuePLN = convertToPLN(asset.wartosc, asset.waluta);
-        const isDebt = asset.kategoria === 'Długi';
+        const isDebt = asset.kategoria === 'DÅ‚ugi';
         const displayValue = isDebt ? -Math.abs(asset.wartosc) : asset.wartosc;
         const displayValuePLN = isDebt ? -Math.abs(valuePLN) : valuePLN;
         
@@ -581,13 +581,13 @@ function renderAssetsList() {
                 </div>
                 <div class="asset-values">
                     <div class="asset-value-main ${isDebt ? 'negative' : ''}">${formatCurrency(displayValue, asset.waluta)}</div>
-                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">≈ ${formatCurrency(displayValuePLN)}</div>` : ''}
+                    ${asset.waluta !== 'PLN' ? `<div class="asset-value-converted">â‰ˆ ${formatCurrency(displayValuePLN)}</div>` : ''}
                 </div>
                 <div class="asset-actions">
                     <button class="btn btn-ghost btn-icon" onclick="showEditAssetModal('${asset.id}')" title="Edytuj">
                         ${ICONS.edit}
                     </button>
-                    <button class="btn btn-ghost btn-icon" onclick="showDeleteConfirm('${asset.id}', '${escapeHtml(asset.nazwa)}')" title="Usuń">
+                    <button class="btn btn-ghost btn-icon" onclick="showDeleteConfirm('${asset.id}', '${escapeHtml(asset.nazwa)}')" title="UsuÅ„">
                         ${ICONS.trash}
                     </button>
                 </div>
@@ -702,12 +702,12 @@ async function handleAssetFormSubmit(e) {
     };
     
     if (!formData.nazwa) {
-        showToast('Wprowadź nazwę aktywa', 'warning');
+        showToast('WprowadÅº nazwÄ™ aktywa', 'warning');
         return;
     }
     
     if (isNaN(formData.wartosc) || formData.wartosc <= 0) {
-        showToast('Wprowadź prawidłową wartość', 'warning');
+        showToast('WprowadÅº prawidÅ‚owÄ… wartoÅ›Ä‡', 'warning');
         return;
     }
     
@@ -725,7 +725,7 @@ async function handleAssetFormSubmit(e) {
 function showDeleteConfirm(id, nazwa) {
     deleteAssetId = id;
     document.getElementById('confirmText').innerHTML = 
-        `Czy na pewno chcesz usunąć aktywo <strong style="color: var(--text-primary)">${escapeHtml(nazwa)}</strong>?<br><span style="font-size: 0.875rem">Ta operacja jest nieodwracalna.</span>`;
+        `Czy na pewno chcesz usunÄ…Ä‡ aktywo <strong style="color: var(--text-primary)">${escapeHtml(nazwa)}</strong>?<br><span style="font-size: 0.875rem">Ta operacja jest nieodwracalna.</span>`;
     document.getElementById('confirmModal').classList.add('active');
 }
 
@@ -779,6 +779,34 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================
+// MERGE ASSETS
+// ============================================
+
+function showMergeDuplicatesModal() {
+    // Wykryj duplikaty
+    const duplicates = MergeAssets.detectDuplicates(assets);
+    
+    // Renderuj modal
+    const modalHtml = MergeAssets.renderDuplicatesModal(duplicates, assets, 'dashboard');
+    
+    // Dodaj do DOM jeśli jeszcze nie istnieje
+    let modalContainer = document.getElementById('mergeDuplicatesModal');
+    if (!modalContainer) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = modalHtml;
+        document.body.appendChild(tempDiv.firstElementChild);
+        modalContainer = document.getElementById('mergeDuplicatesModal');
+    } else {
+        // Zaktualizuj content
+        modalContainer.outerHTML = modalHtml;
+        modalContainer = document.getElementById('mergeDuplicatesModal');
+    }
+    
+    // Pokaż modal
+    modalContainer.classList.add('active');
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
