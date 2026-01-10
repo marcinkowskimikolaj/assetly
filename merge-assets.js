@@ -73,6 +73,10 @@ const MergeAssets = {
     renderDuplicatesModal(duplicates, assets, context = 'dashboard') {
         const modalId = context === 'dashboard' ? 'mergeDuplicatesModal' : 'mergeDuplicatesModalInv';
         
+        // Zapisz assets dla późniejszego użycia
+        this.currentAssets = assets;
+        this.currentContext = context;
+        
         return `
             <div id="${modalId}" class="modal">
                 <div class="modal-content modal-large">
@@ -126,7 +130,7 @@ const MergeAssets = {
                     <div class="merge-group">
                         <div class="merge-group-header">
                             <div class="merge-group-info">
-                                <h4>📦 ${window.escapeHtml(group.normalizedName.toUpperCase())}</h4>
+                                <h4>📦 ${escapeHtml(group.normalizedName.toUpperCase())}</h4>
                                 <div class="merge-group-meta">
                                     ${group.assets.length} aktywa • 
                                     ${group.waluta} • 
@@ -134,7 +138,7 @@ const MergeAssets = {
                                 </div>
                             </div>
                             <div class="merge-group-total">
-                                Suma: ${window.formatCurrency(group.totalValue, group.waluta)}
+                                Suma: ${formatCurrency(group.totalValue, group.waluta)}
                             </div>
                         </div>
                         
@@ -148,10 +152,10 @@ const MergeAssets = {
                                         onchange="MergeAssets.updateGroupSelection(${groupIndex}, '${context}')">
                                     <div class="merge-asset-content">
                                         <div class="merge-asset-name">
-                                            ${assetIndex === 0 ? '⭐ ' : ''}${window.escapeHtml(asset.nazwa)}
+                                            ${assetIndex === 0 ? '⭐ ' : ''}${escapeHtml(asset.nazwa)}
                                         </div>
                                         <div class="merge-asset-value">
-                                            ${window.formatCurrency(asset.wartosc, asset.waluta)}
+                                            ${formatCurrency(asset.wartosc, asset.waluta)}
                                         </div>
                                     </div>
                                 </label>
@@ -211,11 +215,11 @@ const MergeAssets = {
                                 onchange="MergeAssets.updateManualSelection('${context}')">
                             <div class="merge-asset-content">
                                 <div class="merge-asset-name">
-                                    ${window.escapeHtml(asset.nazwa)}
+                                    ${escapeHtml(asset.nazwa)}
                                     ${asset.kontoEmerytalne ? `<span class="retirement-badge ${asset.kontoEmerytalne.toLowerCase()}">${asset.kontoEmerytalne}</span>` : ''}
                                 </div>
                                 <div class="merge-asset-value">
-                                    ${window.formatCurrency(asset.wartosc, asset.waluta)}
+                                    ${formatCurrency(asset.wartosc, asset.waluta)}
                                 </div>
                             </div>
                         </label>
@@ -299,7 +303,7 @@ const MergeAssets = {
             return;
         }
         
-        await this.showPrimaryAssetChoice(assetIds, context);
+        await this.showPrimaryAssetChoice(assetIds, context, this.currentAssets);
     },
     
     /**
@@ -317,9 +321,9 @@ const MergeAssets = {
         // Walidacja - czy mają tę samą walutę i konto?
         let assetsToMerge;
         if (context === 'dashboard') {
-            assetsToMerge = window.assets.filter(a => assetIds.includes(a.id));
+            assetsToMerge = this.currentAssets.filter(a => assetIds.includes(a.id));
         } else {
-            assetsToMerge = window.allAssets.filter(a => assetIds.includes(a.id));
+            assetsToMerge = this.currentAssets.filter(a => assetIds.includes(a.id));
         }
         
         const currencies = [...new Set(assetsToMerge.map(a => a.waluta))];
@@ -335,20 +339,15 @@ const MergeAssets = {
             return;
         }
         
-        await this.showPrimaryAssetChoice(assetIds, context);
+        await this.showPrimaryAssetChoice(assetIds, context, this.currentAssets);
     },
     
     /**
      * Pokazuje dialog wyboru głównego aktywa
      */
-    async showPrimaryAssetChoice(assetIds, context) {
-        // Pobierz aktywa w zależności od kontekstu
-        let assetsToMerge;
-        if (context === 'dashboard') {
-            assetsToMerge = window.assets.filter(a => assetIds.includes(a.id));
-        } else {
-            assetsToMerge = window.allAssets.filter(a => assetIds.includes(a.id));
-        }
+    async showPrimaryAssetChoice(assetIds, context, assetsArray) {
+        // Użyj przekazanej tablicy assets
+        const assetsToMerge = assetsArray.filter(a => assetIds.includes(a.id));
         
         const totalValue = assetsToMerge.reduce((sum, a) => sum + a.wartosc, 0);
         const waluta = assetsToMerge[0].waluta;
@@ -369,8 +368,8 @@ const MergeAssets = {
                             <label class="primary-asset-choice">
                                 <input type="radio" name="primary" value="${asset.id}" ${index === 0 ? 'checked' : ''}>
                                 <div class="primary-asset-info">
-                                    <div class="primary-asset-name">${index === 0 ? '⭐ ' : ''}${window.escapeHtml(asset.nazwa)}</div>
-                                    <div class="primary-asset-meta">${window.formatCurrency(asset.wartosc, asset.waluta)}</div>
+                                    <div class="primary-asset-name">${index === 0 ? '⭐ ' : ''}${escapeHtml(asset.nazwa)}</div>
+                                    <div class="primary-asset-meta">${formatCurrency(asset.wartosc, asset.waluta)}</div>
                                 </div>
                             </label>
                         `).join('')}
@@ -381,7 +380,7 @@ const MergeAssets = {
                         <div class="merge-preview-items">
                             <div class="merge-preview-item">
                                 <span>Wartość:</span>
-                                <strong>${window.formatCurrency(totalValue, waluta)} (suma ${assetsToMerge.length} aktywów)</strong>
+                                <strong>${formatCurrency(totalValue, waluta)} (suma ${assetsToMerge.length} aktywów)</strong>
                             </div>
                             <div class="merge-preview-item">
                                 <span>Waluta:</span>
@@ -497,5 +496,7 @@ const MergeAssets = {
         }
     },
     
-    pendingMerge: null
+    pendingMerge: null,
+    currentAssets: [],
+    currentContext: null
 };
