@@ -21,7 +21,7 @@ function renderOverview() {
             
             <!-- Główna wartość -->
             <div class="overview-hero card-glass">
-                <div class="overview-hero-label">Åączna wartość inwestycji</div>
+                <div class="overview-hero-label">Łączna wartość inwestycji</div>
                 <div class="overview-hero-value">${formatMoney(totalValue)}</div>
             </div>
             
@@ -122,7 +122,7 @@ function renderPortfoliosSummary() {
                     <div class="portfolio-summary-info">
                         <div class="portfolio-summary-name">${escapeHtml(p.nazwa)}</div>
                         <div class="portfolio-summary-meta">
-                            ${p.broker ? p.broker + ' â€¢ ' : ''}${p.assets.length} aktywów
+                            ${p.broker ? p.broker + ' • ' : ''}${p.assets.length} aktywów
                             ${p.kontoEmerytalne ? `<span class="retirement-badge ${p.kontoEmerytalne.toLowerCase()}">${p.kontoEmerytalne}</span>` : ''}
                         </div>
                     </div>
@@ -151,7 +151,7 @@ function renderRecentPayments() {
                     <div class="payment-date">${formatDate(p.data)}</div>
                     <div class="payment-amount">${formatMoney(p.kwotaCalkowita)}</div>
                     <div class="payment-split">
-                        IKE: ${formatMoney(p.kwotaIke)} â€¢ IKZE: ${formatMoney(p.kwotaIkze)}
+                        IKE: ${formatMoney(p.kwotaIke)} • IKZE: ${formatMoney(p.kwotaIkze)}
                     </div>
                 </div>
             `).join('')}
