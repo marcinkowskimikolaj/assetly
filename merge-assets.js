@@ -437,13 +437,8 @@ const MergeAssets = {
                 window.showInvestmentsLoading(true);
             }
             
-            // Pobierz sheetsAPI
-            let api;
-            if (context === 'dashboard') {
-                api = window.sheetsAPI;
-            } else {
-                api = window.createSheetsAPI(window.CONFIG.SPREADSHEET_ID);
-            }
+            // Utwórz instancję API (globalna funkcja)
+            const api = createSheetsAPI(CONFIG.SPREADSHEET_ID);
             
             // Wykonaj merge
             await api.mergeAssets(primaryId, assetIds);
@@ -460,11 +455,11 @@ const MergeAssets = {
                 }
             }
             
-            window.window.showToast(`Pomyślnie połączono ${assetIds.length} aktywów`, 'success');
+            window.showToast(`Pomyślnie połączono ${assetIds.length} aktywów`, 'success');
             
         } catch (error) {
             console.error('Błąd merge:', error);
-            window.window.showToast('Nie udało się połączyć aktywów', 'error');
+            window.showToast('Nie udało się połączyć aktywów', 'error');
         } finally {
             if (context === 'dashboard') {
                 window.showLoading(false);
