@@ -121,7 +121,7 @@ function renderPropertyCard(property) {
             </div>
             
             <div class="property-card-footer">
-                <button class="btn btn-sm btn-secondary" onclick="openEditPropertyModal('${property.id}')">Szczegóły / Edycja</button>
+                <button class="btn btn-sm btn-secondary" onclick="openViewPropertyModal('${property.id}')">Szczegóły</button>
                 <button class="btn btn-icon-only btn-delete" onclick="openDeletePropertyModal('${property.id}')" title="Usuń">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3,6 5,6 21,6"/>
@@ -490,4 +490,116 @@ function removeProjectRow(index) {
 function updateProject(index, field, value) {
     if (field === 'budzet' || field === 'koszt') value = parseFloat(value) || 0;
     tempProjects[index][field] = value;
+}
+
+// ═══════════════════════════════════════════════════════════
+// VIEW MODAL (DASHBOARD)
+// ═══════════════════════════════════════════════════════════
+
+function openViewPropertyModal(propId) {
+    const prop = allProperties.find(p => p.id === propId);
+    if (!prop) return;
+
+    // Header
+    document.getElementById('viewPropName').textContent = prop.nazwa;
+    document.getElementById('viewPropAddress').textContent = `${prop.typ} • ${prop.adres}`;
+
+    // Stats
+    document.getElementById('viewPropValue').textContent = `${formatCurrency(prop.wartoscPLN)} PLN`;
+    document.getElementById('viewPropPurchase').textContent = `${formatCurrency(prop.wartoscZakupu || 0)} PLN`;
+
+    // ROI Calculation
+    const purchase = prop.wartoscZakupu || 0;
+    const value = prop.wartoscPLN || 0;
+    // Sum projects that are Completed
+    const projectsCost = (prop.projektyRemontowe || [])
+        .reduce((sum, p) => sum + (parseFloat(p.koszt) || 0), 0);
+
+    let roi = 0;
+    if (purchase > 0) {
+        roi = ((value - purchase - projectsCost) / purchase) * 100;
+    }
+    const roiEl = document.getElementById('viewPropROI');
+    roiEl.textContent = `${roi.toFixed(1)}%`;
+    roiEl.style.color = roi >= 0 ? 'var(--success)' : 'var(--error)';
+
+    document.getElementById('viewPropArea').textContent = `${prop.powierzchniaM2} m²`;
+    document.getElementById('viewPropYear').textContent = prop.rokBudowy || '-';
+
+    // Map
+    const mapFrame = document.getElementById('viewPropMap');
+    const mapPlaceholder = document.getElementById('viewMapPlaceholder');
+
+    if (prop.adres && prop.adres.length > 5) {
+        const query = encodeURIComponent(prop.adres);
+        mapFrame.src = `https://maps.google.com/maps?q=${query}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+        mapFrame.style.display = 'block';
+        mapPlaceholder.style.display = 'none';
+    } else {
+        mapFrame.style.display = 'none';
+        mapPlaceholder.style.display = 'flex';
+    }
+
+    // Projects Tab
+    const projectsContainer = document.getElementById('viewProjectsList');
+    const projects = prop.projektyRemontowe || [];
+    if (projects.length > 0) {
+        projectsContainer.innerHTML = projects.map(p => `
+            <div class="view-project-item">
+                <div class="project-header">
+                    <span class="project-name">${escapeHtml(p.nazwa)}</span>
+                    <span class="project-status status-${(p.status || '').toLowerCase().replace(' ', '-')}">${p.status}</span>
+                </div>
+                <div class="project-details">
+                    <span>Budżet: ${formatCurrency(p.budzet)}</span>
+                    <span>Koszt: ${formatCurrency(p.koszt)}</span>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        projectsContainer.innerHTML = '<p class="text-muted">Brak projektów remontowych.</p>';
+    }
+
+    // Finance Tab
+    const oplaty = prop.oplatyConfig || {};
+    document.getElementById('viewPropRent').textContent = oplaty.rent ? `${formatCurrency(oplaty.rent)} PLN` : '-';
+    document.getElementById('viewPropTax').textContent = oplaty.tax ? `${formatCurrency(oplaty.tax)} PLN` : '-';
+
+    // Details Tab
+    document.getElementById('viewPropType').textContent = prop.typ;
+    document.getElementById('viewPropStatus').textContent = prop.status;
+    document.getElementById('viewPropKW').textContent = prop.numerKW || '-';
+    document.getElementById('viewPropPlot').textContent = prop.numerDzialki || '-';
+    document.getElementById('viewPropNotes').textContent = prop.notatki || '-';
+
+    // Edit Button
+    document.getElementById('viewEditBtn').onclick = function () {
+        closeViewPropertyModal();
+        openEditPropertyModal(propId);
+    };
+
+    // Reset Tabs
+    switchViewModalTab('projects');
+
+    document.getElementById('propertyViewModal').classList.add('active');
+}
+
+function closeViewPropertyModal() {
+    document.getElementById('propertyViewModal').classList.remove('active');
+    // Clear map src to stop loading
+    document.getElementById('viewPropMap').src = '';
+}
+
+function switchViewModalTab(tabName) {
+    document.querySelectorAll('#propertyViewModal .modal-tab').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.onclick.toString().includes(`'${tabName}'`)) {
+            btn.classList.add('active');
+        }
+    });
+
+    document.querySelectorAll('#propertyViewModal .modal-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`view-tab-${tabName}`).classList.add('active');
 }
