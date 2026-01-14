@@ -152,7 +152,7 @@ const LifeSheets = {
         try {
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: CONFIG.SPREADSHEET_ID,
-                range: `${this.SHEETS.PROPERTY}!A2:O`
+                range: `${this.SHEETS.PROPERTY}!A2:U`
             });
 
             const rows = response.result.values || [];
@@ -172,6 +172,12 @@ const LifeSheets = {
                 harmonogramKonserwacji: this._parseJsonSafe(row[12], []),
                 fileIdDrive: row[13] || '',
                 eventIdCalendar: row[14] || '',
+                rokBudowy: row[15] || '',
+                wartoscZakupu: parseFloat(row[16]) || 0,
+                numerKW: row[17] || '',
+                numerDzialki: row[18] || '',
+                oplatyConfig: this._parseJsonSafe(row[19], {}),
+                projektyRemontowe: this._parseJsonSafe(row[20], []),
                 rowIndex: index + 2
             })).filter(p => p.id);
         } catch (error) {
@@ -201,12 +207,18 @@ const LifeSheets = {
             JSON.stringify(property.pomieszczenia || []),
             JSON.stringify(property.harmonogramKonserwacji || []),
             '', // FileId_Drive
-            ''  // EventId_Calendar
+            '', // EventId_Calendar
+            property.rokBudowy || '',
+            (property.wartoscZakupu || 0).toString(),
+            property.numerKW || '',
+            property.numerDzialki || '',
+            JSON.stringify(property.oplatyConfig || {}),
+            JSON.stringify(property.projektyRemontowe || [])
         ];
 
         await gapi.client.sheets.spreadsheets.values.append({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.PROPERTY}!A:O`,
+            range: `${this.SHEETS.PROPERTY}!A:U`,
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
             resource: { values: [row] }
@@ -224,9 +236,11 @@ const LifeSheets = {
             ? (updates.wartoscRynkowa || property.wartoscRynkowa)
             : (updates.wartoscRynkowa || property.wartoscRynkowa) * (currencyRates[updates.waluta || property.waluta] || 1);
 
-        // Logika łączenia tablicy pomieszczeń/harmonogramu
+        // Logika łączenia JSON
         const pomieszczenia = updates.pomieszczenia !== undefined ? updates.pomieszczenia : property.pomieszczenia;
         const harmonogram = updates.harmonogramKonserwacji !== undefined ? updates.harmonogramKonserwacji : property.harmonogramKonserwacji;
+        const oplaty = updates.oplatyConfig !== undefined ? updates.oplatyConfig : property.oplatyConfig;
+        const projekty = updates.projektyRemontowe !== undefined ? updates.projektyRemontowe : property.projektyRemontowe;
 
         const row = [
             id,
@@ -243,12 +257,18 @@ const LifeSheets = {
             JSON.stringify(pomieszczenia),
             JSON.stringify(harmonogram),
             updates.fileIdDrive !== undefined ? updates.fileIdDrive : property.fileIdDrive,
-            updates.eventIdCalendar !== undefined ? updates.eventIdCalendar : property.eventIdCalendar
+            updates.eventIdCalendar !== undefined ? updates.eventIdCalendar : property.eventIdCalendar,
+            updates.rokBudowy !== undefined ? updates.rokBudowy : property.rokBudowy,
+            (updates.wartoscZakupu !== undefined ? updates.wartoscZakupu : property.wartoscZakupu).toString(),
+            updates.numerKW !== undefined ? updates.numerKW : property.numerKW,
+            updates.numerDzialki !== undefined ? updates.numerDzialki : property.numerDzialki,
+            JSON.stringify(oplaty),
+            JSON.stringify(projekty)
         ];
 
         await gapi.client.sheets.spreadsheets.values.update({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.PROPERTY}!A${property.rowIndex}:O${property.rowIndex}`,
+            range: `${this.SHEETS.PROPERTY}!A${property.rowIndex}:U${property.rowIndex}`,
             valueInputOption: 'USER_ENTERED',
             resource: { values: [row] }
         });
@@ -393,7 +413,13 @@ const LifeSheets = {
                 'Pomieszczenia',
                 'Harmonogram_Konserwacji',
                 'FileId_Drive',
-                'EventId_Calendar'
+                'EventId_Calendar',
+                'Rok_Budowy',
+                'Wartosc_Zakupu',
+                'Numer_KW',
+                'Numer_Dzialki',
+                'Oplaty_Config',
+                'Projekty_Remontowe'
             ],
             [this.SHEETS.INVENTORY]: [
                 'ID',
