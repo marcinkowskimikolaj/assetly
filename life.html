@@ -484,6 +484,118 @@
         </div>
     </div>
 
+    <!-- Modal: Podgląd Nieruchomości (Dashboard) -->
+    <div id="propertyViewModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <div style="flex: 1">
+                    <h3 class="modal-title" id="viewPropName">Nazwa Nieruchomości</h3>
+                    <p id="viewPropAddress"
+                        style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">Adres...</p>
+                </div>
+                <button class="modal-close" onclick="closeViewPropertyModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Dashboard Grid -->
+                <div class="view-dashboard-grid">
+                    <!-- Summary Stats -->
+                    <div class="view-stats-container">
+                        <div class="view-stat-card">
+                            <span class="stat-label">Wartość rynkowa</span>
+                            <span class="stat-value" id="viewPropValue" style="color: var(--primary)">0 PLN</span>
+                        </div>
+                        <div class="view-stat-card">
+                            <span class="stat-label">Wartość zakupu</span>
+                            <span class="stat-value" id="viewPropPurchase">0 PLN</span>
+                        </div>
+                        <div class="view-stat-card">
+                            <span class="stat-label">ROI (Szac.)</span>
+                            <span class="stat-value" id="viewPropROI">0%</span>
+                        </div>
+                        <div class="view-stat-card">
+                            <span class="stat-label">Powierzchnia</span>
+                            <span class="stat-value" id="viewPropArea">0 m²</span>
+                        </div>
+                        <div class="view-stat-card">
+                            <span class="stat-label">Rok budowy</span>
+                            <span class="stat-value" id="viewPropYear">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Map Container -->
+                    <div class="view-map-container">
+                        <iframe id="viewPropMap" width="100%" height="100%" frameborder="0" style="border:0"
+                            allowfullscreen></iframe>
+                        <div id="viewMapPlaceholder" class="map-placeholder">Brak adresu do wyświetlenia mapy</div>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="modal-tabs" style="margin-top: 1.5rem;">
+                    <button type="button" class="modal-tab active" onclick="switchViewModalTab('projects')">Projekty i
+                        Remonty</button>
+                    <button type="button" class="modal-tab" onclick="switchViewModalTab('finance')">Finanse</button>
+                    <button type="button" class="modal-tab" onclick="switchViewModalTab('details')">Szczegóły</button>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="view-tab-projects" class="modal-tab-content active">
+                    <div id="viewProjectsList" class="view-list-container"></div>
+                </div>
+
+                <div id="view-tab-finance" class="modal-tab-content">
+                    <div class="view-info-grid">
+                        <div class="info-item">
+                            <label>Czynsz / Opłaty (mc)</label>
+                            <span id="viewPropRent">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Podatek (rok)</label>
+                            <span id="viewPropTax">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-tab-details" class="modal-tab-content">
+                    <div class="view-info-grid">
+                        <div class="info-item">
+                            <label>Typ</label>
+                            <span id="viewPropType">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Status</label>
+                            <span id="viewPropStatus">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Numer KW</label>
+                            <span id="viewPropKW">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Numer działki</label>
+                            <span id="viewPropPlot">-</span>
+                        </div>
+                        <div class="info-item full-width">
+                            <label>Notatki</label>
+                            <p id="viewPropNotes"
+                                style="font-size: 0.9rem; color: var(--text-primary); margin-top: 0.25rem;">-</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeViewPropertyModal()">Zamknij</button>
+                <button class="btn btn-primary" id="viewEditBtn">Edytuj</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Potwierdzenie usunięcia Nieruchomości -->
     <div id="deletePropertyModal" class="modal">
         <div class="modal-content" style="max-width: 400px;">
