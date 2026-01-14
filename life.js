@@ -33,24 +33,24 @@ async function initLifeModule() {
         switchLifeTab(currentLifeTab);
         return;
     }
-    
+
     showLifeLoading(true);
-    
+
     try {
         // Upewnij się że arkusze istnieją
         await LifeSheets.ensureSheetsExist();
-        
+
         // Załaduj dane
         await loadLifeData();
-        
+
         // Inicjalizuj taby
         initLifeTabs();
-        
+
         // Renderuj pierwszy tab
         switchLifeTab('insurance');
-        
+
         lifeInitialized = true;
-        
+
     } catch (error) {
         console.error('Błąd inicjalizacji modułu Życie:', error);
         if (typeof showToast === 'function') {
@@ -68,7 +68,7 @@ async function loadLifeData() {
         LifeSheets.getInventoryItems(),
         LifeSheets.getSubscriptions()
     ]);
-    
+
     allInsurancePolicies = policies;
     allProperties = properties;
     allInventoryItems = inventory;
@@ -96,22 +96,22 @@ function initLifeTabs() {
 
 function switchLifeTab(tabName) {
     currentLifeTab = tabName;
-    
+
     // Aktualizuj przyciski
     document.querySelectorAll('.life-tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
-    
+
     // Aktualizuj kontenery
     document.querySelectorAll('.life-tab-content').forEach(content => {
         content.classList.remove('active');
     });
-    
+
     const activeContent = document.getElementById(`life-${tabName}`);
     if (activeContent) {
         activeContent.classList.add('active');
     }
-    
+
     // Renderuj zawartość
     switch (tabName) {
         case 'insurance':
@@ -139,7 +139,7 @@ function switchLifeTab(tabName) {
 function renderInsuranceTab() {
     const container = document.getElementById('life-insurance');
     if (!container) return;
-    
+
     // Header z filtami i przyciskiem dodaj
     const headerHtml = `
         <div class="insurance-header">
@@ -172,7 +172,7 @@ function renderInsuranceTab() {
             </button>
         </div>
     `;
-    
+
     // Banner wygasających polis
     const expiringPolicies = getExpiringPolicies(30);
     const bannerHtml = expiringPolicies.length > 0 ? `
@@ -187,7 +187,7 @@ function renderInsuranceTab() {
             </div>
         </div>
     ` : '';
-    
+
     // Porównanie kosztów rok/rok
     const yearComparison = calculateYearlyComparison();
     const comparisonHtml = Object.keys(yearComparison).length >= 2 ? `
@@ -198,15 +198,15 @@ function renderInsuranceTab() {
             </div>
         </div>
     ` : '';
-    
+
     // Lista polis
     const filteredPolicies = getFilteredPolicies();
-    const listHtml = filteredPolicies.length > 0 
+    const listHtml = filteredPolicies.length > 0
         ? `<div class="insurance-list">${filteredPolicies.map(renderPolicyCard).join('')}</div>`
         : renderEmptyInsurance();
-    
+
     container.innerHTML = headerHtml + bannerHtml + comparisonHtml + listHtml;
-    
+
     // Ustaw wartości filtrów
     document.getElementById('insuranceTypeFilter').value = insuranceTypeFilter;
     document.getElementById('insuranceSortBy').value = insuranceSortBy;
@@ -218,22 +218,22 @@ function renderPolicyCard(policy) {
     const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
     const isExpired = daysLeft < 0;
     const isExpiringSoon = daysLeft >= 0 && daysLeft <= 30;
-    
+
     const statusBadges = [];
     if (isExpired) {
         statusBadges.push('<span class="status-badge expired">Wygasła</span>');
     } else if (isExpiringSoon) {
         statusBadges.push('<span class="status-badge expiring-soon">Wygasa wkrótce</span>');
     }
-    
+
     const cardClass = isExpiringSoon && !isExpired ? 'insurance-item expiring' : isExpired ? 'insurance-item expired' : 'insurance-item';
-    
+
     const daysLeftClass = daysLeft < 0 ? 'critical' : daysLeft <= 30 ? 'warning' : '';
     const daysLeftText = isExpired ? 'Polisa wygasła' : `${daysLeft} ${daysLeft === 1 ? 'dzień' : daysLeft < 5 ? 'dni' : 'dni'} do końca`;
-    
+
     const hasDocument = policy.fileIdDrive && policy.fileIdDrive.trim() !== '';
     const hasReminder = policy.eventIdCalendar && policy.eventIdCalendar.trim() !== '';
-    
+
     return `
         <div class="${cardClass}">
             <div class="insurance-item-header">
@@ -359,12 +359,12 @@ function renderEmptyInsurance() {
 // Filtrowanie i sortowanie
 function getFilteredPolicies() {
     let filtered = [...allInsurancePolicies];
-    
+
     // Filtruj po typie
     if (insuranceTypeFilter !== 'all') {
         filtered = filtered.filter(p => p.typ === insuranceTypeFilter);
     }
-    
+
     // Sortuj
     filtered.sort((a, b) => {
         switch (insuranceSortBy) {
@@ -380,7 +380,7 @@ function getFilteredPolicies() {
                 return 0;
         }
     });
-    
+
     return filtered;
 }
 
@@ -398,7 +398,7 @@ function filterExpiringPolicies() {
     insuranceTypeFilter = 'all';
     insuranceSortBy = 'endDate-asc';
     renderInsuranceTab();
-    
+
     // Scroll do pierwszej wygasającej polisy
     setTimeout(() => {
         const expiringCard = document.querySelector('.insurance-item.expiring');
@@ -412,7 +412,7 @@ function filterExpiringPolicies() {
 function getExpiringPolicies(daysThreshold = 30) {
     const today = new Date();
     const threshold = new Date(today.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
-    
+
     return allInsurancePolicies.filter(p => {
         const endDate = new Date(p.dataZakonczenia);
         return endDate >= today && endDate <= threshold;
@@ -422,7 +422,7 @@ function getExpiringPolicies(daysThreshold = 30) {
 // Porównanie kosztów rok/rok
 function calculateYearlyComparison() {
     const yearTotals = {};
-    
+
     allInsurancePolicies.forEach(policy => {
         const year = new Date(policy.dataZakonczenia).getFullYear();
         if (!yearTotals[year]) {
@@ -430,24 +430,24 @@ function calculateYearlyComparison() {
         }
         yearTotals[year] += policy.skladkaPLN;
     });
-    
+
     return yearTotals;
 }
 
 function renderYearComparisonStats(yearComparison) {
     const years = Object.keys(yearComparison).sort((a, b) => b - a);
     if (years.length < 2) return '';
-    
+
     const currentYear = years[0];
     const previousYear = years[1];
     const currentTotal = yearComparison[currentYear];
     const previousTotal = yearComparison[previousYear];
     const difference = currentTotal - previousTotal;
     const percentChange = previousTotal > 0 ? ((difference / previousTotal) * 100) : 0;
-    
+
     const diffClass = difference > 0 ? 'negative' : difference < 0 ? 'positive' : '';
     const diffSign = difference > 0 ? '+' : '';
-    
+
     return `
         <div class="year-stat">
             <div class="year-stat-label">Składki ${previousYear}</div>
@@ -474,21 +474,21 @@ function openAddPolicyModal() {
     document.getElementById('policyModalTitle').textContent = 'Dodaj polisę ubezpieczeniową';
     document.getElementById('policyForm').reset();
     document.getElementById('policyId').value = '';
-    
+
     // Ustaw dzisiejszą datę jako domyślną datę rozpoczęcia
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('policyStartDate').value = today;
-    
-    document.getElementById('policyModal').classList.add('show');
+
+    document.getElementById('policyModal').classList.add('active');
 }
 
 function openEditPolicyModal(policyId) {
     const policy = allInsurancePolicies.find(p => p.id === policyId);
     if (!policy) return;
-    
+
     editingPolicyId = policyId;
     document.getElementById('policyModalTitle').textContent = 'Edytuj polisę ubezpieczeniową';
-    
+
     // Wypełnij formularz
     document.getElementById('policyId').value = policy.id;
     document.getElementById('policyType').value = policy.typ;
@@ -501,18 +501,18 @@ function openEditPolicyModal(policyId) {
     document.getElementById('policyCoverage').value = policy.sumaUbezpieczenia || '';
     document.getElementById('policyInsurer').value = policy.ubezpieczyciel;
     document.getElementById('policyNotes').value = policy.notatki;
-    
-    document.getElementById('policyModal').classList.add('show');
+
+    document.getElementById('policyModal').classList.add('active');
 }
 
 function closePolicyModal() {
-    document.getElementById('policyModal').classList.remove('show');
+    document.getElementById('policyModal').classList.remove('active');
     editingPolicyId = null;
 }
 
 async function handleSavePolicy(event) {
     event.preventDefault();
-    
+
     const formData = {
         typ: document.getElementById('policyType').value,
         nazwa: document.getElementById('policyName').value,
@@ -525,15 +525,15 @@ async function handleSavePolicy(event) {
         ubezpieczyciel: document.getElementById('policyInsurer').value,
         notatki: document.getElementById('policyNotes').value
     };
-    
+
     // Walidacja dat
     if (new Date(formData.dataZakonczenia) < new Date(formData.dataRozpoczecia)) {
         showToast('Data zakończenia nie może być wcześniejsza niż data rozpoczęcia', 'error');
         return;
     }
-    
+
     showLifeLoading(true);
-    
+
     try {
         if (editingPolicyId) {
             // Edycja
@@ -544,12 +544,12 @@ async function handleSavePolicy(event) {
             await LifeSheets.addInsurancePolicy(formData);
             showToast('Polisa dodana pomyślnie', 'success');
         }
-        
+
         // Przeładuj dane i odśwież widok
         await loadLifeData();
         renderInsuranceTab();
         closePolicyModal();
-        
+
     } catch (error) {
         console.error('Błąd zapisu polisy:', error);
         showToast('Błąd podczas zapisu polisy', 'error');
@@ -561,33 +561,33 @@ async function handleSavePolicy(event) {
 function openDeletePolicyModal(policyId) {
     const policy = allInsurancePolicies.find(p => p.id === policyId);
     if (!policy) return;
-    
+
     deletingPolicyId = policyId;
-    document.getElementById('deletePolicyMessage').textContent = 
+    document.getElementById('deletePolicyMessage').textContent =
         `Czy na pewno chcesz usunąć polisę "${policy.nazwa}" (${policy.typ})?`;
-    
-    document.getElementById('deletePolicyModal').classList.add('show');
+
+    document.getElementById('deletePolicyModal').classList.add('active');
 }
 
 function closeDeletePolicyModal() {
-    document.getElementById('deletePolicyModal').classList.remove('show');
+    document.getElementById('deletePolicyModal').classList.remove('active');
     deletingPolicyId = null;
 }
 
 async function confirmDeletePolicy() {
     if (!deletingPolicyId) return;
-    
+
     showLifeLoading(true);
-    
+
     try {
         await LifeSheets.deleteInsurancePolicy(deletingPolicyId);
         showToast('Polisa usunięta pomyślnie', 'success');
-        
+
         // Przeładuj dane i odśwież widok
         await loadLifeData();
         renderInsuranceTab();
         closeDeletePolicyModal();
-        
+
     } catch (error) {
         console.error('Błąd usuwania polisy:', error);
         showToast('Błąd podczas usuwania polisy', 'error');
@@ -619,7 +619,7 @@ function createPolicyReminder(policyId) {
 function renderPropertyTab() {
     const container = document.getElementById('life-property');
     if (!container) return;
-    
+
     container.innerHTML = `
         <div class="placeholder-tab">
             <h2>Property Manager</h2>
@@ -631,7 +631,7 @@ function renderPropertyTab() {
 function renderInventoryTab() {
     const container = document.getElementById('life-inventory');
     if (!container) return;
-    
+
     container.innerHTML = `
         <div class="placeholder-tab">
             <h2>Home Inventory</h2>
@@ -643,7 +643,7 @@ function renderInventoryTab() {
 function renderSubscriptionsTab() {
     const container = document.getElementById('life-subscriptions');
     if (!container) return;
-    
+
     container.innerHTML = `
         <div class="placeholder-tab">
             <h2>Subskrypcje i Stałe Opłaty</h2>
@@ -655,7 +655,7 @@ function renderSubscriptionsTab() {
 function renderCalendarTab() {
     const container = document.getElementById('life-calendar');
     if (!container) return;
-    
+
     container.innerHTML = `
         <div class="placeholder-tab">
             <h2>Kalendarz Wydarzeń</h2>
