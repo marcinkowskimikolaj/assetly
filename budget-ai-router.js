@@ -628,8 +628,22 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 // Ignoruj puste lub śmieciowe wpisy (częsty błąd LLM: {"function": "0"})
                 if (!op || typeof op !== 'object') return false;
 
-                if (!op.function || op.function === '0') {
-                    console.warn('BudgetAIRouter: Dropping invalid operation (no function name or "0")', op);
+                // Jeśli nazwa funkcji to "0" (częsty błąd LLM), spróbujmy ją naprawić semantycznie
+                if (op.function === '0') {
+                    // Próba wnioskowania z intencji/shape
+                    const inferredFunction = this._inferFunctionFromContext(routing.route, routing.question_shape, op.params);
+
+                    if (inferredFunction) {
+                        console.log(`BudgetAIRouter: Auto-fixed function "0" to "${inferredFunction}" based on context`);
+                        op.function = inferredFunction;
+                    } else {
+                        console.warn('BudgetAIRouter: Dropping invalid operation (function "0" and could not infer replacement)', op);
+                        return false;
+                    }
+                }
+
+                if (!op.function) {
+                    console.warn('BudgetAIRouter: Dropping invalid operation (no function name)', op);
                     return false;
                 }
 
@@ -743,6 +757,55 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
         }
 
         return null;
+    },
+
+    _inferFunctionFromContext(route, shape, params) {
+        // Logika mapowania: Route/Shape -> Function
+
+        // 1. Jeśli to podsumowanie (SUM)
+        if (route === 'compute_sum' || shape === 'SUM') {
+            if (params && (params.subcategory || params.category)) {
+                return 'sumByCategory'; // Obsługuje oba przypadki
+            }
+            return 'getSummary';
+        }
+
+        // 2. Rankingi (TOP)
+        if (route === 'compute_top' || shape === 'RANKING') {
+            return 'topExpenses';
+        }
+
+        // 3. Trendy
+        if (route === 'compute_trend' || shape === 'TREND' || shape === 'MAX_IN_TIME' || shape === 'MIN_IN_TIME') {
+            if (params && (params.subcategory || params.category)) {
+                return 'monthlyBreakdown';
+            }
+            return 'trendAnalysis';
+        }
+
+        // 4. Porównania
+        if (route === 'compute_compare' || shape === 'COMPARISON') {
+            return 'compareMonths';
+        }
+
+        // 5. Analizy
+        if (route === 'compute_summary' || shape === 'ANALYSIS' || shape === 'GENERAL') {
+            return 'getSummary';
+        }
+
+        // Domyślny fallback dla route'ów
+        const routeDefaults = {
+            'compute_sum': 'sumByCategory',
+            'compute_top': 'topExpenses',
+            'compute_trend': 'trendAnalysis',
+            'compute_compare': 'compareMonths',
+            'compute_503020': 'analyze503020',
+            'compute_anomalies': 'getAnomalies',
+            'compute_summary': 'getSummary',
+            'general': 'getSummary'
+        };
+
+        return routeDefaults[route] || null;
     },
 
     _findCategoryForSubcategory(subcategory) {
