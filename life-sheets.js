@@ -152,7 +152,7 @@ const LifeSheets = {
         try {
             const response = await gapi.client.sheets.spreadsheets.values.get({
                 spreadsheetId: CONFIG.SPREADSHEET_ID,
-                range: `${this.SHEETS.PROPERTY}!A2:U`
+                range: `${this.SHEETS.PROPERTY}!A2:V`
             });
 
             const rows = response.result.values || [];
@@ -178,6 +178,7 @@ const LifeSheets = {
                 numerDzialki: row[18] || '',
                 oplatyConfig: this._parseJsonSafe(row[19], {}),
                 projektyRemontowe: this._parseJsonSafe(row[20], []),
+                linkedPolicyId: row[21] || '',
                 rowIndex: index + 2
             })).filter(p => p.id);
         } catch (error) {
@@ -213,12 +214,13 @@ const LifeSheets = {
             property.numerKW || '',
             property.numerDzialki || '',
             JSON.stringify(property.oplatyConfig || {}),
-            JSON.stringify(property.projektyRemontowe || [])
+            JSON.stringify(property.projektyRemontowe || []),
+            property.linkedPolicyId || ''
         ];
 
         await gapi.client.sheets.spreadsheets.values.append({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.PROPERTY}!A:U`,
+            range: `${this.SHEETS.PROPERTY}!A:V`,
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
             resource: { values: [row] }
@@ -263,12 +265,13 @@ const LifeSheets = {
             updates.numerKW !== undefined ? updates.numerKW : property.numerKW,
             updates.numerDzialki !== undefined ? updates.numerDzialki : property.numerDzialki,
             JSON.stringify(oplaty),
-            JSON.stringify(projekty)
+            JSON.stringify(projekty),
+            updates.linkedPolicyId !== undefined ? updates.linkedPolicyId : (property.linkedPolicyId || '')
         ];
 
         await gapi.client.sheets.spreadsheets.values.update({
             spreadsheetId: CONFIG.SPREADSHEET_ID,
-            range: `${this.SHEETS.PROPERTY}!A${property.rowIndex}:U${property.rowIndex}`,
+            range: `${this.SHEETS.PROPERTY}!A${property.rowIndex}:V${property.rowIndex}`,
             valueInputOption: 'USER_ENTERED',
             resource: { values: [row] }
         });
@@ -419,7 +422,8 @@ const LifeSheets = {
                 'Numer_KW',
                 'Numer_Dzialki',
                 'Oplaty_Config',
-                'Projekty_Remontowe'
+                'Projekty_Remontowe',
+                'Powiazana_Polisa_ID'
             ],
             [this.SHEETS.INVENTORY]: [
                 'ID',
