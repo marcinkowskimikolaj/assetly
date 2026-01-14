@@ -15,7 +15,7 @@ const AIProviders = {
             endpoint: 'https://api.llm7.io/v1/chat/completions',
             model: 'llm7-chat', // sprawdzony działający model
             role: 'router', // używany do klasyfikacji
-            timeout: 30000,
+            timeout: 25000,
             maxTokens: 1500,
             requiresKey: false // LLM7 działa z kluczem lub 'unused'
         },
@@ -285,8 +285,7 @@ const AIProviders = {
                         max_tokens: this.PROVIDERS.LLM7.maxTokens
                     })
                 },
-                this.PROVIDERS.LLM7.timeout,
-                2 // Retries for Router
+                this.PROVIDERS.LLM7.timeout
             );
 
             if (!response.ok) {
@@ -375,8 +374,7 @@ const AIProviders = {
                         }
                     })
                 },
-                this.PROVIDERS.GEMINI.timeout,
-                1 // Retries for Gemini
+                this.PROVIDERS.GEMINI.timeout
             );
 
             if (!response.ok) {
@@ -435,8 +433,7 @@ const AIProviders = {
                         max_tokens: options.maxTokens || this.PROVIDERS.OPENAI.maxTokens
                     })
                 },
-                this.PROVIDERS.OPENAI.timeout,
-                1 // Retries for OpenAI
+                this.PROVIDERS.OPENAI.timeout
             );
 
             if (!response.ok) {
@@ -470,7 +467,7 @@ const AIProviders = {
     // HELPERY
     // ═══════════════════════════════════════════════════════════
 
-    async _fetchWithTimeout(url, options, timeout, retries = 0) {
+    async _fetchWithTimeout(url, options, timeout) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -480,28 +477,10 @@ const AIProviders = {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-
-            // Jeśli status 5xx, to traktujemy jako błąd do ponowienia (tylko jeśli mamy retries)
-            if (retries > 0 && response.status >= 500) {
-                throw new Error(`Server error HTTP ${response.status}`);
-            }
-
             return response;
         } catch (error) {
             clearTimeout(timeoutId);
-
-            // Anulowanie przez timeout
-            const isTimeout = error.name === 'AbortError';
-            const errorMsg = isTimeout ? 'Timeout połączenia' : error.message;
-
-            if (retries > 0) {
-                console.warn(`AIProviders: Request failed (${errorMsg}), retrying... (${retries} left)`);
-                // Exponential backoff: 1000ms, 2000ms, 4000ms...
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                return this._fetchWithTimeout(url, options, timeout, retries - 1);
-            }
-
-            if (isTimeout) {
+            if (error.name === 'AbortError') {
                 throw new Error('Timeout połączenia');
             }
             throw error;
@@ -538,3 +517,24 @@ const AIProviders = {
         if (!hasGenerator) {
             return {
                 ready: false,
+                message: 'Skonfiguruj przynajmniej jeden provider AI (Gemini lub OpenAI)',
+                level: 'error'
+            };
+        }
+
+        // LLM7 działa bez klucza, więc nie jest to błąd
+        if (!hasLLM7Key) {
+            return {
+                ready: true,
+                message: 'AI działa. LLM7 używa darmowego limitu (40 req/min).',
+                level: 'success'
+            };
+        }
+
+        return {
+            ready: true,
+            message: 'Wszystkie providery skonfigurowane',
+            level: 'success'
+        };
+    }
+};
