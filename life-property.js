@@ -14,6 +14,7 @@ let deletingPropertyId = null;
 let tempRooms = [];
 let tempMaintenance = [];
 let tempProjects = [];
+let availablePolicies = [];
 
 // ═══════════════════════════════════════════════════════════
 // RENDERING TABU
@@ -186,7 +187,7 @@ function handlePropertySortChange() {
 // MODALE I CRUD
 // ═══════════════════════════════════════════════════════════
 
-function openAddPropertyModal() {
+async function openAddPropertyModal() {
     editingPropertyId = null;
     document.getElementById('propertyModalTitle').textContent = 'Dodaj nieruchomość';
     document.getElementById('propertyForm').reset();
@@ -203,10 +204,13 @@ function openAddPropertyModal() {
     renderMaintenanceListModal();
     renderProjectsListModal();
 
+    // Load Policies
+    await loadPoliciesForSelect();
+
     document.getElementById('propertyModal').classList.add('active');
 }
 
-function openEditPropertyModal(propId) {
+async function openEditPropertyModal(propId) {
     const prop = allProperties.find(p => p.id === propId);
     if (!prop) return;
 
@@ -233,6 +237,9 @@ function openEditPropertyModal(propId) {
     const oplaty = prop.oplatyConfig || {};
     document.getElementById('propTax').value = oplaty.tax || '';
     document.getElementById('propRent').value = oplaty.rent || '';
+
+    // Load Policies (awaiting for correct select state)
+    await loadPoliciesForSelect(prop.linkedPolicyId);
 
     // Sub-listy
     tempRooms = JSON.parse(JSON.stringify(prop.pomieszczenia || []));
@@ -301,7 +308,8 @@ async function handleSaveProperty(event) {
         oplatyConfig: oplatyConfig,
         pomieszczenia: tempRooms,
         harmonogramKonserwacji: tempMaintenance,
-        projektyRemontowe: tempProjects
+        projektyRemontowe: tempProjects,
+        linkedPolicyId: document.getElementById('propInsurancePolicy').value
     };
 
     showLifeLoading(true);
@@ -493,6 +501,46 @@ function updateProject(index, field, value) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// INSURANCE HELPERS
+// ═══════════════════════════════════════════════════════════
+
+async function loadPoliciesForSelect(selectedId = '') {
+    const select = document.getElementById('propInsurancePolicy');
+    select.innerHTML = '<option value="">Ładowanie...</option>';
+
+    try {
+        availablePolicies = await LifeSheets.getInsurancePolicies();
+        select.innerHTML = '<option value="">-- Brak powiązania --</option>';
+
+        availablePolicies.forEach(policy => {
+            const cost = policy.skladkaPLN || policy.skladkaRoczna || 0;
+            const option = document.createElement('option');
+            option.value = policy.id;
+            option.textContent = `${policy.nazwa} (${formatCurrency(cost)} PLN)`;
+            if (policy.id === selectedId) option.selected = true;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Błąd ładowania polis', e);
+        select.innerHTML = '<option value="">Błąd pobierania</option>';
+    }
+    updateInsuranceCostDisplay();
+}
+
+function updateInsuranceCostDisplay() {
+    const select = document.getElementById('propInsurancePolicy');
+    const display = document.getElementById('propInsuranceCostDisplay');
+    const policy = availablePolicies.find(p => p.id === select.value);
+
+    if (policy) {
+        const cost = policy.skladkaPLN || policy.skladkaRoczna || 0;
+        display.textContent = `${formatCurrency(cost)} PLN`;
+    } else {
+        display.textContent = '-';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
 // VIEW MODAL (DASHBOARD)
 // ═══════════════════════════════════════════════════════════
 
@@ -564,6 +612,29 @@ function openViewPropertyModal(propId) {
     const oplaty = prop.oplatyConfig || {};
     document.getElementById('viewPropRent').textContent = oplaty.rent ? `${formatCurrency(oplaty.rent)} PLN` : '-';
     document.getElementById('viewPropTax').textContent = oplaty.tax ? `${formatCurrency(oplaty.tax)} PLN` : '-';
+
+    // Policy Info
+    const policyEl = document.getElementById('viewPropPolicy');
+    policyEl.textContent = 'Ładowanie...';
+    if (prop.linkedPolicyId) {
+        LifeSheets.getInsurancePolicies().then(policies => {
+            const pol = policies.find(p => p.id === prop.linkedPolicyId);
+            if (pol) {
+                const cost = pol.skladkaPLN || pol.skladkaRoczna || 0;
+                policyEl.innerHTML = `
+                    <span style="color: var(--text-primary)">${escapeHtml(pol.nazwa)}</span>
+                    <span style="color: var(--text-secondary); font-size: 0.9em; margin-left: 1rem;">${formatCurrency(cost)} PLN/rok</span>
+                `;
+            } else {
+                policyEl.textContent = 'Nie znaleziono polisy';
+            }
+        }).catch(err => {
+            console.error(err);
+            policyEl.textContent = 'Błąd!';
+        });
+    } else {
+        policyEl.textContent = 'Brak powiązania';
+    }
 
     // Details Tab
     document.getElementById('viewPropType').textContent = prop.typ;
