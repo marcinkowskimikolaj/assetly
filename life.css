@@ -1,0 +1,504 @@
+/**
+ * Assetly - Life Module Styles
+ * Premium Dark Finance Theme
+ */
+
+/* ============================================
+   TABS NAVIGATION
+   ============================================ */
+.life-tabs-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
+
+.life-tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.life-tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.life-tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* ============================================
+   TAB CONTENT
+   ============================================ */
+.life-tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.life-tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   PLACEHOLDER TABS
+   ============================================ */
+.placeholder-tab {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.placeholder-tab h2 {
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.placeholder-tab p {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* ============================================
+   INSURANCE TAB - HEADER SECTION
+   ============================================ */
+.insurance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.insurance-filters {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.insurance-filters select {
+    min-width: 180px;
+}
+
+/* ============================================
+   WARNING BANNER (Expiring Policies)
+   ============================================ */
+.insurance-warning-banner {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.insurance-warning-banner.hidden {
+    display: none;
+}
+
+.insurance-warning-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--error);
+    flex-shrink: 0;
+}
+
+.insurance-warning-content {
+    flex: 1;
+}
+
+.insurance-warning-content p {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.insurance-warning-content p strong {
+    color: var(--error);
+}
+
+.insurance-warning-link {
+    color: var(--primary);
+    cursor: pointer;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.insurance-warning-link:hover {
+    color: var(--primary-light);
+}
+
+/* ============================================
+   YEAR COMPARISON CARD
+   ============================================ */
+.year-comparison-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.year-comparison-card h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.year-comparison-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.year-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.year-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.year-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.year-stat-value.positive {
+    color: var(--success);
+}
+
+.year-stat-value.negative {
+    color: var(--error);
+}
+
+.year-stat-change {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   INSURANCE LIST
+   ============================================ */
+.insurance-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.insurance-empty {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: var(--bg-card);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.insurance-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    color: var(--text-muted);
+}
+
+.insurance-empty h3 {
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.insurance-empty p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+/* ============================================
+   INSURANCE ITEM (Card)
+   ============================================ */
+.insurance-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.insurance-item:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.insurance-item.expiring {
+    border-color: var(--error);
+    border-width: 2px;
+}
+
+.insurance-item.expired {
+    opacity: 0.7;
+    background: var(--bg-secondary);
+}
+
+.insurance-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+    gap: 1rem;
+}
+
+.insurance-item-title {
+    flex: 1;
+}
+
+.insurance-type-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.insurance-item-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.insurance-item-insurer {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.insurance-status-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-badge.expired {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--error);
+}
+
+.status-badge.expiring-soon {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--warning);
+}
+
+/* ============================================
+   INSURANCE ITEM - BODY
+   ============================================ */
+.insurance-item-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.insurance-item-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.insurance-item-detail-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.insurance-item-detail-value {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.insurance-item-detail-value.premium {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.insurance-item-detail-value.days-left {
+    font-weight: 600;
+}
+
+.insurance-item-detail-value.days-left.critical {
+    color: var(--error);
+}
+
+.insurance-item-detail-value.days-left.warning {
+    color: var(--warning);
+}
+
+/* ============================================
+   INSURANCE ITEM - FOOTER
+   ============================================ */
+.insurance-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.insurance-item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.insurance-item-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.insurance-item-attachment {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.insurance-item-attachment:hover {
+    color: var(--primary);
+}
+
+.insurance-item-attachment svg {
+    width: 16px;
+    height: 16px;
+}
+
+.insurance-item-attachment.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ============================================
+   BUTTONS - SPECIALIZED
+   ============================================ */
+.btn-icon-only {
+    padding: 0.5rem;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-only svg {
+    width: 18px;
+    height: 18px;
+}
+
+.btn-edit {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: var(--accent);
+}
+
+.btn-edit:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: var(--accent);
+}
+
+.btn-delete {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--error);
+}
+
+.btn-delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--error);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .life-tabs-nav {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .insurance-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .insurance-filters {
+        flex-direction: column;
+    }
+    
+    .insurance-filters select {
+        width: 100%;
+    }
+    
+    .year-comparison-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .insurance-item-body {
+        grid-template-columns: 1fr;
+    }
+    
+    .insurance-item-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .insurance-item-actions {
+        justify-content: space-between;
+    }
+}
