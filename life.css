@@ -799,7 +799,128 @@
     padding: 2rem;
 }
 
-/* Property View Dashboard */
+/* Inventory Stats */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary-dark);
+}
+
+.stat-title {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Inventory Grid */
+.inventory-grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.inventory-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+
+.inventory-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary);
+}
+
+.inv-card-img {
+    height: 140px;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 3rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.inv-card-body {
+    padding: 1.25rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.inv-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.inv-category {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: rgba(16, 185, 129, 0.1);
+    /* Primary opaque */
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.inv-value {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.inv-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.inv-details {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Inventory List */
+.inventory-list-view .life-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
 .view-dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
