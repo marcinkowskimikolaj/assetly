@@ -309,12 +309,152 @@ const LifeSheets = {
     // ═══════════════════════════════════════════════════════════
 
     async getInventoryItems() {
-        // TODO Sprint 3
-        return [];
+        try {
+            const response = await gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: CONFIG.SPREADSHEET_ID,
+                range: `${this.SHEETS.INVENTORY}!A2:T`
+            });
+
+            const rows = response.result.values || [];
+            return rows.map((row, index) => ({
+                id: row[0] || '',
+                kategoria: row[1] || 'Inne',
+                nazwa: row[2] || '',
+                producent: row[3] || '',
+                model: row[4] || '',
+                numerSeryjny: row[5] || '',
+                dataZakupu: row[6] || '',
+                wartoscZakupu: parseFloat(row[7]) || 0,
+                waluta: row[8] || 'PLN',
+                wartoscPLN: parseFloat(row[9]) || 0,
+                wartoscBiezaca: parseFloat(row[10]) || 0,
+                stan: row[11] || 'W użyciu',
+                idNieruchomosci: row[12] || '',
+                idPomieszczenia: row[13] || '',
+                gwarancjaDo: row[14] || '',
+                notatki: row[15] || '',
+                fileIdDrive: row[16] || '',
+                zalaczniki: this._parseJsonSafe(row[17], []),
+                historiaSerwisow: this._parseJsonSafe(row[18], []),
+                opcjeDeprecjacji: this._parseJsonSafe(row[19], {}),
+                rowIndex: index + 2
+            })).filter(item => item.id);
+        } catch (error) {
+            console.warn('Nie można pobrać inwentarza:', error);
+            return [];
+        }
     },
 
-    // ═══════════════════════════════════════════════════════════
-    // SUBSKRYPCJE (SUBSCRIPTIONS) - Placeholder dla Sprint 4
+    async addInventoryItem(item) {
+        const id = 'inv-' + Date.now();
+        const wartoscPLN = item.waluta === 'PLN'
+            ? item.wartoscZakupu
+            : item.wartoscZakupu * (currencyRates[item.waluta] || 1);
+
+        const row = [
+            id,
+            item.kategoria || 'Inne',
+            item.nazwa,
+            item.producent || '',
+            item.model || '',
+            item.numerSeryjny || '',
+            item.dataZakupu || '',
+            (item.wartoscZakupu || 0).toString(),
+            item.waluta || 'PLN',
+            wartoscPLN.toFixed(2),
+            (item.wartoscBiezaca || wartoscPLN).toString(),
+            item.stan || 'W użyciu',
+            item.idNieruchomosci || '',
+            item.idPomieszczenia || '',
+            item.gwarancjaDo || '',
+            item.notatki || '',
+            item.fileIdDrive || '',
+            JSON.stringify(item.zalaczniki || []),
+            JSON.stringify(item.historiaSerwisow || []),
+            JSON.stringify(item.opcjeDeprecjacji || {})
+        ];
+
+        await gapi.client.sheets.spreadsheets.values.append({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${this.SHEETS.INVENTORY}!A:T`,
+            valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS',
+            resource: { values: [row] }
+        });
+
+        return { ...item, id, wartoscPLN };
+    },
+
+    async updateInventoryItem(id, updates) {
+        const items = await this.getInventoryItems();
+        const item = items.find(i => i.id === id);
+        if (!item) return false;
+
+        // Recalculate Value PLN if needed
+        let wartoscPLN = item.wartoscPLN;
+        if (updates.wartoscZakupu || updates.waluta) {
+            const val = updates.wartoscZakupu || item.wartoscZakupu;
+            const cur = updates.waluta || item.waluta;
+            wartoscPLN = cur === 'PLN' ? val : val * (currencyRates[cur] || 1);
+        }
+
+        const row = [
+            id,
+            updates.kategoria || item.kategoria,
+            updates.nazwa || item.nazwa,
+            updates.producent !== undefined ? updates.producent : item.producent,
+            updates.model !== undefined ? updates.model : item.model,
+            updates.numerSeryjny !== undefined ? updates.numerSeryjny : item.numerSeryjny,
+            updates.dataZakupu !== undefined ? updates.dataZakupu : item.dataZakupu,
+            (updates.wartoscZakupu !== undefined ? updates.wartoscZakupu : item.wartoscZakupu).toString(),
+            updates.waluta || item.waluta,
+            wartoscPLN.toFixed(2),
+            (updates.wartoscBiezaca !== undefined ? updates.wartoscBiezaca : item.wartoscBiezaca).toString(),
+            updates.stan || item.stan,
+            updates.idNieruchomosci !== undefined ? updates.idNieruchomosci : item.idNieruchomosci,
+            updates.idPomieszczenia !== undefined ? updates.idPomieszczenia : item.idPomieszczenia,
+            updates.gwarancjaDo !== undefined ? updates.gwarancjaDo : item.gwarancjaDo,
+            updates.notatki !== undefined ? updates.notatki : item.notatki,
+            updates.fileIdDrive !== undefined ? updates.fileIdDrive : item.fileIdDrive,
+            JSON.stringify(updates.zalaczniki !== undefined ? updates.zalaczniki : item.zalaczniki),
+            JSON.stringify(updates.historiaSerwisow !== undefined ? updates.historiaSerwisow : item.historiaSerwisow),
+            JSON.stringify(updates.opcjeDeprecjacji !== undefined ? updates.opcjeDeprecjacji : item.opcjeDeprecjacji)
+        ];
+
+        await gapi.client.sheets.spreadsheets.values.update({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${this.SHEETS.INVENTORY}!A${item.rowIndex}:T${item.rowIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [row] }
+        });
+
+        return true;
+    },
+
+    async deleteInventoryItem(id) {
+        const items = await this.getInventoryItems();
+        const item = items.find(i => i.id === id);
+        if (!item) return false;
+
+        const sheetId = await this.getSheetId(this.SHEETS.INVENTORY);
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            resource: {
+                requests: [{
+                    deleteDimension: {
+                        range: {
+                            sheetId: sheetId,
+                            dimension: 'ROWS',
+                            startIndex: item.rowIndex - 1,
+                            endIndex: item.rowIndex
+                        }
+                    }
+                }]
+            }
+        });
+
+        return true;
+    },
     // ═══════════════════════════════════════════════════════════
 
     async getSubscriptions() {
@@ -436,12 +576,16 @@ const LifeSheets = {
                 'Wartosc_Zakupu',
                 'Waluta',
                 'Wartosc_PLN',
-                'Wartosc_Biezaca',
+                'Wartosc_Biezaca', // Szacowana
                 'Stan',
-                'Lokalizacja',
+                'ID_Nieruchomosci',
+                'ID_Pomieszczenia',
                 'Gwarancja_Do',
-                'Notatki',
-                'FileId_Drive'
+                'Notatki', // Instrukcja, historia
+                'FileId_Drive', // Główne zdjęcie
+                'Zalaczniki_JSON', // Paragony, inne pliki
+                'Historia_Serwisow', // JSON
+                'Opcje_Deprecjacji' // JSON
             ],
             [this.SHEETS.SUBSCRIPTIONS]: [
                 'ID',
