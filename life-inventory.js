@@ -17,7 +17,7 @@ let editingInventoryId = null;
 // ═══════════════════════════════════════════════════════════
 
 async function renderInventoryTab() {
-    const container = document.getElementById('content-inventory');
+    const container = document.getElementById('life-inventory');
     if (!container) return; // Should not happen if HTML is correct
 
     showLifeLoading(true);
@@ -269,11 +269,11 @@ function setInventoryView(mode) {
 }
 
 function handleInventorySearch() {
-    renderInventoryContent(document.getElementById('content-inventory'));
+    renderInventoryContent(document.getElementById('life-inventory'));
 }
 
 function handleInventoryFilter() {
-    renderInventoryContent(document.getElementById('content-inventory'));
+    renderInventoryContent(document.getElementById('life-inventory'));
 }
 
 // ═══════════════════════════════════════════════════════════
