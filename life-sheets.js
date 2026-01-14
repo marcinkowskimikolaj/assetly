@@ -303,6 +303,16 @@ const LifeSheets = {
     // HELPERS
     // ═══════════════════════════════════════════════════════════
 
+    _parseJsonSafe(jsonString, defaultValue) {
+        if (!jsonString) return defaultValue;
+        try {
+            return JSON.parse(jsonString);
+        } catch (e) {
+            console.warn('Błąd parsowania JSON:', e);
+            return defaultValue;
+        }
+    },
+
     async getSheetId(sheetName) {
         const response = await gapi.client.sheets.spreadsheets.get({
             spreadsheetId: CONFIG.SPREADSHEET_ID
@@ -427,13 +437,3 @@ const LifeSheets = {
                 const headerRow = headers[sheetName];
                 const lastColumn = String.fromCharCode(64 + headerRow.length);
 
-                await gapi.client.sheets.spreadsheets.values.update({
-                    spreadsheetId: CONFIG.SPREADSHEET_ID,
-                    range: `${sheetName}!A1:${lastColumn}1`,
-                    valueInputOption: 'USER_ENTERED',
-                    resource: { values: [headerRow] }
-                });
-            }
-        }
-    }
-};
