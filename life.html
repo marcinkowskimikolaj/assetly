@@ -302,14 +302,20 @@
                 <div class="modal-tabs">
                     <button type="button" class="modal-tab active" onclick="switchPropertyModalTab('info')">Informacje
                         podstawowe</button>
+                    <button type="button" class="modal-tab" onclick="switchPropertyModalTab('finance')">Finanse i
+                        Opłaty</button>
+                    <button type="button" class="modal-tab" onclick="switchPropertyModalTab('projects')">Projekty i
+                        Remonty</button>
                     <button type="button" class="modal-tab"
                         onclick="switchPropertyModalTab('rooms')">Pomieszczenia</button>
-                    <button type="button" class="modal-tab" onclick="switchPropertyModalTab('maintenance')">Harmonogram
-                        konserwacji</button>
+                    <button type="button" class="modal-tab"
+                        onclick="switchPropertyModalTab('maintenance')">Konserwacja</button>
+                    <button type="button" class="modal-tab" onclick="switchPropertyModalTab('docs')">Dokumenty</button>
                 </div>
 
-                <!-- Tab 1: Info -->
+                <!-- Tab 1: Informacje podstawowe -->
                 <div id="prop-tab-info" class="modal-tab-content active">
+                    <input type="hidden" id="propertyId">
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label" for="propType">Typ nieruchomości</label>
@@ -352,8 +358,19 @@
                             <input type="number" id="propArea" class="form-input" step="0.01" min="0" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="propDate">Data zakupu</label>
-                            <input type="date" id="propDate" class="form-input" required>
+                            <label class="form-label" for="propYearBuilt">Rok budowy</label>
+                            <input type="number" id="propYearBuilt" class="form-input" placeholder="np. 2010">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="propKW">Numer KW</label>
+                            <input type="text" id="propKW" class="form-input" placeholder="ABCD/12345678/9">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="propPlot">Numer działki</label>
+                            <input type="text" id="propPlot" class="form-input" placeholder="np. 123/4">
                         </div>
                     </div>
 
@@ -373,13 +390,61 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="propPurchasePrice">Wartość zakupu</label>
+                            <input type="number" id="propPurchasePrice" class="form-input" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="propDate">Data zakupu</label>
+                            <input type="date" id="propDate" class="form-input" required>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label" for="propNotes">Notatki</label>
                         <textarea id="propNotes" class="form-input" rows="3"></textarea>
                     </div>
                 </div>
 
-                <!-- Tab 2: Pomieszczenia -->
+                <!-- Tab: Finanse i Opłaty -->
+                <div id="prop-tab-finance" class="modal-tab-content">
+                    <div class="form-group">
+                        <label class="form-label">Konfiguracja opłat i podatków</label>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Skonfiguruj
+                            stałe opłaty, aby system mógł generować raporty (Sprint 3).</p>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="propTax">Podatek roczny</label>
+                            <input type="number" id="propTax" class="form-input" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="propRent">Czynsz / Opłaty (miesięcznie)</label>
+                            <input type="number" id="propRent" class="form-input" step="0.01" min="0"
+                                placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="propInsuranceCost">Koszt ubezpieczenia (rocznie)</label>
+                        <input type="number" id="propInsuranceCost" class="form-input" step="0.01" min="0"
+                            placeholder="Pobierane z polisy jeśli powiązana" disabled>
+                    </div>
+                </div>
+
+                <!-- Tab: Projekty i Remonty -->
+                <div id="prop-tab-projects" class="modal-tab-content">
+                    <div class="sub-list-header">
+                        <h4>Projekty remontowe</h4>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="addProjectRow()">+ Nowy
+                            Projekt</button>
+                    </div>
+                    <div id="projectsContainer" class="sub-list-container">
+                        <!-- Wiersze dodawane dynamicznie -->
+                    </div>
+                </div>
+
+                <!-- Tab: Pomieszczenia -->
                 <div id="prop-tab-rooms" class="modal-tab-content">
                     <div class="sub-list-header">
                         <h4>Lista pomieszczeń</h4>
@@ -390,7 +455,7 @@
                     </div>
                 </div>
 
-                <!-- Tab 3: Konserwacja -->
+                <!-- Tab: Konserwacja -->
                 <div id="prop-tab-maintenance" class="modal-tab-content">
                     <div class="sub-list-header">
                         <h4>Harmonogram konserwacji</h4>
@@ -399,6 +464,15 @@
                     </div>
                     <div id="maintenanceContainer" class="sub-list-container">
                         <!-- Wiersze dodawane dynamicznie -->
+                    </div>
+                </div>
+
+                <!-- Tab: Dokumenty (Placeholder) -->
+                <div id="prop-tab-docs" class="modal-tab-content">
+                    <div class="placeholder-tab" style="padding: 2rem;">
+                        <h3>Dokumenty prawne</h3>
+                        <p>Zarządzanie aktami notarialnymi i skanami dokumentów.<br>Wymaga integracji z Google Drive
+                            (Sprint 6).</p>
                     </div>
                 </div>
 
