@@ -622,17 +622,7 @@ function createPolicyReminder(policyId) {
 
 
 
-function renderInventoryTab() {
-    const container = document.getElementById('life-inventory');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="placeholder-tab">
-            <h2>Home Inventory</h2>
-            <p>Inwentarz domowy będzie dostępny w Sprint 3</p>
-        </div>
-    `;
-}
+// function renderInventoryTab() moved to life-inventory.js
 
 function renderSubscriptionsTab() {
     const container = document.getElementById('life-subscriptions');
