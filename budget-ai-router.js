@@ -12,15 +12,15 @@
  */
 
 const BudgetAIRouter = {
-    
+
     // Stan
     _lastRouting: null,
     _planRepairAttempted: false,
-    
+
     // ═══════════════════════════════════════════════════════════
     // ZAMKNIĘTA TAKSONOMIA (źródło prawdy)
     // ═══════════════════════════════════════════════════════════
-    
+
     VALID_CATEGORIES: [
         'Auto i transport',
         'Codzienne wydatki',
@@ -34,7 +34,7 @@ const BudgetAIRouter = {
         'Płatności',
         'Rozrywka'
     ],
-    
+
     VALID_SUBCATEGORIES: {
         'Auto i transport': ['Auto i transport - inne', 'Paliwo', 'Parking i opłaty', 'Przejazdy', 'Serwis i części', 'Ubezpieczenie auta'],
         'Codzienne wydatki': ['Alkohol', 'Codzienne wydatki - inne', 'Jedzenie poza domem', 'Papierosy', 'Zwierzęta', 'Żywność i chemia domowa'],
@@ -48,35 +48,35 @@ const BudgetAIRouter = {
         'Płatności': ['Czynsz i wynajem', 'Gaz', 'Ogrzewanie', 'Opłaty i odsetki', 'Płatności - inne', 'Podatki', 'Prąd', 'Spłaty rat', 'TV, internet, telefon', 'Ubezpieczenia', 'Woda i kanalizacja'],
         'Rozrywka': ['Podróże i wyjazdy', 'Rozrywka - inne', 'Sport i hobby', 'Wyjścia i wydarzenia']
     },
-    
+
     VALID_ROUTES: [
-        'compute_sum', 
-        'compute_top', 
-        'compute_trend', 
-        'compute_compare', 
-        'compute_503020', 
-        'compute_anomalies', 
-        'compute_summary', 
-        'clarify', 
+        'compute_sum',
+        'compute_top',
+        'compute_trend',
+        'compute_compare',
+        'compute_503020',
+        'compute_anomalies',
+        'compute_summary',
+        'clarify',
         'general'
     ],
-    
+
     VALID_SHAPES: [
-        'RANKING', 
-        'MAX_IN_TIME', 
-        'MIN_IN_TIME', 
-        'SUM', 
-        'TREND', 
-        'COMPARISON', 
-        'BREAKDOWN', 
-        'ANALYSIS', 
+        'RANKING',
+        'MAX_IN_TIME',
+        'MIN_IN_TIME',
+        'SUM',
+        'TREND',
+        'COMPARISON',
+        'BREAKDOWN',
+        'ANALYSIS',
         'GENERAL'
     ],
-    
+
     // ═══════════════════════════════════════════════════════════
     // WZORCE DO ZBIERANIA HINTS (nie do decydowania!)
     // ═══════════════════════════════════════════════════════════
-    
+
     SHAPE_HINT_PATTERNS: {
         MAX_IN_TIME: [
             /w\s+kt[óo]rym\s+miesi[aą]cu.*najwi[eę]cej/i,
@@ -117,58 +117,58 @@ const BudgetAIRouter = {
             /przegląd/i
         ]
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // GŁÓWNA METODA ROUTINGU
     // ═══════════════════════════════════════════════════════════
-    
+
     async classifyIntent(userQuery, cache = null, isRepairAttempt = false) {
         if (!isRepairAttempt) {
             this._lastRouting = null;
             this._planRepairAttempted = false;
         }
-        
+
         if (!cache) {
             cache = await BudgetAICache.getCache();
         }
-        
+
         // ─────────────────────────────────────────────────────────
         // KROK 1: JS zbiera HINTS (podpowiedzi) - NIE decyduje!
         // ─────────────────────────────────────────────────────────
         const hints = this._collectHints(userQuery, cache);
         console.log('BudgetAIRouter: Collected hints:', hints);
-        
+
         // ─────────────────────────────────────────────────────────
         // KROK 2: LLM7 - GŁÓWNY DECYDENT
         // ─────────────────────────────────────────────────────────
         const llm7Result = await this._askLLM7ToDecide(userQuery, cache, hints);
-        
+
         if (llm7Result.success) {
             // ─────────────────────────────────────────────────────
             // KROK 3: Techniczna walidacja (nie kwestionuje interpretacji!)
             // ─────────────────────────────────────────────────────
             const validation = this._technicalValidation(llm7Result.routing);
-            
+
             if (validation.valid) {
                 console.log('BudgetAIRouter: LLM7 routing accepted:', llm7Result.routing);
                 return llm7Result.routing;
             }
-            
+
             // ─────────────────────────────────────────────────────
             // KROK 4: Próba naprawy przez drugi obieg LLM7
             // ─────────────────────────────────────────────────────
             if (!isRepairAttempt && !this._planRepairAttempted) {
                 console.warn('BudgetAIRouter: Technical validation failed:', validation.errors);
                 this._planRepairAttempted = true;
-                
+
                 const repairedRouting = await this._repairPlan(
-                    userQuery, 
-                    llm7Result.routing, 
+                    userQuery,
+                    llm7Result.routing,
                     validation.errors,
                     cache,
                     hints
                 );
-                
+
                 if (repairedRouting) {
                     console.log('BudgetAIRouter: Plan repaired successfully');
                     return repairedRouting;
@@ -177,59 +177,59 @@ const BudgetAIRouter = {
         } else {
             console.warn('BudgetAIRouter: LLM7 failed:', llm7Result.error);
         }
-        
+
         // ─────────────────────────────────────────────────────────
         // KROK 5: Ostateczny fallback - deterministyczny JS
         // ─────────────────────────────────────────────────────────
         console.log('BudgetAIRouter: Using fallback routing');
         return this._fallbackRouting(userQuery, cache, hints);
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // KROK 1: ZBIERANIE HINTS (JS jako asystent)
     // ═══════════════════════════════════════════════════════════
-    
+
     /**
      * Zbiera podpowiedzi z zapytania - NIE podejmuje decyzji!
      * Te dane są POMOCNICZE dla LLM7
      */
     _collectHints(userQuery, cache) {
         const query = userQuery.toLowerCase();
-        
+
         const hints = {
             // Surowe słowa kluczowe z zapytania
             keywords: this._extractKeywords(userQuery),
-            
+
             // Hint o kształcie pytania (wzorce regex)
             shapeHint: this._detectShapeHint(query),
-            
+
             // Hint o okresie czasowym
             periodHint: this._detectPeriodHint(userQuery, cache),
-            
+
             // Hinty z BudgetAISynonyms (jeśli coś znalazł)
             synonymHints: this._getSynonymHints(userQuery),
-            
+
             // Czy pytanie wygląda na ogólne (bez konkretnej kategorii)?
             looksGeneral: this._looksLikeGeneralQuestion(query),
-            
+
             // Czy wykryto wiele tematów?
             multipleTopicsDetected: this._detectMultipleTopics(query)
         };
-        
+
         return hints;
     },
-    
+
     _extractKeywords(query) {
         // Wyciągnij znaczące słowa (>2 znaki, nie stop-words)
-        const stopWords = ['ile', 'jak', 'czy', 'moje', 'mój', 'moja', 'się', 'przez', 
-                          'ostatnie', 'ostatni', 'ostatnich', 'oraz', 'dla', 'czy', 'może',
-                          'chcę', 'chce', 'powiedz', 'opowiedz', 'pokaż', 'pokaz'];
-        
+        const stopWords = ['ile', 'jak', 'czy', 'moje', 'mój', 'moja', 'się', 'przez',
+            'ostatnie', 'ostatni', 'ostatnich', 'oraz', 'dla', 'czy', 'może',
+            'chcę', 'chce', 'powiedz', 'opowiedz', 'pokaż', 'pokaz'];
+
         return query.toLowerCase()
             .split(/[\s,;.!?]+/)
             .filter(word => word.length > 2 && !stopWords.includes(word));
     },
-    
+
     _detectShapeHint(query) {
         for (const [shape, patterns] of Object.entries(this.SHAPE_HINT_PATTERNS)) {
             for (const pattern of patterns) {
@@ -240,7 +240,7 @@ const BudgetAIRouter = {
         }
         return null; // Brak pewnego hinta - LLM7 zdecyduje
     },
-    
+
     _detectPeriodHint(userQuery, cache) {
         const periodMatch = BudgetAICompute.parsePeriod(userQuery);
         if (periodMatch) {
@@ -250,7 +250,7 @@ const BudgetAIRouter = {
                 confidence: 'detected_by_parser'
             };
         }
-        
+
         // Sprawdź względne okresy
         const query = userQuery.toLowerCase();
         if (query.match(/ostatni(ch|e|ego)?\s+(\d+)\s+miesi/)) {
@@ -260,21 +260,21 @@ const BudgetAIRouter = {
                 confidence: 'relative_detected'
             };
         }
-        
+
         if (query.match(/zesz[łl]y\s+miesi[aą]c/)) {
             return { relativeMonths: 1, confidence: 'relative_detected' };
         }
-        
+
         return null;
     },
-    
+
     _getSynonymHints(userQuery) {
         if (typeof BudgetAISynonyms === 'undefined') {
             return null;
         }
-        
+
         const resolved = BudgetAISynonyms.resolve(userQuery);
-        
+
         // Zwracamy jako HINTY, nie jako decyzje
         if (resolved.subcategories.length > 0 || resolved.categories.length > 0) {
             return {
@@ -292,10 +292,10 @@ const BudgetAIRouter = {
                 detectedIntents: resolved.intents
             };
         }
-        
+
         return null;
     },
-    
+
     _looksLikeGeneralQuestion(query) {
         const generalPatterns = [
             /jak\s+(wygl[aą]daj[aą]|zmienia[łl]y\s+si[eę])\s+moje\s+(wydatki|finanse|dochody)/i,
@@ -303,17 +303,17 @@ const BudgetAIRouter = {
             /podsumuj\s+moje\s+finanse/i,
             /czy\s+s[aą]\s+jakie[sś]\s+niepokojące/i
         ];
-        
+
         return generalPatterns.some(p => p.test(query));
     },
-    
+
     _detectMultipleTopics(query) {
         // Wykryj "X oraz Y", "X i Y", "X, Y"
         const multiPatterns = [
             /(\w+)\s+(oraz|i|,)\s+(\w+)/i,
             /zar[oó]wno\s+(\w+)\s+jak\s+i\s+(\w+)/i
         ];
-        
+
         for (const pattern of multiPatterns) {
             const match = query.match(pattern);
             if (match) {
@@ -323,32 +323,32 @@ const BudgetAIRouter = {
                 };
             }
         }
-        
+
         return { detected: false };
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // KROK 2: LLM7 - GŁÓWNY DECYDENT
     // ═══════════════════════════════════════════════════════════
-    
+
     async _askLLM7ToDecide(userQuery, cache, hints) {
         const systemPrompt = this._buildLLM7Prompt(cache, hints);
-        
+
         const result = await AIProviders.callRouter(systemPrompt, userQuery);
-        
+
         if (!result.success) {
             return { success: false, error: result.error };
         }
-        
+
         try {
             let jsonContent = result.content.trim();
-            
+
             // Wyciągnij JSON
             const codeBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             if (codeBlockMatch) {
                 jsonContent = codeBlockMatch[1].trim();
             }
-            
+
             if (!jsonContent.startsWith('{')) {
                 const firstBrace = jsonContent.indexOf('{');
                 const lastBrace = jsonContent.lastIndexOf('}');
@@ -356,21 +356,21 @@ const BudgetAIRouter = {
                     jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
                 }
             }
-            
+
             const parsed = JSON.parse(jsonContent);
             parsed.source = 'llm7';
-            
+
             return { success: true, routing: parsed };
-            
+
         } catch (error) {
             return { success: false, error: `JSON parse error: ${error.message}` };
         }
     },
-    
+
     _buildLLM7Prompt(cache, hints) {
         const functions = BudgetAICompute.getFunctionList();
         const periods = cache.availablePeriods || [];
-        
+
         // ─────────────────────────────────────────────────────────
         // SEKCJA A: Rola i zadanie LLM7
         // ─────────────────────────────────────────────────────────
@@ -399,7 +399,7 @@ STRUKTURA: KATEGORIA (główna) → PODKATEGORIA (szczegółowa)
 W params.category używaj nazwy KATEGORII, w params.subcategory nazwy PODKATEGORII!
 
 `;
-        
+
         for (const category of this.VALID_CATEGORIES) {
             const subs = this.VALID_SUBCATEGORIES[category] || [];
             prompt += `📁 KATEGORIA: "${category}"\n`;
@@ -422,7 +422,7 @@ DOSTĘPNE FUNKCJE OBLICZENIOWE
 ═══════════════════════════════════════════════════════════════════════
 
 `;
-        
+
         for (const [name, info] of Object.entries(functions)) {
             prompt += `• ${name}: ${info.description}\n`;
             prompt += `  Parametry: ${JSON.stringify(info.params)}\n\n`;
@@ -451,19 +451,19 @@ DANE POMOCNICZE OD JS (HINTS) - możesz użyć lub zignorować
 ═══════════════════════════════════════════════════════════════════════
 
 `;
-        
+
         if (hints.keywords && hints.keywords.length > 0) {
             prompt += `Wykryte słowa kluczowe: ${hints.keywords.join(', ')}\n`;
         }
-        
+
         if (hints.shapeHint) {
             prompt += `Sugerowany typ pytania: ${hints.shapeHint} (z regex patterns)\n`;
         }
-        
+
         if (hints.periodHint) {
             prompt += `Wykryty okres: ${JSON.stringify(hints.periodHint)}\n`;
         }
-        
+
         if (hints.synonymHints) {
             prompt += `\nSugestie synonimów od JS:\n`;
             if (hints.synonymHints.possibleSubcategories?.length > 0) {
@@ -477,11 +477,11 @@ DANE POMOCNICZE OD JS (HINTS) - możesz użyć lub zignorować
                 });
             }
         }
-        
+
         if (hints.looksGeneral) {
             prompt += `\n⚠️ JS uważa, że to może być OGÓLNE pytanie o finanse (bez konkretnej kategorii)\n`;
         }
-        
+
         if (hints.multipleTopicsDetected?.detected) {
             prompt += `\n⚠️ JS wykrył WIELE tematów: ${hints.multipleTopicsDetected.terms?.join(', ')}\n`;
             prompt += `   Rozważ dodanie osobnych operacji dla każdego tematu.\n`;
@@ -564,19 +564,19 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
 
         return prompt;
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // KROK 3: TECHNICZNA WALIDACJA (nie kwestionuje interpretacji!)
     // ═══════════════════════════════════════════════════════════
-    
+
     _technicalValidation(routing) {
         const errors = [];
-        
+
         // 1. Sprawdź wymagane pola
         if (!routing.intent_summary) {
             errors.push('Brak intent_summary');
         }
-        
+
         // 2. Sprawdź czy route jest na liście
         if (!routing.route || !this.VALID_ROUTES.includes(routing.route)) {
             // Próba naprawy przez mapowanie
@@ -588,7 +588,7 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 errors.push(`Nieprawidłowy route: "${routing.route}"`);
             }
         }
-        
+
         // 3. Sprawdź czy kategoria istnieje (jeśli podana)
         if (routing.canonical_category && !this.VALID_CATEGORIES.includes(routing.canonical_category)) {
             // Może LLM7 podał podkategorię jako kategorię?
@@ -601,7 +601,7 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 errors.push(`Nieznana kategoria: "${routing.canonical_category}"`);
             }
         }
-        
+
         // 4. Sprawdź czy podkategoria istnieje i pasuje do kategorii
         if (routing.canonical_subcategory && routing.canonical_category) {
             const validSubs = this.VALID_SUBCATEGORIES[routing.canonical_category] || [];
@@ -616,23 +616,36 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 }
             }
         }
-        
+
         // 5. Sprawdź operacje
         if (routing.operations && Array.isArray(routing.operations)) {
             const validFunctions = Object.keys(BudgetAICompute.AVAILABLE_FUNCTIONS);
-            
+
+            const originalOpsCount = routing.operations.length;
+
+            // Filtruj operacje - odrzucaj błędne zamiast wywalać cały plan
             routing.operations = routing.operations.filter(op => {
-                if (!op.function) {
-                    errors.push('Operacja bez nazwy funkcji');
+                // Ignoruj puste lub śmieciowe wpisy (częsty błąd LLM: {"function": "0"})
+                if (!op || typeof op !== 'object') return false;
+
+                if (!op.function || op.function === '0') {
+                    console.warn('BudgetAIRouter: Dropping invalid operation (no function name or "0")', op);
                     return false;
                 }
+
                 if (!validFunctions.includes(op.function)) {
-                    errors.push(`Nieznana funkcja: "${op.function}"`);
+                    console.warn(`BudgetAIRouter: Dropping operation with unknown function: "${op.function}"`);
                     return false;
                 }
+
                 return true;
             });
-            
+
+            // Jeśli mieliśmy operacje, ale wszystkie zostały odrzucone - to błąd
+            if (originalOpsCount > 0 && routing.operations.length === 0) {
+                errors.push('Wszystkie operacje zostały odrzucone jako nieprawidłowe');
+            }
+
             // Napraw kategorie w params operacji
             routing.operations.forEach(op => {
                 if (op.params) {
@@ -646,7 +659,7 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                             op.params.category = correctCategory;
                         }
                     }
-                    
+
                     // Jeśli mamy subcategory ale nie mamy category, znajdź kategorię
                     if (op.params.subcategory && !op.params.category) {
                         const correctCategory = this._findCategoryForSubcategory(op.params.subcategory);
@@ -655,7 +668,7 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                             console.log(`BudgetAIRouter: Auto-added category "${correctCategory}" for subcategory "${op.params.subcategory}"`);
                         }
                     }
-                    
+
                     // Propaguj canonical do params jeśli brak
                     if (!op.params.category && routing.canonical_category) {
                         op.params.category = routing.canonical_category;
@@ -666,19 +679,19 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 }
             });
         }
-        
+
         // 6. Sprawdź question_shape
         if (routing.question_shape && !this.VALID_SHAPES.includes(routing.question_shape)) {
             routing.question_shape = 'GENERAL';
         }
-        
+
         return {
             valid: errors.length === 0,
             errors: errors,
             routing: routing
         };
     },
-    
+
     _tryFixRoute(originalRoute, operations, questionShape) {
         // Mapowanie częstych błędów
         const routeMapping = {
@@ -699,11 +712,11 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
             'analyze503020': 'compute_503020',
             'getAnomalies': 'compute_anomalies'
         };
-        
+
         if (originalRoute && routeMapping[originalRoute]) {
             return routeMapping[originalRoute];
         }
-        
+
         // Wnioskuj z operations
         if (operations && operations.length > 0) {
             const firstFunc = operations[0].function;
@@ -711,7 +724,7 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
                 return routeMapping[firstFunc];
             }
         }
-        
+
         // Wnioskuj z question_shape
         const shapeToRoute = {
             'RANKING': 'compute_top',
@@ -724,14 +737,14 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
             'ANALYSIS': 'compute_summary',
             'GENERAL': 'general'
         };
-        
+
         if (questionShape && shapeToRoute[questionShape]) {
             return shapeToRoute[questionShape];
         }
-        
+
         return null;
     },
-    
+
     _findCategoryForSubcategory(subcategory) {
         for (const [cat, subs] of Object.entries(this.VALID_SUBCATEGORIES)) {
             if (subs.includes(subcategory)) {
@@ -740,14 +753,14 @@ Odpowiedz TYLKO poprawnym JSON. Nie dodawaj tekstu przed ani po JSON.`;
         }
         return null;
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // KROK 4: NAPRAWA PLANU (drugi obieg LLM7)
     // ═══════════════════════════════════════════════════════════
-    
+
     async _repairPlan(userQuery, originalRouting, errors, cache, hints) {
         console.log('BudgetAIRouter: Attempting plan repair...');
-        
+
         const repairPrompt = `Jesteś routerem naprawczym. Poprzedni plan miał BŁĘDY TECHNICZNE i musisz go naprawić.
 
 ORYGINALNE ZAPYTANIE UŻYTKOWNIKA:
@@ -770,18 +783,18 @@ Zwróć TYLKO poprawny JSON.`;
 
         try {
             const result = await AIProviders.callRouter(repairPrompt, 'Napraw powyższy plan routingu.');
-            
+
             if (!result.success) {
                 console.warn('BudgetAIRouter: Repair call failed:', result.error);
                 return null;
             }
-            
+
             let jsonContent = result.content.trim();
             const codeBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             if (codeBlockMatch) {
                 jsonContent = codeBlockMatch[1].trim();
             }
-            
+
             if (!jsonContent.startsWith('{')) {
                 const firstBrace = jsonContent.indexOf('{');
                 const lastBrace = jsonContent.lastIndexOf('}');
@@ -789,45 +802,45 @@ Zwróć TYLKO poprawny JSON.`;
                     jsonContent = jsonContent.substring(firstBrace, lastBrace + 1);
                 }
             }
-            
+
             const parsed = JSON.parse(jsonContent);
             const validation = this._technicalValidation(parsed);
-            
+
             if (validation.valid) {
                 validation.routing.source = 'llm7_repaired';
                 return validation.routing;
             }
-            
+
             console.warn('BudgetAIRouter: Repair still has errors:', validation.errors);
             return null;
-            
+
         } catch (error) {
             console.warn('BudgetAIRouter: Repair parsing failed:', error);
             return null;
         }
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // KROK 5: FALLBACK (ostateczność)
     // ═══════════════════════════════════════════════════════════
-    
+
     _fallbackRouting(userQuery, cache, hints) {
         const query = userQuery.toLowerCase();
-        
+
         let route = 'general';
         let operations = [];
         let intentSummary = 'Ogólne pytanie o finanse';
         let category = null;
         let subcategory = null;
         let questionShape = hints.shapeHint || 'GENERAL';
-        
+
         // Użyj hints do podstawowego routingu
         if (hints.synonymHints?.possibleSubcategories?.length > 0) {
             const first = hints.synonymHints.possibleSubcategories[0];
             category = first.category;
             subcategory = first.suggestion;
         }
-        
+
         // Okres
         let periodFrom = null;
         let periodTo = null;
@@ -835,7 +848,7 @@ Zwróć TYLKO poprawny JSON.`;
             periodFrom = hints.periodHint.from;
             periodTo = hints.periodHint.to;
         }
-        
+
         // Routing na podstawie shape
         switch (questionShape) {
             case 'MAX_IN_TIME':
@@ -847,7 +860,7 @@ Zwróć TYLKO poprawny JSON.`;
                     params: { category, subcategory, periodFrom, periodTo }
                 });
                 break;
-                
+
             case 'RANKING':
                 route = 'compute_top';
                 intentSummary = 'Top wydatki';
@@ -856,7 +869,7 @@ Zwróć TYLKO poprawny JSON.`;
                     params: { n: 10, level: 'category', periodFrom, periodTo }
                 });
                 break;
-                
+
             case 'SUM':
                 route = 'compute_sum';
                 intentSummary = `Suma wydatków${subcategory ? ` dla "${subcategory}"` : ''}`;
@@ -865,7 +878,7 @@ Zwróć TYLKO poprawny JSON.`;
                     params: { category, subcategory, periodFrom, periodTo }
                 });
                 break;
-                
+
             case 'TREND':
             case 'ANALYSIS':
                 if (hints.looksGeneral || !category) {
@@ -882,7 +895,7 @@ Zwróć TYLKO poprawny JSON.`;
                     });
                 }
                 break;
-                
+
             default:
                 if (query.match(/50.?30.?20/)) {
                     route = 'compute_503020';
@@ -905,7 +918,7 @@ Zwróć TYLKO poprawny JSON.`;
                     operations.push({ function: 'getSummary', params: {} });
                 }
         }
-        
+
         return {
             intent_summary: intentSummary,
             question_shape: questionShape,
@@ -919,11 +932,11 @@ Zwróć TYLKO poprawny JSON.`;
             source: 'fallback'
         };
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // BUDOWANIE KAPSULY FAKTÓW
     // ═══════════════════════════════════════════════════════════
-    
+
     buildFactsCapsule(routing, computeResults, cache, userQuery = null) {
         const capsule = {
             original_query: userQuery,
@@ -936,11 +949,11 @@ Zwróć TYLKO poprawny JSON.`;
             derived: {},
             context: {}
         };
-        
+
         // Dodaj wyniki obliczeń
         computeResults.forEach((result, index) => {
             const operation = result.operation;
-            
+
             if (result.success) {
                 if (capsule.results[operation]) {
                     if (!Array.isArray(capsule.results[operation])) {
@@ -950,7 +963,7 @@ Zwróć TYLKO poprawny JSON.`;
                 } else {
                     capsule.results[operation] = result.data;
                 }
-                
+
                 if (operation === 'monthlyBreakdown' && result.data?.breakdown) {
                     const derivedData = this._calculateDerivedMetrics(result.data, routing.question_shape);
                     Object.assign(capsule.derived, derivedData);
@@ -959,7 +972,7 @@ Zwróć TYLKO poprawny JSON.`;
                 capsule.results[`${operation}_error_${index}`] = { error: result.error };
             }
         });
-        
+
         // Kontekst
         const periods = cache.availablePeriods || [];
         capsule.context = {
@@ -973,7 +986,7 @@ Zwróć TYLKO poprawny JSON.`;
                 to: routing.period_to
             }
         };
-        
+
         if (cache.trends) {
             capsule.context.overallTrends = {
                 expenses: cache.trends.expenses?.direction || 'unknown',
@@ -981,30 +994,30 @@ Zwróć TYLKO poprawny JSON.`;
                 balance: cache.trends.balance?.direction || 'unknown'
             };
         }
-        
+
         return capsule;
     },
-    
+
     _calculateDerivedMetrics(breakdownResult, questionShape) {
         const derived = {};
         const breakdown = breakdownResult.breakdown || [];
-        
+
         if (breakdown.length === 0) {
             derived.hasData = false;
             derived.message = 'Brak danych dla wybranej kategorii/podkategorii';
             return derived;
         }
-        
+
         derived.hasData = true;
-        
+
         let maxEntry = null;
         let minEntry = null;
         let sum = 0;
-        
+
         for (const entry of breakdown) {
             const value = entry.value ?? entry.amount ?? 0;
             sum += value;
-            
+
             if (!maxEntry || value > (maxEntry.value ?? maxEntry.amount ?? 0)) {
                 maxEntry = entry;
             }
@@ -1012,57 +1025,57 @@ Zwróć TYLKO poprawny JSON.`;
                 minEntry = entry;
             }
         }
-        
+
         const maxValue = maxEntry ? (maxEntry.value ?? maxEntry.amount ?? 0) : 0;
         const minValue = minEntry ? (minEntry.value ?? minEntry.amount ?? 0) : 0;
-        
+
         derived.total = sum;
         derived.count = breakdown.length;
         derived.average = breakdown.length > 0 ? sum / breakdown.length : 0;
-        
+
         derived.maximum = {
             period: maxEntry?.period,
             value: maxValue,
             label: this._formatPeriodLabel(maxEntry?.period)
         };
-        
+
         derived.minimum = {
             period: minEntry?.period,
             value: minValue,
             label: this._formatPeriodLabel(minEntry?.period)
         };
-        
+
         if (questionShape === 'MAX_IN_TIME') {
             derived.answer = `Najwięcej wydano w ${derived.maximum.label}: ${this._formatAmount(maxValue)}`;
         } else if (questionShape === 'MIN_IN_TIME') {
             derived.answer = `Najmniej wydano w ${derived.minimum.label}: ${this._formatAmount(minValue)}`;
         }
-        
+
         return derived;
     },
-    
+
     _formatPeriodLabel(period) {
         if (!period) return 'nieznany';
         const [year, month] = period.split('-');
         const monthNames = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
-                          'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+            'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
         const monthIndex = parseInt(month) - 1;
         return `${monthNames[monthIndex] || month} ${year}`;
     },
-    
+
     _formatAmount(value) {
-        return new Intl.NumberFormat('pl-PL', { 
-            style: 'currency', 
+        return new Intl.NumberFormat('pl-PL', {
+            style: 'currency',
             currency: 'PLN',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         }).format(value);
     },
-    
+
     // ═══════════════════════════════════════════════════════════
     // SYSTEM PROMPT DLA GENERATORA
     // ═══════════════════════════════════════════════════════════
-    
+
     getGeneratorSystemPrompt() {
         return `Jesteś asystentem finansowym. Odpowiadasz na pytania o budżet na podstawie WYŁĄCZNIE dostarczonych danych.
 
