@@ -616,17 +616,11 @@ function createPolicyReminder(policyId) {
 // PLACEHOLDERY INNYCH TABÓW - Sprint 2, 3, 4, 5
 // ═══════════════════════════════════════════════════════════
 
-function renderPropertyTab() {
-    const container = document.getElementById('life-property');
-    if (!container) return;
+// ═══════════════════════════════════════════════════════════
+// TAB: NIERUCHOMOŚCI - SPRINT 2
+// ═══════════════════════════════════════════════════════════
 
-    container.innerHTML = `
-        <div class="placeholder-tab">
-            <h2>Property Manager</h2>
-            <p>Zarządzanie nieruchomościami będzie dostępne w Sprint 2</p>
-        </div>
-    `;
-}
+
 
 function renderInventoryTab() {
     const container = document.getElementById('life-inventory');
