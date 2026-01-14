@@ -145,7 +145,7 @@ const LifeSheets = {
     },
 
     // ═══════════════════════════════════════════════════════════
-    // NIERUCHOMOŚCI (PROPERTY) - Placeholder dla Sprint 2
+    // NIERUCHOMOŚCI (PROPERTY) - Sprint 2
     // ═══════════════════════════════════════════════════════════
 
     async getProperties() {
@@ -437,3 +437,13 @@ const LifeSheets = {
                 const headerRow = headers[sheetName];
                 const lastColumn = String.fromCharCode(64 + headerRow.length);
 
+                await gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId: CONFIG.SPREADSHEET_ID,
+                    range: `${sheetName}!A1:${lastColumn}1`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [headerRow] }
+                });
+            }
+        }
+    }
+};
