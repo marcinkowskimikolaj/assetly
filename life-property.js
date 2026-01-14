@@ -13,6 +13,7 @@ let editingPropertyId = null;
 let deletingPropertyId = null;
 let tempRooms = [];
 let tempMaintenance = [];
+let tempProjects = [];
 
 // ═══════════════════════════════════════════════════════════
 // RENDERING TABU
@@ -197,8 +198,10 @@ function openAddPropertyModal() {
     // Reset sub-lists
     tempRooms = [];
     tempMaintenance = [];
+    tempProjects = [];
     renderRoomsListModal();
     renderMaintenanceListModal();
+    renderProjectsListModal();
 
     document.getElementById('propertyModal').classList.add('active');
 }
@@ -210,7 +213,7 @@ function openEditPropertyModal(propId) {
     editingPropertyId = propId;
     document.getElementById('propertyModalTitle').textContent = 'Edytuj nieruchomość';
 
-    // Wypełnij dane
+    // Wypełnij dane - Podstawowe
     document.getElementById('propertyId').value = prop.id;
     document.getElementById('propType').value = prop.typ;
     document.getElementById('propStatus').value = prop.status;
@@ -221,12 +224,23 @@ function openEditPropertyModal(propId) {
     document.getElementById('propValue').value = prop.wartoscRynkowa;
     document.getElementById('propCurrency').value = prop.waluta;
     document.getElementById('propNotes').value = prop.notatki;
+    document.getElementById('propYearBuilt').value = prop.rokBudowy || '';
+    document.getElementById('propPurchasePrice').value = prop.wartoscZakupu || '';
+    document.getElementById('propKW').value = prop.numerKW || '';
+    document.getElementById('propPlot').value = prop.numerDzialki || '';
+
+    // Finanse
+    const oplaty = prop.oplatyConfig || {};
+    document.getElementById('propTax').value = oplaty.tax || '';
+    document.getElementById('propRent').value = oplaty.rent || '';
 
     // Sub-listy
     tempRooms = JSON.parse(JSON.stringify(prop.pomieszczenia || []));
     tempMaintenance = JSON.parse(JSON.stringify(prop.harmonogramKonserwacji || []));
+    tempProjects = JSON.parse(JSON.stringify(prop.projektyRemontowe || []));
     renderRoomsListModal();
     renderMaintenanceListModal();
+    renderProjectsListModal();
 
     // Reset tabs
     switchPropertyModalTab('info');
@@ -243,7 +257,14 @@ function switchPropertyModalTab(tabName) {
     // Buttons
     document.querySelectorAll('.modal-tab').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.textContent.includes(tabName === 'info' ? 'Informacje' : tabName === 'rooms' ? 'Pomieszczenia' : 'Harmonogram')) {
+        const text = btn.textContent;
+        // Simple mapping check
+        if ((tabName === 'info' && text.includes('Informacje')) ||
+            (tabName === 'finance' && text.includes('Finanse')) ||
+            (tabName === 'projects' && text.includes('Projekty')) ||
+            (tabName === 'rooms' && text.includes('Pomieszczenia')) ||
+            (tabName === 'maintenance' && text.includes('Konserwacja')) ||
+            (tabName === 'docs' && text.includes('Dokumenty'))) {
             btn.classList.add('active');
         }
     });
@@ -258,6 +279,11 @@ function switchPropertyModalTab(tabName) {
 async function handleSaveProperty(event) {
     event.preventDefault();
 
+    const oplatyConfig = {
+        tax: parseFloat(document.getElementById('propTax').value) || 0,
+        rent: parseFloat(document.getElementById('propRent').value) || 0
+    };
+
     const formData = {
         typ: document.getElementById('propType').value,
         status: document.getElementById('propStatus').value,
@@ -268,8 +294,14 @@ async function handleSaveProperty(event) {
         wartoscRynkowa: parseFloat(document.getElementById('propValue').value) || 0,
         waluta: document.getElementById('propCurrency').value,
         notatki: document.getElementById('propNotes').value,
+        rokBudowy: document.getElementById('propYearBuilt').value,
+        wartoscZakupu: parseFloat(document.getElementById('propPurchasePrice').value) || 0,
+        numerKW: document.getElementById('propKW').value,
+        numerDzialki: document.getElementById('propPlot').value,
+        oplatyConfig: oplatyConfig,
         pomieszczenia: tempRooms,
-        harmonogramKonserwacji: tempMaintenance
+        harmonogramKonserwacji: tempMaintenance,
+        projektyRemontowe: tempProjects
     };
 
     showLifeLoading(true);
@@ -418,4 +450,44 @@ function calculateNextDate(dateStr, freq) {
     if (freq === 'rocznie') date.setFullYear(date.getFullYear() + 1);
 
     return date.toISOString().split('T')[0];
+}
+
+// Projects
+function renderProjectsListModal() {
+    const container = document.getElementById('projectsContainer');
+    container.innerHTML = tempProjects.map((proj, index) => `
+        <div class="sub-list-item">
+            <div class="sub-item-row">
+                <input type="text" class="form-input form-input-sm" placeholder="Nazwa projektu (np. Remont łazienki)" value="${proj.nazwa}" onchange="updateProject(${index}, 'nazwa', this.value)">
+                <select class="form-select form-select-sm" style="width: 120px" onchange="updateProject(${index}, 'status', this.value)">
+                    <option value="Planowany" ${proj.status === 'Planowany' ? 'selected' : ''}>Planowany</option>
+                    <option value="W trakcie" ${proj.status === 'W trakcie' ? 'selected' : ''}>W trakcie</option>
+                    <option value="Zakończony" ${proj.status === 'Zakończony' ? 'selected' : ''}>Zakończony</option>
+                </select>
+                <button type="button" class="btn btn-icon-only btn-delete" onclick="removeProjectRow(${index})">×</button>
+            </div>
+            <div class="sub-item-row">
+                <label class="sub-label">Budżet:</label>
+                <input type="number" class="form-input form-input-sm" placeholder="0.00" value="${proj.budzet}" onchange="updateProject(${index}, 'budzet', this.value)">
+                <label class="sub-label">Koszt:</label>
+                <input type="number" class="form-input form-input-sm" placeholder="0.00" value="${proj.koszt}" onchange="updateProject(${index}, 'koszt', this.value)">
+            </div>
+            <input type="text" class="form-input form-input-sm" placeholder="Opis (opcjonalnie)" value="${proj.opis || ''}" onchange="updateProject(${index}, 'opis', this.value)" style="margin-top: 0.5rem">
+        </div>
+    `).join('');
+}
+
+function addProjectRow() {
+    tempProjects.push({ nazwa: '', status: 'Planowany', budzet: 0, koszt: 0, opis: '' });
+    renderProjectsListModal();
+}
+
+function removeProjectRow(index) {
+    tempProjects.splice(index, 1);
+    renderProjectsListModal();
+}
+
+function updateProject(index, field, value) {
+    if (field === 'budzet' || field === 'koszt') value = parseFloat(value) || 0;
+    tempProjects[index][field] = value;
 }
