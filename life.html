@@ -426,9 +426,14 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="propInsuranceCost">Koszt ubezpieczenia (rocznie)</label>
-                        <input type="number" id="propInsuranceCost" class="form-input" step="0.01" min="0"
-                            placeholder="Pobierane z polisy jeśli powiązana" disabled>
+                        <label class="form-label" for="propInsurancePolicy">Polisa Ubezpieczeniowa</label>
+                        <select id="propInsurancePolicy" class="form-select" onchange="updateInsuranceCostDisplay()">
+                            <option value="">-- Brak powiązania --</option>
+                        </select>
+                        <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            Koszt roczny: <strong id="propInsuranceCostDisplay"
+                                style="color: var(--text-primary)">-</strong>
+                        </div>
                     </div>
                 </div>
 
@@ -558,6 +563,11 @@
                         <div class="info-item">
                             <label>Podatek (rok)</label>
                             <span id="viewPropTax">-</span>
+                        </div>
+                        <div class="info-item full-width"
+                            style="border-top: 1px solid var(--border); padding-top: 0.5rem; margin-top: 0.5rem;">
+                            <label>Polisa Ubezpieczeniowa</label>
+                            <span id="viewPropPolicy">-</span>
                         </div>
                     </div>
                 </div>
