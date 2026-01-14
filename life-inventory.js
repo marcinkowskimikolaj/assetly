@@ -280,13 +280,20 @@ function handleInventoryFilter() {
 // MODAL LOGIC
 // ═══════════════════════════════════════════════════════════
 
-// Placeholder for Sprint 3.1 Step 2 (Modal Implementation)
-
-function openAddInventoryModal() {
+async function openAddInventoryModal() {
     editingInventoryId = null;
     document.getElementById('inventoryModalTitle').textContent = 'Dodaj przedmiot';
     document.getElementById('inventoryForm').reset();
     document.getElementById('inventoryId').value = '';
+
+    // Ensure Properties are loaded (JIC)
+    if (typeof allProperties === 'undefined' || allProperties.length === 0) {
+        try {
+            allProperties = await LifeSheets.getProperties();
+        } catch (e) {
+            console.error('Failed to load properties for modal', e);
+        }
+    }
 
     // Populate Properties
     populateInventoryPropertySelect();
@@ -296,13 +303,17 @@ function openAddInventoryModal() {
     document.getElementById('inventoryModal').classList.add('active');
 }
 
-function openEditInventoryModal(id) {
+async function openEditInventoryModal(id) {
     const item = allInventory.find(i => i.id === id);
     if (!item) return;
 
     editingInventoryId = id;
     document.getElementById('inventoryModalTitle').textContent = 'Edytuj przedmiot';
     document.getElementById('inventoryId').value = item.id;
+
+    if (typeof allProperties === 'undefined' || allProperties.length === 0) {
+        allProperties = await LifeSheets.getProperties();
+    }
 
     // Info Tab
     document.getElementById('invName').value = item.nazwa;
@@ -320,9 +331,10 @@ function openEditInventoryModal(id) {
     // Value Tab
     document.getElementById('invPurchaseDate').value = item.dataZakupu || '';
     document.getElementById('invStatus').value = item.stan || 'W użyciu';
-    document.getElementById('invPurchasePrice').value = item.wartoscZakupu || '';
+    // Handle number inputs carefully
+    document.getElementById('invPurchasePrice').value = item.wartoscZakupu;
     document.getElementById('invCurrency').value = item.waluta || 'PLN';
-    document.getElementById('invCurrentValue').value = item.wartoscBiezaca || '';
+    document.getElementById('invCurrentValue').value = item.wartoscBiezaca;
     document.getElementById('invWarrantyDate').value = item.gwarancjaDo || '';
 
     // Maintenance Tab
@@ -351,18 +363,29 @@ function switchInventoryModalTab(tabName) {
 
 function populateInventoryPropertySelect() {
     const select = document.getElementById('invProperty');
+    if (!select) return;
+
+    // Save current value if re-populating
+    const currentVal = select.value;
+
     select.innerHTML = '<option value="">-- wybierz --</option>';
-    allProperties.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = p.nazwa;
-        select.appendChild(opt);
-    });
+    if (allProperties && allProperties.length > 0) {
+        allProperties.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.nazwa;
+            select.appendChild(opt);
+        });
+    }
+
+    if (currentVal) select.value = currentVal;
 }
 
 function updateInventoryRoomSelect() {
     const propId = document.getElementById('invProperty').value;
     const select = document.getElementById('invRoom');
+    if (!select) return;
+
     select.innerHTML = '<option value="">-- wybierz --</option>';
 
     if (!propId) {
@@ -371,17 +394,29 @@ function updateInventoryRoomSelect() {
     }
 
     const prop = allProperties.find(p => p.id === propId);
-    if (prop && prop.pomieszczenia) {
-        select.disabled = false;
-        prop.pomieszczenia.forEach(room => {
-            const opt = document.createElement('option');
-            opt.value = room.name;
-            opt.textContent = room.name;
-            select.appendChild(opt);
-        });
+    // console.log(`propId: ${propId}, found prop:`, prop); // Debugging rooms
+    if (prop) {
+        // console.log(`Property ${prop.nazwa} rooms:`, prop.pomieszczenia); // Debugging rooms
+
+        if (Array.isArray(prop.pomieszczenia) && prop.pomieszczenia.length > 0) {
+            select.disabled = false;
+            prop.pomieszczenia.forEach(room => {
+                const opt = document.createElement('option');
+                // Handle complex room object or simple string
+                // Based on Sprint 2.6, room is object {id, name, ...} or just string?
+                // life-sheets.js implies parsing JSON.
+                // Let's assume object has .name or it is a string.
+                const roomName = room.name || room;
+                opt.value = roomName;
+                opt.textContent = roomName;
+                select.appendChild(opt);
+            });
+        } else {
+            select.disabled = false; // Enable so user sees "Brak"
+            select.innerHTML = '<option value="">Brak zdefiniowanych pomieszczeń</option>';
+        }
     } else {
         select.disabled = true;
-        select.innerHTML = '<option value="">Brak pomieszczeń</option>';
     }
 }
 
