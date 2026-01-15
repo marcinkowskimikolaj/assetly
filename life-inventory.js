@@ -117,11 +117,14 @@ function renderInventoryToolbar(container) {
 
 function populateRoomFilter() {
     const select = document.getElementById('inventoryRoomFilter');
+    if (!select) return;
     // Collect all unique rooms from Properties
     const rooms = new Set();
-    allProperties.forEach(p => {
-        (p.pomieszczenia || []).forEach(r => rooms.add(r.name));
-    });
+    if (typeof allProperties !== 'undefined') {
+        allProperties.forEach(p => {
+            (p.pomieszczenia || []).forEach(r => rooms.add(r.name || r));
+        });
+    }
 
     rooms.forEach(room => {
         const opt = document.createElement('option');
@@ -197,6 +200,7 @@ function truncateString(str, num) {
 
 function renderInventoryContent(container) {
     const content = document.getElementById('inventory-grid-container');
+    if (!content) return;
     content.className = inventoryInfo.viewMode === 'list' ? 'inventory-list-view' : 'inventory-grid-view';
 
     const filtered = filterInventory(allInventory);
@@ -253,6 +257,14 @@ function filterInventory(items) {
 }
 
 function handleInventorySort() {
+    renderInventoryContent(document.getElementById('life-inventory'));
+}
+
+function handleInventorySearch() {
+    renderInventoryContent(document.getElementById('life-inventory'));
+}
+
+function handleInventoryFilter() {
     renderInventoryContent(document.getElementById('life-inventory'));
 }
 
@@ -330,14 +342,6 @@ function setInventoryView(mode) {
     document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
     // (Re-render logic handled by global render)
     renderInventoryTab();
-}
-
-function handleInventorySearch() {
-    renderInventoryContent(document.getElementById('life-inventory'));
-}
-
-function handleInventoryFilter() {
-    renderInventoryContent(document.getElementById('life-inventory'));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -458,18 +462,80 @@ function updateInventoryRoomSelect() {
     }
 
     const prop = allProperties.find(p => p.id === propId);
-    // console.log(`propId: ${propId}, found prop:`, prop); // Debugging rooms
     if (prop) {
-        // console.log(`Property ${prop.nazwa} rooms:`, prop.pomieszczenia); // Debugging rooms
-
         if (Array.isArray(prop.pomieszczenia) && prop.pomieszczenia.length > 0) {
             select.disabled = false;
             prop.pomieszczenia.forEach(room => {
                 const opt = document.createElement('option');
-                // Handle complex room object or simple string
-                // Based on Sprint 2.6, room is object {id, name, ...} or just string?
-                // life-sheets.js implies parsing JSON.
-                // Let's assume object has .name or it is a string.
                 const roomName = room.name || room;
                 opt.value = roomName;
                 opt.textContent = roomName;
+                select.appendChild(opt);
+            });
+        } else {
+            select.disabled = false; // Enable so user sees "Brak"
+            select.innerHTML = '<option value="">Brak zdefiniowanych pomieszczeń</option>';
+        }
+    } else {
+        select.disabled = true;
+    }
+}
+
+async function handleSaveInventory(event) {
+    event.preventDefault();
+    if (!lifeInitialized) return;
+
+    showLifeLoading(true);
+
+    const formData = {
+        nazwa: document.getElementById('invName').value,
+        kategoria: document.getElementById('invCategory').value,
+        producent: document.getElementById('invBrand').value,
+        model: document.getElementById('invModel').value,
+        numerSeryjny: document.getElementById('invSerial').value,
+
+        idNieruchomosci: document.getElementById('invProperty').value,
+        idPomieszczenia: document.getElementById('invRoom').value,
+
+        dataZakupu: document.getElementById('invPurchaseDate').value,
+        wartoscZakupu: parseFloat(document.getElementById('invPurchasePrice').value) || 0,
+        waluta: document.getElementById('invCurrency').value,
+
+        wartoscBiezaca: parseFloat(document.getElementById('invCurrentValue').value) || 0,
+
+        stan: document.getElementById('invStatus').value,
+        gwarancjaDo: document.getElementById('invWarrantyDate').value,
+        notatki: document.getElementById('invNotes').value
+    };
+
+    try {
+        if (editingInventoryId) {
+            await LifeSheets.updateInventoryItem(editingInventoryId, formData);
+            showToast('Zaktualizowano przedmiot', 'success');
+        } else {
+            await LifeSheets.addInventoryItem(formData);
+            showToast('Dodano przedmiot', 'success');
+        }
+        closeInventoryModal();
+        await renderInventoryTab();
+    } catch (error) {
+        console.error('Błąd zapisu inwentarza', error);
+        showToast('Błąd zapisu', 'error');
+    } finally {
+        showLifeLoading(false);
+    }
+}
+
+function deleteInventoryItem(id) {
+    if (confirm('Czy na pewno chcesz usunąć ten przedmiot?')) {
+        showLifeLoading(true);
+        LifeSheets.deleteInventoryItem(id).then(() => {
+            renderInventoryTab();
+            showToast('Usunięto przedmiot', 'success');
+        }).catch(() => {
+            showToast('Błąd usuwania', 'error');
+        }).finally(() => {
+            showLifeLoading(false);
+        });
+    }
+}
