@@ -46,7 +46,21 @@ async function renderInventoryTab() {
 // ═══════════════════════════════════════════════════════════
 
 function renderInventoryToolbar(container) {
-    if (document.getElementById('inventory-toolbar')) return; // Already exists
+    // We want to re-render if it exists to update button states, 
+    // but without losing focus on search if possible.
+    // For MVP, we'll just check if toolbar needs refresh.
+
+    let toolbar = document.getElementById('inventory-toolbar');
+    if (toolbar) {
+        // Just update active classes on view buttons
+        const viewGrid = document.getElementById('btn-view-grid');
+        const viewList = document.getElementById('btn-view-list');
+        if (viewGrid && viewList) {
+            viewGrid.classList.toggle('active', inventoryInfo.viewMode === 'grid');
+            viewList.classList.toggle('active', inventoryInfo.viewMode === 'list');
+        }
+        return;
+    }
 
     const html = `
         <div id="inventory-toolbar" class="life-toolbar">
@@ -63,28 +77,35 @@ function renderInventoryToolbar(container) {
                     <option value="Sport">Sport</option>
                     <option value="Narzędzia">Narzędzia</option>
                     <option value="Kolekcje">Kolekcje</option>
+                    <option value="Jubilerstwo">Jubilerstwo</option>
+                    <option value="Sztuka">Sztuka</option>
                     <option value="Inne">Inne</option>
                 </select>
                 <select id="inventoryRoomFilter" class="form-select" onchange="handleInventoryFilter()">
                     <option value="all">Wszystkie pomieszczenia</option>
-                    <!-- Populated dynamically -->
+                </select>
+                <select id="inventorySortFilter" class="form-select" onchange="handleInventorySort()">
+                    <option value="value-desc">Najwyższa wartość</option>
+                    <option value="value-asc">Najniższa wartość</option>
+                    <option value="name-asc">Nazwa (A-Z)</option>
+                    <option value="date-desc">Najnowsze nabytki</option>
                 </select>
             </div>
             <div class="toolbar-right">
                 <div class="view-toggle">
-                    <button class="btn-icon ${inventoryInfo.viewMode === 'list' ? 'active' : ''}" onclick="setInventoryView('list')" title="Widok listy">
+                    <button id="btn-view-list" class="btn-icon ${inventoryInfo.viewMode === 'list' ? 'active' : ''}" onclick="setInventoryView('list')" title="Widok listy">
                         <i class="fas fa-list"></i>
                     </button>
-                    <button class="btn-icon ${inventoryInfo.viewMode === 'grid' ? 'active' : ''}" onclick="setInventoryView('grid')" title="Widok siatki">
+                    <button id="btn-view-grid" class="btn-icon ${inventoryInfo.viewMode === 'grid' ? 'active' : ''}" onclick="setInventoryView('grid')" title="Widok siatki">
                         <i class="fas fa-th-large"></i>
                     </button>
                 </div>
-                <button class="btn btn-primary" onclick="openAddInventoryModal()">
+                <button class="btn btn-primary btn-with-icon" onclick="openAddInventoryModal()">
                     <i class="fas fa-plus"></i> Dodaj przedmiot
                 </button>
             </div>
         </div>
-        <div id="inventory-stats" class="stats-grid">
+        <div id="inventory-stats" class="inventory-stats-bar">
             <!-- Stats populated by renderInventoryStats -->
         </div>
         <div id="inventory-grid-container" class="inventory-container"></div>
@@ -117,30 +138,57 @@ function renderInventoryStats(container) {
     const totalCount = allInventory.length;
     const totalValue = allInventory.reduce((sum, item) => sum + (item.wartoscBiezaca || item.wartoscPLN || 0), 0);
 
-    // Warranty logic (simple check)
+    // Most expensive
+    const mostValuable = allInventory.length > 0
+        ? [...allInventory].sort((a, b) => (b.wartoscBiezaca || b.wartoscPLN) - (a.wartoscBiezaca || a.wartoscPLN))[0]
+        : null;
+
+    // Warranty logic
     const now = new Date();
     const expiringSoon = allInventory.filter(i => {
         if (!i.gwarancjaDo) return false;
         const date = new Date(i.gwarancjaDo);
-        const diffTime = date - now;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
         return diffDays > 0 && diffDays <= 30;
     }).length;
 
     statsContainer.innerHTML = `
-        <div class="stat-card">
-            <div class="stat-title">Liczba przedmiotów</div>
-            <div class="stat-value">${totalCount}</div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon"><i class="fas fa-boxes"></i></div>
+            <div class="inv-stat-info">
+                <span class="inv-stat-label">Liczba przedmiotów</span>
+                <span class="inv-stat-value">${totalCount}</span>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">Całkowita wartość</div>
-            <div class="stat-value text-primary">${formatCurrency(totalValue)} PLN</div>
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon text-primary"><i class="fas fa-wallet"></i></div>
+            <div class="inv-stat-info">
+                <span class="inv-stat-label">Całkowita wartość</span>
+                <span class="inv-stat-value">${formatCurrency(totalValue)} PLN</span>
+            </div>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">Kończące się gwarancje</div>
-            <div class="stat-value ${expiringSoon > 0 ? 'text-warning' : ''}">${expiringSoon}</div>
+        ${mostValuable ? `
+        <div class="inv-stat-card">
+            <div class="inv-stat-icon text-accent"><i class="fas fa-crown"></i></div>
+            <div class="inv-stat-info">
+                <span class="inv-stat-label">Najcenniejszy przedmiot</span>
+                <span class="inv-stat-value" title="${mostValuable.nazwa}">${truncateString(mostValuable.nazwa, 12)}</span>
+            </div>
+        </div>
+        ` : ''}
+        <div class="inv-stat-card ${expiringSoon > 0 ? 'warning' : ''}">
+            <div class="inv-stat-icon"><i class="fas fa-shield-alt"></i></div>
+            <div class="inv-stat-info">
+                <span class="inv-stat-label">Kończące się gwarancje</span>
+                <span class="inv-stat-value">${expiringSoon}</span>
+            </div>
         </div>
     `;
+}
+
+function truncateString(str, num) {
+    if (str.length <= num) return str;
+    return str.slice(0, num) + '...';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -175,21 +223,37 @@ function filterInventory(items) {
     const search = (document.getElementById('inventorySearch')?.value || '').toLowerCase();
     const cat = document.getElementById('inventoryCategoryFilter')?.value || 'all';
     const room = document.getElementById('inventoryRoomFilter')?.value || 'all';
+    const sortBy = document.getElementById('inventorySortFilter')?.value || 'value-desc';
 
-    return items.filter(item => {
+    let filtered = items.filter(item => {
         const matchesSearch = (item.nazwa || '').toLowerCase().includes(search) ||
             (item.producent || '').toLowerCase().includes(search) ||
             (item.model || '').toLowerCase().includes(search);
         const matchesCat = cat === 'all' || item.kategoria === cat;
-        // Room logic needs Property -> Room mapping or simple Room Name match if stored in item
-        // Assuming item.idPomieszczenia stores Room ID or Name. For MVP let's match exact value.
-        // Or if we store PropertyID + RoomID, we need to lookup.
-        // For now, let's assume we store the ID and filter by that, BUT the filter sends Room Name?
-        // Let's defer advanced Room filtering. Matching simple filter for now.
-        const matchesRoom = room === 'all' || true; // Placeholder until strict Room ID Logic
+        const matchesRoom = room === 'all' || item.idPomieszczenia === room || item.roomName === room;
 
         return matchesSearch && matchesCat && matchesRoom;
     });
+
+    // Sorting
+    filtered.sort((a, b) => {
+        const valA = a.wartoscBiezaca || a.wartoscPLN || 0;
+        const valB = b.wartoscBiezaca || b.wartoscPLN || 0;
+
+        switch (sortBy) {
+            case 'value-desc': return valB - valA;
+            case 'value-asc': return valA - valB;
+            case 'name-asc': return (a.nazwa || '').localeCompare(b.nazwa || '');
+            case 'date-desc': return new Date(b.dataZakupu || 0) - new Date(a.dataZakupu || 0);
+            default: return 0;
+        }
+    });
+
+    return filtered;
+}
+
+function handleInventorySort() {
+    renderInventoryContent(document.getElementById('life-inventory'));
 }
 
 function renderInventoryGrid(container, items) {
@@ -409,67 +473,3 @@ function updateInventoryRoomSelect() {
                 const roomName = room.name || room;
                 opt.value = roomName;
                 opt.textContent = roomName;
-                select.appendChild(opt);
-            });
-        } else {
-            select.disabled = false; // Enable so user sees "Brak"
-            select.innerHTML = '<option value="">Brak zdefiniowanych pomieszczeń</option>';
-        }
-    } else {
-        select.disabled = true;
-    }
-}
-
-async function handleSaveInventory(event) {
-    event.preventDefault();
-    if (!lifeInitialized) return;
-
-    showLifeLoading(true);
-
-    const formData = {
-        nazwa: document.getElementById('invName').value,
-        kategoria: document.getElementById('invCategory').value,
-        producent: document.getElementById('invBrand').value,
-        model: document.getElementById('invModel').value,
-        numerSeryjny: document.getElementById('invSerial').value,
-
-        idNieruchomosci: document.getElementById('invProperty').value,
-        idPomieszczenia: document.getElementById('invRoom').value,
-
-        dataZakupu: document.getElementById('invPurchaseDate').value,
-        wartoscZakupu: parseFloat(document.getElementById('invPurchasePrice').value) || 0,
-        waluta: document.getElementById('invCurrency').value,
-
-        wartoscBiezaca: parseFloat(document.getElementById('invCurrentValue').value) || 0,
-
-        stan: document.getElementById('invStatus').value,
-        gwarancjaDo: document.getElementById('invWarrantyDate').value,
-        notatki: document.getElementById('invNotes').value
-    };
-
-    try {
-        if (editingInventoryId) {
-            await LifeSheets.updateInventoryItem(editingInventoryId, formData);
-            showToast('Zaktualizowano przedmiot', 'success');
-        } else {
-            await LifeSheets.addInventoryItem(formData);
-            showToast('Dodano przedmiot', 'success');
-        }
-        closeInventoryModal();
-        await renderInventoryTab();
-    } catch (error) {
-        console.error('Błąd zapisu inwentarza', error);
-        showToast('Błąd zapisu', 'error');
-    } finally {
-        showLifeLoading(false);
-    }
-}
-
-function deleteInventoryItem(id) {
-    if (confirm('Czy na pewno chcesz usunąć ten przedmiot?')) {
-        showLifeLoading(true);
-        LifeSheets.deleteInventoryItem(id).then(() => {
-            renderInventoryTab();
-        });
-    }
-}
