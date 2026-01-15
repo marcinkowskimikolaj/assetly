@@ -118,15 +118,34 @@ function renderInventoryToolbar(container) {
 function populateRoomFilter() {
     const select = document.getElementById('inventoryRoomFilter');
     if (!select) return;
+
     // Collect all unique rooms from Properties
     const rooms = new Set();
-    if (typeof allProperties !== 'undefined') {
+    if (typeof allProperties !== 'undefined' && allProperties.length > 0) {
         allProperties.forEach(p => {
-            (p.pomieszczenia || []).forEach(r => rooms.add(r.name || r));
+            if (Array.isArray(p.pomieszczenia)) {
+                p.pomieszczenia.forEach(r => {
+                    // Handle different room formats
+                    let roomName = null;
+                    if (typeof r === 'string') {
+                        roomName = r;
+                    } else if (r && typeof r === 'object') {
+                        // Try different property names
+                        roomName = r.name || r.nazwa || r.roomName;
+                    }
+
+                    if (roomName && roomName.trim()) {
+                        rooms.add(roomName.trim());
+                    }
+                });
+            }
         });
     }
 
-    rooms.forEach(room => {
+    // Sort rooms alphabetically
+    const sortedRooms = Array.from(rooms).sort((a, b) => a.localeCompare(b, 'pl'));
+
+    sortedRooms.forEach(room => {
         const opt = document.createElement('option');
         opt.value = room;
         opt.textContent = room;
@@ -201,18 +220,23 @@ function truncateString(str, num) {
 function renderInventoryContent(container) {
     const content = document.getElementById('inventory-grid-container');
     if (!content) return;
+
+    // Add fade effect
+    content.style.opacity = '0.5';
+
     content.className = inventoryInfo.viewMode === 'list' ? 'inventory-list-view' : 'inventory-grid-view';
 
     const filtered = filterInventory(allInventory);
 
     if (filtered.length === 0) {
         content.innerHTML = `
-            <div class="empty-state">
+            <div class="empty-state fade-in">
                 <div class="empty-icon"><i class="fas fa-box-open"></i></div>
                 <h3>Brak przedmiotów</h3>
                 <p>Naciśnij "Dodaj przedmiot", aby rozpocząć inwentaryzację.</p>
             </div>
         `;
+        setTimeout(() => content.style.opacity = '1', 50);
         return;
     }
 
@@ -221,6 +245,9 @@ function renderInventoryContent(container) {
     } else {
         renderInventoryGrid(content, filtered);
     }
+
+    // Restore opacity after render
+    setTimeout(() => content.style.opacity = '1', 50);
 }
 
 function filterInventory(items) {
