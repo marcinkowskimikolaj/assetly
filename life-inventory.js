@@ -1,4 +1,4 @@
-/**
+/** 
  * Assetly - Life Module - Inventory Tab
  * Logika i obsługa zakładki Inwentarz (Sprint 3)
  */
