@@ -14,7 +14,7 @@ let currentLifeTab = 'insurance';
 let allInsurancePolicies = [];
 let allProperties = [];
 let allInventoryItems = [];
-let allSubscriptions = [];
+// allSubscriptions moved to life-subscriptions.js
 
 // Filtry i sortowanie - Ubezpieczenia
 let insuranceTypeFilter = 'all';
