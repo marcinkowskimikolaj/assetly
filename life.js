@@ -624,17 +624,7 @@ function createPolicyReminder(policyId) {
 
 // function renderInventoryTab() moved to life-inventory.js
 
-function renderSubscriptionsTab() {
-    const container = document.getElementById('life-subscriptions');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="placeholder-tab">
-            <h2>Subskrypcje i Stałe Opłaty</h2>
-            <p>Zarządzanie subskrypcjami będzie dostępne w Sprint 4</p>
-        </div>
-    `;
-}
+// function renderSubscriptionsTab() moved to life-subscriptions.js
 
 function renderCalendarTab() {
     const container = document.getElementById('life-calendar');
@@ -670,5 +660,7 @@ window.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal')) {
         if (e.target.id === 'policyModal') closePolicyModal();
         if (e.target.id === 'deletePolicyModal') closeDeletePolicyModal();
+        if (e.target.id === 'inventoryModal') closeInventoryModal();
+        if (e.target.id === 'subscriptionModal') closeSubscriptionModal();
     }
 });
