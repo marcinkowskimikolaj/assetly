@@ -480,7 +480,7 @@ const LifeSheets = {
                 dataNastepnejPlatnosci: row[9] || '',
                 dataRozpoczecia: row[10] || '',
                 dataZakonczenia: row[11] || '',
-                aktywny: row[12] === 'true' || row[12] === true,
+                aktywny: String(row[12]).toLowerCase() === 'true' || row[12] === true,
                 notatki: row[13] || '',
                 eventIdCalendar: row[14] || '',
                 rowIndex: index + 2
