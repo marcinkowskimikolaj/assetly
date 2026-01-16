@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="life.css">
     <link rel="stylesheet" href="life-inventory.css">
+    <link rel="stylesheet" href="life-subscriptions.css">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2310B981' rx='20' width='100' height='100'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>A</text></svg>">
 </head>
@@ -784,6 +785,107 @@
         </div>
     </div>
 
+    <!-- Modal: Dodaj/Edytuj Subskrypcję -->
+    <div id="subscriptionModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="subscriptionModalTitle">Dodaj subskrypcję</h3>
+                <button class="modal-close" onclick="closeSubscriptionModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+
+            <form id="subscriptionForm" onsubmit="handleSaveSubscription(event)">
+                <input type="hidden" id="subscriptionId" value="">
+
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Nazwa usługi *</label>
+                            <input type="text" id="subNazwa" class="form-input" required placeholder="np. Netflix">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Dostawca</label>
+                            <input type="text" id="subDostawca" class="form-input" placeholder="np. Netflix, Inc.">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Kategoria</label>
+                            <select id="subKategoria" class="form-select">
+                                <option value="streaming">🎬 Streaming</option>
+                                <option value="muzyka">🎵 Muzyka</option>
+                                <option value="oprogramowanie">💻 Oprogramowanie</option>
+                                <option value="gaming">🎮 Gaming</option>
+                                <option value="cloud">☁️ Chmura</option>
+                                <option value="fitness">💪 Fitness</option>
+                                <option value="news">📰 News/Media</option>
+                                <option value="inne">📦 Inne</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Okres płatności</label>
+                            <select id="subOkres" class="form-select">
+                                <option value="miesięczny">Miesięczny</option>
+                                <option value="kwartalny">Kwartalny</option>
+                                <option value="roczny">Roczny</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Kwota *</label>
+                            <input type="number" id="subKwota" class="form-input" required step="0.01" min="0"
+                                placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Waluta</label>
+                            <select id="subWaluta" class="form-select">
+                                <option value="PLN">PLN</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Data następnej płatności</label>
+                            <input type="date" id="subDataNastepnej" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data rozpoczęcia</label>
+                            <input type="date" id="subDataRozpoczecia" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label toggle-label">
+                            <input type="checkbox" id="subAktywny" checked>
+                            <span class="toggle-text">Subskrypcja aktywna</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Notatki</label>
+                        <textarea id="subNotatki" class="form-input" rows="3"
+                            placeholder="Dodatkowe informacje..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeSubscriptionModal()">Anuluj</button>
+                    <button type="submit" class="btn btn-primary">Zapisz</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -796,6 +898,7 @@
     <script src="life-sheets.js"></script>
     <script src="life-property.js"></script>
     <script src="life-inventory.js"></script>
+    <script src="life-subscriptions.js"></script>
     <script src="life.js"></script>
 
     <script>
