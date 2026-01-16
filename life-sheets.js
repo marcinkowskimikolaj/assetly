@@ -456,10 +456,137 @@ const LifeSheets = {
         return true;
     },
     // ═══════════════════════════════════════════════════════════
+    // SUBSKRYPCJE (SUBSCRIPTIONS)
+    // ═══════════════════════════════════════════════════════════
 
     async getSubscriptions() {
-        // TODO Sprint 4
-        return [];
+        try {
+            const response = await gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: CONFIG.SPREADSHEET_ID,
+                range: `${this.SHEETS.SUBSCRIPTIONS}!A2:O`
+            });
+
+            const rows = response.result.values || [];
+            return rows.map((row, index) => ({
+                id: row[0] || '',
+                typ: row[1] || '',
+                kategoria: row[2] || '',
+                nazwa: row[3] || '',
+                dostawca: row[4] || '',
+                kwota: parseFloat(row[5]) || 0,
+                waluta: row[6] || 'PLN',
+                kwotaPLN: parseFloat(row[7]) || 0,
+                okresPlatnosci: row[8] || 'miesięczny',
+                dataNastepnejPlatnosci: row[9] || '',
+                dataRozpoczecia: row[10] || '',
+                dataZakonczenia: row[11] || '',
+                aktywny: row[12] === 'true' || row[12] === true,
+                notatki: row[13] || '',
+                eventIdCalendar: row[14] || '',
+                rowIndex: index + 2
+            })).filter(s => s.id);
+        } catch (error) {
+            console.warn('Nie można pobrać subskrypcji:', error);
+            return [];
+        }
+    },
+
+    async addSubscription(subscription) {
+        const id = 'sub-' + Date.now();
+        const kwotaPLN = subscription.waluta === 'PLN'
+            ? subscription.kwota
+            : subscription.kwota * (currencyRates[subscription.waluta] || 1);
+
+        const row = [
+            id,
+            subscription.typ || '',
+            subscription.kategoria || '',
+            subscription.nazwa,
+            subscription.dostawca || '',
+            subscription.kwota.toString(),
+            subscription.waluta || 'PLN',
+            kwotaPLN.toFixed(2),
+            subscription.okresPlatnosci || 'miesięczny',
+            subscription.dataNastepnejPlatnosci || '',
+            subscription.dataRozpoczecia || '',
+            subscription.dataZakonczenia || '',
+            subscription.aktywny !== false ? 'true' : 'false',
+            subscription.notatki || '',
+            '' // EventId_Calendar
+        ];
+
+        await gapi.client.sheets.spreadsheets.values.append({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${this.SHEETS.SUBSCRIPTIONS}!A:O`,
+            valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS',
+            resource: { values: [row] }
+        });
+
+        return { ...subscription, id, kwotaPLN };
+    },
+
+    async updateSubscription(id, updates) {
+        const subscriptions = await this.getSubscriptions();
+        const sub = subscriptions.find(s => s.id === id);
+        if (!sub) return false;
+
+        const kwotaPLN = (updates.waluta || sub.waluta) === 'PLN'
+            ? (updates.kwota !== undefined ? updates.kwota : sub.kwota)
+            : (updates.kwota !== undefined ? updates.kwota : sub.kwota) * (currencyRates[updates.waluta || sub.waluta] || 1);
+
+        const row = [
+            id,
+            updates.typ !== undefined ? updates.typ : sub.typ,
+            updates.kategoria !== undefined ? updates.kategoria : sub.kategoria,
+            updates.nazwa !== undefined ? updates.nazwa : sub.nazwa,
+            updates.dostawca !== undefined ? updates.dostawca : sub.dostawca,
+            (updates.kwota !== undefined ? updates.kwota : sub.kwota).toString(),
+            updates.waluta !== undefined ? updates.waluta : sub.waluta,
+            kwotaPLN.toFixed(2),
+            updates.okresPlatnosci !== undefined ? updates.okresPlatnosci : sub.okresPlatnosci,
+            updates.dataNastepnejPlatnosci !== undefined ? updates.dataNastepnejPlatnosci : sub.dataNastepnejPlatnosci,
+            updates.dataRozpoczecia !== undefined ? updates.dataRozpoczecia : sub.dataRozpoczecia,
+            updates.dataZakonczenia !== undefined ? updates.dataZakonczenia : sub.dataZakonczenia,
+            (updates.aktywny !== undefined ? updates.aktywny : sub.aktywny) ? 'true' : 'false',
+            updates.notatki !== undefined ? updates.notatki : sub.notatki,
+            sub.eventIdCalendar || ''
+        ];
+
+        await gapi.client.sheets.spreadsheets.values.update({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: `${this.SHEETS.SUBSCRIPTIONS}!A${sub.rowIndex}:O${sub.rowIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [row] }
+        });
+
+        return true;
+    },
+
+    async deleteSubscription(id) {
+        const subscriptions = await this.getSubscriptions();
+        const sub = subscriptions.find(s => s.id === id);
+        if (!sub) return false;
+
+        const sheetId = await this.getSheetId(this.SHEETS.SUBSCRIPTIONS);
+
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            resource: {
+                requests: [{
+                    deleteDimension: {
+                        range: {
+                            sheetId: sheetId,
+                            dimension: 'ROWS',
+                            startIndex: sub.rowIndex - 1,
+                            endIndex: sub.rowIndex
+                        }
+                    }
+                }]
+            }
+        });
+
+        return true;
     },
 
     // ═══════════════════════════════════════════════════════════
